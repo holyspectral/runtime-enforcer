@@ -100,7 +100,7 @@ func TestConvertTetragonProcEvent(t *testing.T) {
 				if errors.Is(err, tetragon.ErrPodInfoUnavailable) {
 					require.Nil(t, tt.ev.GetProcessExec().GetProcess().GetPod())
 				}
-				if errors.Is(err, tetragon.ErrPodWorkloadKindNotSupported) {
+				if errors.Is(err, tetragon.ErrWorkloadKindNotSupported) {
 					require.Equal(t,
 						tetragon.WorkloadKindPod,
 						tt.ev.GetProcessExec().GetProcess().GetPod().GetWorkloadKind())
@@ -111,4 +111,27 @@ func TestConvertTetragonProcEvent(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestCronJobUnsupported(t *testing.T) {
+	event := &tetragonv1.GetEventsResponse{
+		Event: &tetragonv1.GetEventsResponse_ProcessExec{
+			ProcessExec: &tetragonv1.ProcessExec{
+				Process: &tetragonv1.Process{
+					Binary: "/usr/bin/bash",
+					Pod: &tetragonv1.Pod{
+						Namespace:    "ns1",
+						Workload:     "p1",
+						WorkloadKind: "Pod",
+					},
+				},
+			},
+		},
+	}
+
+	result, err := tetragon.ConvertTetragonProcEvent(event)
+
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.ErrorIs(t, err, tetragon.ErrWorkloadKindNotSupported)
 }

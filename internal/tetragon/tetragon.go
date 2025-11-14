@@ -26,6 +26,7 @@ const (
 	maxGRPCRecvSize         = 128 * 1024 * 1024 // 128mb
 	maxDelay                = 2 * time.Minute
 	WorkloadKindPod         = "Pod"
+	WorkloadKindCronJob     = "CronJob"
 )
 
 type Connector struct {
@@ -40,9 +41,9 @@ type Connector struct {
 // (e.g., process is on the node). Callers can treat it as a non-fatal skip.
 var ErrPodInfoUnavailable = errors.New("pod info unavailable on event")
 
-// ErrPodWorkloadKindNotSupported signals that the pod workload kind is not supported
+// ErrWorkloadKindNotSupported signals that the pod workload kind is not supported
 // Callers can treat it as a non-fatal skip.
-var ErrPodWorkloadKindNotSupported = errors.New("pod workload kind is not supported")
+var ErrWorkloadKindNotSupported = errors.New("workload kind is not supported")
 
 func CreateConnector(
 	logger *slog.Logger,
@@ -111,7 +112,8 @@ func (c *Connector) FillInitialProcesses(ctx context.Context) error {
 			continue
 		}
 
-		if eventPod.GetWorkloadKind() == WorkloadKindPod {
+		workloadKind := eventPod.GetWorkloadKind()
+		if workloadKind == WorkloadKindPod || workloadKind == WorkloadKindCronJob {
 			continue
 		}
 
@@ -144,9 +146,10 @@ func ConvertTetragonProcEvent(e *tetragon.GetEventsResponse) (*eventhandler.Proc
 		return nil, ErrPodInfoUnavailable
 	}
 
-	// For now we don't support learning for pods with workload kind "Pod"
-	if pod.GetWorkloadKind() == WorkloadKindPod {
-		return nil, ErrPodWorkloadKindNotSupported
+	workloadKind := pod.GetWorkloadKind()
+	// For now we don't support learning for pods with workload kind "Pod" and "CronJob"
+	if workloadKind == WorkloadKindPod || workloadKind == WorkloadKindCronJob {
+		return nil, ErrWorkloadKindNotSupported
 	}
 
 	return &eventhandler.ProcessLearningEvent{
@@ -260,7 +263,7 @@ func (c *Connector) getEvents(ctx context.Context, client tetragon.FineGuidanceS
 
 		if err = c.dispatchEvent(ctx, res); err != nil &&
 			!errors.Is(err, ErrPodInfoUnavailable) &&
-			!errors.Is(err, ErrPodWorkloadKindNotSupported) {
+			!errors.Is(err, ErrWorkloadKindNotSupported) {
 			c.logger.ErrorContext(ctx, "fail to dispatch event", "evt", res, "error", err)
 		}
 	}
