@@ -49,7 +49,6 @@ This is a quick overview of all the CRDs we’re going to define. Each one of th
 
 Changes from the previous version:
 - The WorkloadSecurityPolicy was renamed into WorkloadPolicy
-- The WorkloadSecurityPolicyTuning was deleted and replaced by the status in the WorkloadPolicy resource.
 
 ## Learning Phase
 
@@ -59,16 +58,13 @@ During learning mode, we create WorkloadPolicyProposal resources. These resource
 apiVersion: security.rancher.io/v1alpha1
 kind: WorkloadPolicyProposal
 metadata:
-  name: workloadpolicyproposal-sample
+  name: deploy-pgsql-8646457455 # <workload_type>-<workload_name>
   ownerReferences:
   - apiVersion: apps/v1
     kind: Deployment
     name: pgsql-8646457455
     uid: 39a32022-4c8f-424e-a8b6-3c92af3acb2e
 spec:
-  selector:
-    matchLabels:
-      app: postgres
   rulesByContainer:
     "db-migration": # rules applied to the container named "db-migration"
        executables:
@@ -102,13 +98,10 @@ Policies are defined using the WorkloadPolicy resource. This is how this resourc
 apiVersion: security.rancher.io/v1alpha1
 kind: WorkloadPolicy
 metadata:
-  name: postgres-policy
+  name: deploy-pgsql-8646457455
   namespace: default
 spec:
   mode: monitor # monitor | protect
-  selector:
-    matchLabels:
-      app: postgres
   rulesByContainer:
     postgres:
       rules:
@@ -138,15 +131,12 @@ Notes on the behavior:
 - In case of workload rollout, the WorkloadPolicy remains unchanged. If it causes issues with the rollout, the user is in charge of rolling back to the previous version or destroying the policy
 
 ## Binding a WorkloadPolicy
-A workload is protected by a WorkloadPolicy through a podSelector, like in the current approach.
-As proposed in the previous version, we suggest the usage of a unique label security.rancher.io/policy, but we don’t enforce it by default since putting it in the spec.template would cause a rollout. 
-
-So the difference with the previous version is that we simply leave users to choose their preferred approach. Having a dedicated label is still suggested, but not compulsory.
+A workload is protected by a WorkloadPolicy through a podSelector. We suggest the usage of a unique label security.rancher.io/policy, but we don’t enforce it by default since putting it in the spec.template would cause a rollout.
 
 - Basic user -> use default k8s workload selectors -> everything works out of the box, no rollout required.
 - Advanced user (real production scenario) -> enforce a unique label on workloads and use this label as a selector -> a rollout could be required if the workload was initially created without the label
 
-Now that the label is no longer compulsory, we cannot rely on it to understand if a workload is covered or not; we should fall back to a kubectl plugin that scrapes the resources and helps the user to understand the situation (potential conflict, partial workload coverage,...). 
+Since the label is not compulsory, we cannot rely on it to understand if a workload is covered or not; we should use a kubectl plugin that scrapes the resources and helps the user to understand the situation (potential conflict, partial workload coverage,...). 
 
 Users can still rely on the unique label if they choose to use it, and so simple kubectl commands. Our kubectl plugin should be generic and also cover cases where the label is not used.
 
@@ -156,7 +146,7 @@ Pods are made by containers, each one of them running a container image. The sam
 
 Most of the time, a Redis/Tomcat/NodeJS container image is always going to behave in the same way. There could be some exceptions, we must take that scenario into account.
 
-SUSE is already distributing maintained container images through AppCo. It would make sense to tie our profiles to the container images, rather than thinking about the concept of “workload”.
+Vendors alreadu distribute maintained container images through their platforms. It would make sense to tie our profiles to the container images, rather than thinking about the concept of “workload”.
 
 Let's define an ImagePolicy:
 
@@ -187,14 +177,16 @@ metadata:
   namespace: default
 spec:
   mode: monitor # monitor | protect
-  containerRules:
+  rulesByContainer:
     postgres:
       rules:
         executables:
           allowed:
             - /usr/bin/psql
     otel-collector:
-      imagePolicyRef: otel-collector # name of the ImagePolicy
+      rules:
+        executables:
+          imagePolicyRef: otel-collector # name of the ImagePolicy
     db-migration:
       rules:
         executables:
