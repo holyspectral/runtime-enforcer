@@ -10,7 +10,7 @@
 
 [summary]: #summary
 
-First RFC, which doubles as a template.
+This RFC tries to summarize the disccusion happened to far about the policy lifecycle, and tries to also stabilize CRDs in terms of lifecycle, names, and possible interactions.
 
 # Motivation
 
@@ -39,13 +39,12 @@ The following user stories are to be intended as examples:
 ## CRDs Overview
 This is a quick overview of all the CRDs we’re going to define. Each one of them is going to be described in depth in the next sections.
 
-| CRD Current Name | CRD New Name | Description |
-| --- | --- | --- |
-| WorkloadSecurityPolicyProposal | WorkloadPolicyProposal | Proposed policies learned from workload behavior. Now includes per-container rules. |
-| WorkloadSecurityPolicy | WorkloadPolicy | Defines the enforcement policy (monitor/protect) for a workload, grouping per-container rules or image references. |
-| ClusterWorkloadSecurityPolicy | (Removed) | Replaced by ImagePolicy for cluster-wide reusable profiles. |
-| (New) | ImagePolicy | Defines reusable runtime rules (templates) based on container image, used for policy templating. |
-
+| CRD Current Name               | CRD New Name           | Description                                                                                                        |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| WorkloadSecurityPolicyProposal | WorkloadPolicyProposal | Proposed policies learned from workload behavior. Now includes per-container rules.                                |
+| WorkloadSecurityPolicy         | WorkloadPolicy         | Defines the enforcement policy (monitor/protect) for a workload, grouping per-container rules or image references. |
+| ClusterWorkloadSecurityPolicy  | (Removed)              | Replaced by ImagePolicy for cluster-wide reusable profiles.                                                        |
+| (New)                          | ImagePolicy            | Defines reusable runtime rules (templates) based on container image, used for policy templating.                   |
 
 Changes from the previous version:
 - The WorkloadSecurityPolicy was renamed into WorkloadPolicy
@@ -146,7 +145,7 @@ Pods are made by containers, each one of them running a container image. The sam
 
 Most of the time, a Redis/Tomcat/NodeJS container image is always going to behave in the same way. There could be some exceptions, we must take that scenario into account.
 
-Vendors alreadu distribute maintained container images through their platforms. It would make sense to tie our profiles to the container images, rather than thinking about the concept of “workload”.
+Vendors already distribute maintained container images through their platforms. It would make sense to tie our profiles to the container images, rather than thinking about the concept of “workload”.
 
 Let's define an ImagePolicy:
 
