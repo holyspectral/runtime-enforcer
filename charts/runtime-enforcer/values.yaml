@@ -115,6 +115,8 @@ tetragon:
     nameOverride: tetragon
     grpc:
       address: unix:///var/run/tetragon/tetragon.sock
+    prometheus:
+      enabled: false
   tetragonOperator:
     enabled: false
   crds:
@@ -122,3 +124,4 @@ tetragon:
   extraHostPathMounts:
     - name: tetragon-socket
       mountPath: /var/run/tetragon/
+
