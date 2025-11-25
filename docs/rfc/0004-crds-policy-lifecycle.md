@@ -12,6 +12,8 @@
 
 This RFC tries to summarize the disccusion happened to far about the policy lifecycle, and tries to also stabilize CRDs in terms of lifecycle, names, and possible interactions.
 
+This RFC supersedes [RFC-001](https://github.com/neuvector/runtime-enforcer/blob/main/docs/rfc/0001-workloadgroup.md).
+
 # Motivation
 
 [motivation]: #motivation
@@ -45,9 +47,12 @@ This is a quick overview of all the CRDs we’re going to define. Each one of th
 | WorkloadSecurityPolicy         | WorkloadPolicy         | Defines the enforcement policy (monitor/protect) for a workload, grouping per-container rules or image references. |
 | ClusterWorkloadSecurityPolicy  | (Removed)              | Replaced by ImagePolicy for cluster-wide reusable profiles.                                                        |
 | (New)                          | ImagePolicy            | Defines reusable runtime rules (templates) based on container image, used for policy templating.                   |
+| (New)                          | ContainerPolicy        | Defines rules that will be used to handle sidecar containers at a cluster level.                                   |
 
 Changes from the previous version:
-- The WorkloadSecurityPolicy was renamed into WorkloadPolicy
+- The WorkloadSecurityPolicy was renamed into `WorkloadPolicy`
+- We have new CRDs for the `ImagePolicy` and the `ContainerPolicy`
+- The `ClusterWorkloadSecurityPolicy` has been removed
 
 ## Learning Phase
 
@@ -57,11 +62,11 @@ During learning mode, we create WorkloadPolicyProposal resources. These resource
 apiVersion: security.rancher.io/v1alpha1
 kind: WorkloadPolicyProposal
 metadata:
-  name: deploy-pgsql-8646457455 # <workload_type>-<workload_name>
+  name: statefulsets-pgsql # <workload_type>-<workload_name>
   ownerReferences:
-  - apiVersion: apps/v1
-    kind: Deployment
-    name: pgsql-8646457455
+  - apiVersion: v1
+    kind: StatefulSet
+    name: pgsql
     uid: 39a32022-4c8f-424e-a8b6-3c92af3acb2e
 spec:
   rulesByContainer:
@@ -85,9 +90,9 @@ Changes compared to the current implementation:
 
 Notes on the behavior:
 
-- The WorkloadPolicyProposal has an ownerReference that ties it back to the workload resource for which the behaviour was observed.
+- The WorkloadPolicyProposal has an `ownerReference` that ties it back to the workload resource for which the behaviour was observed.
 - When the observed workload is deleted, the associated WorkloadPolicyProposal is deleted as well.
-- When we switch from a proposal to a real policy we delete the proposal and don’t recreate it again
+- When we switch from a `WorkloadPolicyProposal` to an actual `WorkloadPolicy` we delete the `WorkloadPolicyProposal` and don’t recreate it again
 - In case of workload rollout, the WorkloadPolicyProposal continues to learn like nothing happened. 
 
 ## The WorkloadPolicy resource
@@ -97,7 +102,7 @@ Policies are defined using the WorkloadPolicy resource. This is how this resourc
 apiVersion: security.rancher.io/v1alpha1
 kind: WorkloadPolicy
 metadata:
-  name: deploy-pgsql-8646457455
+  name: statefulsets-pgsql
   namespace: default
 spec:
   mode: monitor # monitor | protect
@@ -122,22 +127,24 @@ spec:
 
 Changes compared to the current implementation:
 
-- The rules section has been replaced by rulesByContainer. This new field holds a map with the name of the containers as key, and the list of the container rules as value.
+- The rules section has been replaced by `rulesByContainer`. This new field holds a map with the name of the containers as key, and the list of the container rules as value.
+- The `WorkloadPolicy` does not have the label selector field to identify the pods to protect.
 
 Notes on the behavior:
 
 - When the enforced workload is deleted, the WorkloadPolicy is still alive; it should be deleted manually
+- When a `WorkloadPolicy` is deleted, we will implement a mutating admission controller that will prevent users to delete such a policy if it is referenced by any workload/pod
 - In case of workload rollout, the WorkloadPolicy remains unchanged. If it causes issues with the rollout, the user is in charge of rolling back to the previous version or destroying the policy
 
 ## Binding a WorkloadPolicy
-A workload is protected by a WorkloadPolicy through a podSelector. We suggest the usage of a unique label security.rancher.io/policy, but we don’t enforce it by default since putting it in the spec.template would cause a rollout.
+A workload is protected by a WorkloadPolicy the usage of a unique label `security.rancher.io/policy: <policy-name>`.
+
+When the label is applied, a rollout could be triggered as follows:
 
 - Basic user -> use default k8s workload selectors -> everything works out of the box, no rollout required.
 - Advanced user (real production scenario) -> enforce a unique label on workloads and use this label as a selector -> a rollout could be required if the workload was initially created without the label
 
-Since the label is not compulsory, we cannot rely on it to understand if a workload is covered or not; we should use a kubectl plugin that scrapes the resources and helps the user to understand the situation (potential conflict, partial workload coverage,...). 
-
-Users can still rely on the unique label if they choose to use it, and so simple kubectl commands. Our kubectl plugin should be generic and also cover cases where the label is not used.
+Since the label is mandatory, we can rely on it to understand if a workload is covered by a policy or not. 
 
 ## Using the ImagePolicy to inherit rules from pre-made templates
 
@@ -266,6 +273,36 @@ status:
 ```
 
 At this stage we don't want to commit on the name of the WorkloadPolicyTuning resource as we might come up with a better name later, and we will for sure revisit at least the naming of the resource. We decided to defer that to a dedicated RFC when we get to implement tuning for policies.
+
+## Tetragon integration strategy
+
+The current integration strategy between our policy CRDs and tetragon’s `TracingPolicyNamespaced` stays the same.
+
+Let’s go through all the possible cases, considering the current architecture of Tetragon.
+
+The user creates a `WorkloadSecurityPolicy` named `pgsql` inside of the infra namespace.
+
+Our controller will examine the policy and, for each container rule it will create a tetragon `TracingPolicyNamespaced` inside of the infra namespace.
+
+The tetragon policy will identify the containers by using two information:
+
+- Identify the pod by using the `security.rancher.io/policy: <policy-name>` label. In this case, `security.rancher.io/policy:pgsql`.
+- Identify the container by using the name of the container mentioned inside of the `.spec.rulesByContainer.[]`
+
+Depending on the mode of the WorkloadPolicy, we will reconcile a different type of tetragon policy, like we’re currently doing. At this point, the job or our controller is done.
+
+The Tetragon policy will stay “dormant” until a user assigns the special `security.rancher.io/policy: <policy-name>` to their workload.
+
+We’re currently discussing with Tetragon maintainers to revisit how policies can be defined, to make them more “workload centric”. The work with upstream began before we did this refinement of our CRDs. Nevertheless, the proposal we made upstream remains valid also with this new set of CRDs and workflow.
+
+## Transitions
+
+These are the transitions that a policy will go through:
+
+- Learn -> Monitor: given a `WorkloadPolicyProposal` that correctly learned a workload's behavior, the user applies a label to mark it as ready to be deployed. The `WorkloadPolicyProposal` gets deleted and a `WorkloadPolicy` with the corresponding behavior and the mode set to `monitor` gets created.
+- Monitor -> Protect: given a `WorkloadPolicy` with `mode: monitor`, the user just modifies the resource setting `monitor: protect`.
+- Protect -> Monitor: given a `WorkloadPolicy` with `mode: protect`, the user just modifies the resource setting `mode: monitor`.
+- Protect -> Learn: given a `WorkloadPolicy` with `mode: protect`, it will be sufficient to delete it. Subsequently, a `WorkloadPolicyProposal` will be created from scratch.
 
 # Drawbacks
 
