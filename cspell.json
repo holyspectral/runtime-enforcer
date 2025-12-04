@@ -50,8 +50,6 @@
         "workloadsecuritypolicyproposals",
         "workloadsecuritypolicy",
         "workloadsecuritypolicies",
-        "clusterworkloadsecuritypolicy",
-        "clusterworkloadsecuritypolicies",
         "tracingpolicy",
         "tracingpolicies",
         "tracingpoliciesnamespaced",

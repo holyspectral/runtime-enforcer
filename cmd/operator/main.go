@@ -99,13 +99,6 @@ func SetupControllers(logger logr.Logger,
 		return fmt.Errorf("unable to create workload security policy controller: %w", err)
 	}
 
-	if err = (&controller.ClusterWorkloadSecurityPolicyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("unable to create ClusterWorkloadSecurityPolicyReconciler controller: %w", err)
-	}
-
 	if err = (&controller.WorkloadSecurityPolicyProposalReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),

@@ -12,7 +12,6 @@ import (
 
 type SecurityV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	ClusterWorkloadSecurityPoliciesGetter
 	WorkloadSecurityPoliciesGetter
 	WorkloadSecurityPolicyProposalsGetter
 }
@@ -20,10 +19,6 @@ type SecurityV1alpha1Interface interface {
 // SecurityV1alpha1Client is used to interact with features provided by the security.rancher.io group.
 type SecurityV1alpha1Client struct {
 	restClient rest.Interface
-}
-
-func (c *SecurityV1alpha1Client) ClusterWorkloadSecurityPolicies(namespace string) ClusterWorkloadSecurityPolicyInterface {
-	return newClusterWorkloadSecurityPolicies(c, namespace)
 }
 
 func (c *SecurityV1alpha1Client) WorkloadSecurityPolicies(namespace string) WorkloadSecurityPolicyInterface {
