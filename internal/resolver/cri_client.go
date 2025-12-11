@@ -23,10 +23,11 @@ var (
 
 // The resolver should try to open a new client if the previous one failed.
 type criResolver struct {
-	ctx      context.Context
-	client   criapi.RuntimeServiceClient
-	logger   *slog.Logger
-	endpoint string
+	ctx        context.Context
+	client     criapi.RuntimeServiceClient
+	logger     *slog.Logger
+	endpoint   string
+	cgroupRoot string
 }
 
 func newCRIResolver(ctx context.Context, logger *slog.Logger) (*criResolver, error) {
@@ -60,6 +61,13 @@ func newCRIResolver(ctx context.Context, logger *slog.Logger) (*criResolver, err
 		}
 		criClient.logger.ErrorContext(ctx, "cannot create CRI client", "endpoint", criClient.endpoint, "error", err)
 	}
+
+	// We compute the cgroup root only once here to avoid doing it for every container
+	criClient.cgroupRoot, err = cgroups.HostCgroupRoot()
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, err
 }
 
@@ -199,17 +207,13 @@ func (c *criResolver) getCgroupPath(containerID string) (string, error) {
 }
 
 func (c *criResolver) resolveCgroup(containerID string) (uint64, string, error) {
+	// this is extracted from the container runtime
 	cgPath, err := c.getCgroupPath(containerID)
 	if err != nil {
 		return 0, "", err
 	}
 
-	cgRoot, err := cgroups.HostCgroupRoot()
-	if err != nil {
-		return 0, "", err
-	}
-
-	path := filepath.Join(cgRoot, cgPath)
+	path := filepath.Join(c.cgroupRoot, cgPath)
 	cgID, err := cgroups.GetCgroupIDFromPath(path)
 	if err != nil {
 		return 0, "", err
