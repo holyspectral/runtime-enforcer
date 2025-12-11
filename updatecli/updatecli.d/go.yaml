@@ -45,8 +45,6 @@ targets:
     spec:
       file: .pre-commit-config.yaml
       key: $.repos[0].hooks[0].language_version
-    transformers:
-      - quote: true
 
 actions:
   default:
