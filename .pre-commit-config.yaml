@@ -7,4 +7,4 @@ repos:
   hooks:
   - id: golangci-lint
     stages: [pre-commit]
-    language_version: "\"1.25.5\""
+    language_version: "1.25.5"
