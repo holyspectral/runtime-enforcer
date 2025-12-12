@@ -74,7 +74,7 @@ func NewManager(logger *slog.Logger, enableLearning bool, eBPFLogLevel ebpf.LogL
 
 	newLogger := logger.With("component", "ebpf-manager")
 	newLogger.Info("Load time configuration detected",
-		"cgrp_fs_magic", cgroups.CgroupFsMagicStr(conf.CgrpFsMagic),
+		"cgrp_fs_magic", cgroups.CgroupFsMagicString(conf.CgrpFsMagic),
 		"cgrp_v1_subsys_idx", conf.Cgrpv1SubsysIdx,
 		"debug_mode", conf.DebugMode)
 

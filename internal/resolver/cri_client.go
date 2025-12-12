@@ -36,8 +36,15 @@ func newCRIResolver(ctx context.Context, logger *slog.Logger) (*criResolver, err
 		logger: logger.With("component", "cri-client"),
 	}
 
-	// We try to create the client here so that we can fail fast if no endpoint is reachable
 	var err error
+	// We compute the cgroup root only once here to avoid doing it for every container
+	criClient.cgroupRoot, err = cgroups.GetHostCgroupRoot()
+	criClient.logger.WarnContext(ctx, "detected cgroup root", "path", criClient.cgroupRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// We try to create the client here so that we can fail fast if no endpoint is reachable
 	if os.Getenv("CUSTOM_CRI_SOCKET_PATH") != "" {
 		criClient.endpoint = os.Getenv("CUSTOM_CRI_SOCKET_PATH")
 		criClient.endpoint = "unix://" + criClient.endpoint
@@ -61,13 +68,6 @@ func newCRIResolver(ctx context.Context, logger *slog.Logger) (*criResolver, err
 		}
 		criClient.logger.ErrorContext(ctx, "cannot create CRI client", "endpoint", criClient.endpoint, "error", err)
 	}
-
-	// We compute the cgroup root only once here to avoid doing it for every container
-	criClient.cgroupRoot, err = cgroups.HostCgroupRoot()
-	if err != nil {
-		return nil, err
-	}
-
 	return nil, err
 }
 
