@@ -107,7 +107,7 @@ func newClientTry(endpoint string) (criapi.RuntimeServiceClient, error) {
 func SystemdExpandSlice(slice string) (string, error) {
 	suffix := ".slice"
 	// Name has to end with ".slice", but can't be just ".slice".
-	if len(slice) < len(suffix) || !strings.HasSuffix(slice, suffix) {
+	if len(slice) <= len(suffix) || !strings.HasSuffix(slice, suffix) {
 		return "", fmt.Errorf("invalid slice name: %s", slice)
 	}
 
@@ -116,23 +116,32 @@ func SystemdExpandSlice(slice string) (string, error) {
 		return "", fmt.Errorf("invalid slice name: %s", slice)
 	}
 
-	var path, prefix string
 	sliceName := strings.TrimSuffix(slice, suffix)
 	// if input was -.slice, we should just return root now
 	if sliceName == "-" {
 		return "/", nil
 	}
+
+	var (
+		pathBuilder   strings.Builder
+		prefixBuilder strings.Builder
+	)
+
 	for _, component := range strings.Split(sliceName, "-") {
 		// test--a.slice isn't permitted, nor is -test.slice.
 		if component == "" {
 			return "", fmt.Errorf("invalid slice name: %s", slice)
 		}
 
-		// Append the component to the path and to the prefix.
-		path += "/" + prefix + component + suffix
-		prefix += component + "-"
+		pathBuilder.WriteByte('/')
+		pathBuilder.WriteString(prefixBuilder.String())
+		pathBuilder.WriteString(component)
+		pathBuilder.WriteString(suffix)
+
+		prefixBuilder.WriteString(component)
+		prefixBuilder.WriteByte('-')
 	}
-	return path, nil
+	return pathBuilder.String(), nil
 }
 
 // ParseCgroupsPath parses the cgroup path from the CRI response.
