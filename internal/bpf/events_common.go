@@ -7,9 +7,65 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
 )
+
+type mode int
+
+const (
+	learning mode = iota
+	monitoring
+)
+
+func (mod mode) String() string {
+	switch mod {
+	case learning:
+		return "learning"
+	case monitoring:
+		return "monitoring"
+	default:
+		return "unknown"
+	}
+}
+
+func (m *Manager) setupEventConsumer(ctx context.Context, mod mode) error {
+	var progLink link.Link
+	defer func() {
+		m.logger.InfoContext(ctx, "stopped consumer", "mode", mod.String())
+		if progLink != nil {
+			if err := progLink.Close(); err != nil {
+				m.logger.ErrorContext(ctx, "closing program link", "error", err, "mode", mod.String())
+			}
+		}
+	}()
+
+	var err error
+
+	prog := m.objs.ExecveSend
+	outChan := m.learningEventChan
+	buf := m.objs.RingbufExecve
+	if mod == monitoring {
+		prog = m.objs.EnforceCgroupPolicy
+		outChan = m.monitoringEventChan
+		buf = m.objs.RingbufMonitoring
+	}
+
+	progLink, err = link.AttachTracing(link.TracingOptions{
+		Program: prog,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to attach %s prog: %w", prog.String(), err)
+	}
+
+	rd, err := ringbuf.NewReader(buf)
+	if err != nil {
+		return fmt.Errorf("opening %s ringbuf reader: %w", buf.String(), err)
+	}
+
+	return m.processRingbufEvents(ctx, rd, outChan)
+}
 
 // processRingbufEvents is a small helper used by both learning and monitoring loops.
 // It reads events from the given ring buffer and sends them to the provided channel.
