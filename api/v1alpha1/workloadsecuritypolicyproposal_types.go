@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -114,7 +115,7 @@ func (p *WorkloadSecurityPolicyProposalSpec) IntoWorkloadSecurityPolicySpec() Wo
 	return WorkloadSecurityPolicySpec{
 		Rules:    p.Rules,
 		Severity: MaximumSeverity,
-		Mode:     MonitorMode,
+		Mode:     policymode.MonitorString,
 		Selector: p.Selector,
 	}
 }

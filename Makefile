@@ -44,7 +44,7 @@ help: ## Display this help.
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=operator-role crd webhook paths="./api/v1alpha1" paths="./internal/controller" output:crd:artifacts:config=charts/runtime-enforcer/templates/crd output:rbac:artifacts:config=charts/runtime-enforcer/templates/operator
-	$(CONTROLLER_GEN) rbac:roleName=daemon-role paths="./internal/tetragon" paths="./internal/eventhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/daemon
+	$(CONTROLLER_GEN) rbac:roleName=daemon-role paths="./cmd/daemon" paths="./internal/eventhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/daemon
 	sed -i 's/operator-role/{{ include "runtime-enforcer.fullname" . }}-operator/' charts/runtime-enforcer/templates/operator/role.yaml
 	sed -i 's/daemon-role/{{ include "runtime-enforcer.fullname" . }}-daemon/' charts/runtime-enforcer/templates/daemon/role.yaml
 
@@ -76,23 +76,27 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: generate-ebpf
+generate-ebpf: ## Generate eBPF artifacts.
+	go generate ./internal/bpf
+
 .PHONY: test
-test: vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"    go test $$(go list ./... | grep -v /e2e) -race -test.v -coverprofile coverage/cover.out -covermode=atomic
+test: generate-ebpf vet setup-envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"    go test $$(go list ./... | grep -v /e2e | grep -v /internal/bpf) -race -test.v -coverprofile coverage/cover.out -covermode=atomic
 
 .PHONY: helm-unittest
 helm-unittest:
 	helm unittest charts/runtime-enforcer/ --file "tests/**/*_test.yaml"
 
 .PHONY: test-e2e
-test-e2e: vet
+test-e2e: generate-ebpf vet
 ifeq ($(E2E_NO_REBUILD),)
 	TAG=latest make $(E2E_DEPS)
 endif
 	go test ./test/e2e/ -v
 
 .PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter
+lint: generate-ebpf golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
 
 .PHONY: lint-fix
@@ -109,8 +113,12 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 operator: fmt vet ## Build manager binary.
 	CGO_ENABLED=0 GOOS=linux go build -o bin/operator ./cmd/operator
 
+.PHONY: test-bpf
+test-bpf: generate-ebpf ## Run bpf tests.
+	go test -v ./internal/bpf -count=1 -exec "sudo -E"
+
 .PHONY: daemon
-daemon: fmt vet ## Build daemon binary.
+daemon: generate-ebpf fmt vet ## Build daemon binary.
 	CGO_ENABLED=0 GOOS=linux go build -o bin/daemon ./cmd/daemon
 
 .PHONY: run

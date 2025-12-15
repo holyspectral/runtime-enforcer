@@ -78,6 +78,7 @@ spec:
                           which executables are allowed to run
                         items:
                           type: string
+                        maxItems: 0
                         type: array
                     type: object
                 type: object

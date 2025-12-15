@@ -3,7 +3,6 @@ package e2e_test
 import (
 	"context"
 	"os"
-	"slices"
 	"testing"
 
 	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
@@ -139,13 +138,7 @@ func getLearningModeTest() types.Feature {
 					err = wait.For(conditions.New(r).ResourceMatch(
 						&proposal,
 						func(_ k8s.Object) bool {
-							if slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/bash") &&
-								slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/ls") &&
-								slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/sleep") {
-								return true
-							}
-
-							return false
+							return verifyUbuntuLearnedProcesses(proposal.Spec.Rules.Executables.Allowed)
 						}),
 						wait.WithTimeout(DefaultOperationTimeout),
 					)

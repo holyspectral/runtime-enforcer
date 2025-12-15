@@ -21,22 +21,18 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - cilium.io
+  - security.rancher.io
   resources:
-  - tracingpolicies
-  - tracingpoliciesnamespaced
+  - workloadsecuritypolicies
   verbs:
   - create
-  - delete
   - get
   - list
   - patch
-  - update
   - watch
 - apiGroups:
   - security.rancher.io
   resources:
-  - workloadsecuritypolicies
   - workloadsecuritypolicyproposals
   verbs:
   - create
@@ -49,14 +45,12 @@ rules:
 - apiGroups:
   - security.rancher.io
   resources:
-  - workloadsecuritypolicies/finalizers
   - workloadsecuritypolicyproposals/finalizers
   verbs:
   - update
 - apiGroups:
   - security.rancher.io
   resources:
-  - workloadsecuritypolicies/status
   - workloadsecuritypolicyproposals/status
   verbs:
   - get

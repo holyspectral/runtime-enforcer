@@ -12,7 +12,15 @@ jobs:
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version-file: "go.mod"
-
+      - name: Install system dependencies for eBPF build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libelf-dev \
+            clang \
+            llvm \
+            libbpf-dev
       - name: Running Test e2e
         run: |
           make test-e2e

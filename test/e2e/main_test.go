@@ -3,11 +3,9 @@ package e2e_test
 import (
 	"bytes"
 	"context"
-	"slices"
 	"strings"
 	"testing"
 
-	tragonv1alpha1 "github.com/cilium/tetragon/pkg/k8s/apis/cilium.io/v1alpha1"
 	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,13 +103,7 @@ func getMainTest() types.Feature {
 				err := wait.For(conditions.New(r).ResourceMatch(
 					&proposal,
 					func(_ k8s.Object) bool {
-						if slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/bash") &&
-							slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/ls") &&
-							slices.Contains(proposal.Spec.Rules.Executables.Allowed, "/usr/bin/sleep") {
-							return true
-						}
-
-						return false
+						return verifyUbuntuLearnedProcesses(proposal.Spec.Rules.Executables.Allowed)
 					}),
 					wait.WithTimeout(DefaultOperationTimeout),
 				)
@@ -119,7 +111,7 @@ func getMainTest() types.Feature {
 
 				return context.WithValue(ctx, key("proposal"), &proposal)
 			}).
-		Assess("a proposal is promoted to a security policy and its Tetragon rules is created",
+		Assess("a proposal is promoted to a security policy and the WP is created",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				t.Log("create a security policy")
 
@@ -148,22 +140,7 @@ func getMainTest() types.Feature {
 				err := r.Create(ctx, &policy)
 				require.NoError(t, err, "create policy")
 
-				t.Log("waiting for the tetragon rule to be created: ", policy.Name)
-
-				tp := tragonv1alpha1.TracingPolicyNamespaced{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      policy.Name,
-						Namespace: proposal.Namespace,
-					},
-				}
-
-				err = wait.For(conditions.New(r).ResourceMatch(&tp, func(_ k8s.Object) bool {
-					return true
-				}), wait.WithTimeout(DefaultOperationTimeout))
-				require.NoError(t, err)
-				assert.Len(t, "1", len(tp.Spec.KProbes))
-				assert.Equal(t, []string{"test-policy"}, tp.Spec.KProbes[0].Tags)
-				assert.Equal(t, "[9] test-policy", tp.Spec.KProbes[0].Message)
+				// todo!: we should check the status of the WP is updated
 
 				return context.WithValue(ctx, key("policy"), &policy)
 			}).
@@ -197,14 +174,6 @@ func getMainTest() types.Feature {
 			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadSecurityPolicy)
 
 			err := r.Delete(ctx, policy)
-			require.NoError(t, err)
-
-			err = wait.For(conditions.New(r).ResourceDeleted(&tragonv1alpha1.TracingPolicyNamespaced{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      policy.Name,
-					Namespace: policy.Namespace,
-				},
-			}))
 			require.NoError(t, err)
 
 			return ctx
