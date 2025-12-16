@@ -41,7 +41,8 @@ jobs:
         with:
           version: v3.19.0
       - name: Install Helm-unittest
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        # Pin version to 1.0.2 due to https://github.com/helm-unittest/helm-unittest/issues/790
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version 1.0.2
       - run: make helm-unittest
   golangci:
     name: Golang CI
