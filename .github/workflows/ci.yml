@@ -54,6 +54,19 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: Install system dependencies for eBPF build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libelf-dev \
+            clang \
+            llvm \
+            libbpf-dev
+
+      - name: Generate eBPF code
+        run: make generate-ebpf
+
       - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
           version: v2.4.0

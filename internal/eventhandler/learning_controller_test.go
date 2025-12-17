@@ -9,8 +9,8 @@ import (
 	"github.com/neuvector/runtime-enforcer/internal/eventhandler"
 	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
 
-	. "github.com/onsi/ginkgo/v2" //nolint:revive // Required for testing
-	. "github.com/onsi/gomega"    //nolint:revive // Required for testing
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

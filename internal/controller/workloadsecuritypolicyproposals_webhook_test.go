@@ -1,8 +1,8 @@
 package controller_test
 
 import (
-	. "github.com/onsi/ginkgo/v2" //nolint:revive // Required for testing
-	. "github.com/onsi/gomega"    //nolint:revive // Required for testing
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
 	"github.com/neuvector/runtime-enforcer/internal/controller"
