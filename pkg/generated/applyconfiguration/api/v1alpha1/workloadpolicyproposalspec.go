@@ -10,8 +10,8 @@ import (
 // WorkloadPolicyProposalSpecApplyConfiguration represents a declarative configuration of the WorkloadPolicyProposalSpec type for use
 // with apply.
 type WorkloadPolicyProposalSpecApplyConfiguration struct {
-	Selector         *v1.LabelSelectorApplyConfiguration                 `json:"selector,omitempty"`
-	RulesByContainer map[string]*apiv1alpha1.WorkloadSecurityPolicyRules `json:"rulesByContainer,omitempty"`
+	Selector         *v1.LabelSelectorApplyConfiguration         `json:"selector,omitempty"`
+	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
 
 // WorkloadPolicyProposalSpecApplyConfiguration constructs a declarative configuration of the WorkloadPolicyProposalSpec type for use with
@@ -32,9 +32,9 @@ func (b *WorkloadPolicyProposalSpecApplyConfiguration) WithSelector(value *v1.La
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, the entries provided by each call will be put on the RulesByContainer field,
 // overwriting an existing map entries in RulesByContainer field with the same key.
-func (b *WorkloadPolicyProposalSpecApplyConfiguration) WithRulesByContainer(entries map[string]*apiv1alpha1.WorkloadSecurityPolicyRules) *WorkloadPolicyProposalSpecApplyConfiguration {
+func (b *WorkloadPolicyProposalSpecApplyConfiguration) WithRulesByContainer(entries map[string]*apiv1alpha1.WorkloadPolicyRules) *WorkloadPolicyProposalSpecApplyConfiguration {
 	if b.RulesByContainer == nil && len(entries) > 0 {
-		b.RulesByContainer = make(map[string]*apiv1alpha1.WorkloadSecurityPolicyRules, len(entries))
+		b.RulesByContainer = make(map[string]*apiv1alpha1.WorkloadPolicyRules, len(entries))
 	}
 	for k, v := range entries {
 		b.RulesByContainer[k] = v

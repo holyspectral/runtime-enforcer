@@ -120,17 +120,17 @@ func getMainTest() types.Feature {
 				r := ctx.Value(key("client")).(*resources.Resources)
 				proposal := ctx.Value(key("proposal")).(*v1alpha1.WorkloadPolicyProposal)
 
-				policy := v1alpha1.WorkloadSecurityPolicy{
+				policy := v1alpha1.WorkloadPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-policy",
 						Namespace: proposal.ObjectMeta.Namespace,
 					},
-					Spec: v1alpha1.WorkloadSecurityPolicySpec{
+					Spec: v1alpha1.WorkloadPolicySpec{
 						Mode:     "protect",
 						Selector: proposal.Spec.Selector,
-						RulesByContainer: map[string]*v1alpha1.WorkloadSecurityPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadSecurityPolicyRules{
-								Executables: v1alpha1.WorkloadSecurityPolicyExecutables{
+						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
+							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,
 								},
@@ -175,7 +175,7 @@ func getMainTest() types.Feature {
 			}).
 		Assess("delete security policy", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			r := ctx.Value(key("client")).(*resources.Resources)
-			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadSecurityPolicy)
+			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
 
 			err := r.Delete(ctx, policy)
 			require.NoError(t, err)

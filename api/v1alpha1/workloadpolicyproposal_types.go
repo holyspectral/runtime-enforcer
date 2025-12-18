@@ -25,7 +25,7 @@ type WorkloadPolicyProposalSpec struct {
 	Selector *metav1.LabelSelector `json:"selector,omitempty"`
 
 	// rulesByContainer specifies the rules this policy contains, per-container.
-	RulesByContainer map[string]*WorkloadSecurityPolicyRules `json:"rulesByContainer,omitempty"`
+	RulesByContainer map[string]*WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
 
 type WorkloadPolicyProposalCondition struct {
@@ -97,13 +97,13 @@ func (p *WorkloadPolicyProposal) AddProcess(containerName string, executable str
 	}
 
 	if p.Spec.RulesByContainer == nil {
-		p.Spec.RulesByContainer = make(map[string]*WorkloadSecurityPolicyRules)
+		p.Spec.RulesByContainer = make(map[string]*WorkloadPolicyRules)
 	}
 
 	rules, ok := p.Spec.RulesByContainer[containerName]
 	if !ok {
-		p.Spec.RulesByContainer[containerName] = &WorkloadSecurityPolicyRules{
-			Executables: WorkloadSecurityPolicyExecutables{
+		p.Spec.RulesByContainer[containerName] = &WorkloadPolicyRules{
+			Executables: WorkloadPolicyExecutables{
 				Allowed: []string{executable},
 			},
 		}
@@ -128,9 +128,9 @@ func (p *WorkloadPolicyProposal) AddPartialOwnerReferenceDetails(workloadKind st
 	}
 }
 
-func (p *WorkloadPolicyProposalSpec) IntoWorkloadSecurityPolicySpec() WorkloadSecurityPolicySpec {
+func (p *WorkloadPolicyProposalSpec) IntoWorkloadPolicySpec() WorkloadPolicySpec {
 	// Setting severity to 10 and enforcement mode to "monitor" by default.
-	return WorkloadSecurityPolicySpec{
+	return WorkloadPolicySpec{
 		Severity:         MaximumSeverity,
 		Mode:             policymode.MonitorString,
 		Selector:         p.Selector,

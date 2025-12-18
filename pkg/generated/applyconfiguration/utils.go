@@ -16,6 +16,10 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=security.rancher.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicy"):
+		return &apiv1alpha1.WorkloadPolicyApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyExecutables"):
+		return &apiv1alpha1.WorkloadPolicyExecutablesApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyProposal"):
 		return &apiv1alpha1.WorkloadPolicyProposalApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyProposalCondition"):
@@ -24,16 +28,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.WorkloadPolicyProposalSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyProposalStatus"):
 		return &apiv1alpha1.WorkloadPolicyProposalStatusApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadSecurityPolicy"):
-		return &apiv1alpha1.WorkloadSecurityPolicyApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadSecurityPolicyExecutables"):
-		return &apiv1alpha1.WorkloadSecurityPolicyExecutablesApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadSecurityPolicyRules"):
-		return &apiv1alpha1.WorkloadSecurityPolicyRulesApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadSecurityPolicySpec"):
-		return &apiv1alpha1.WorkloadSecurityPolicySpecApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadSecurityPolicyStatus"):
-		return &apiv1alpha1.WorkloadSecurityPolicyStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyRules"):
+		return &apiv1alpha1.WorkloadPolicyRulesApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicySpec"):
+		return &apiv1alpha1.WorkloadPolicySpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("WorkloadPolicyStatus"):
+		return &apiv1alpha1.WorkloadPolicyStatusApplyConfiguration{}
 
 	}
 	return nil

@@ -2,6 +2,14 @@
 
 package v1alpha1
 
+// WorkloadPolicyListerExpansion allows custom methods to be added to
+// WorkloadPolicyLister.
+type WorkloadPolicyListerExpansion interface{}
+
+// WorkloadPolicyNamespaceListerExpansion allows custom methods to be added to
+// WorkloadPolicyNamespaceLister.
+type WorkloadPolicyNamespaceListerExpansion interface{}
+
 // WorkloadPolicyProposalListerExpansion allows custom methods to be added to
 // WorkloadPolicyProposalLister.
 type WorkloadPolicyProposalListerExpansion interface{}
@@ -9,11 +17,3 @@ type WorkloadPolicyProposalListerExpansion interface{}
 // WorkloadPolicyProposalNamespaceListerExpansion allows custom methods to be added to
 // WorkloadPolicyProposalNamespaceLister.
 type WorkloadPolicyProposalNamespaceListerExpansion interface{}
-
-// WorkloadSecurityPolicyListerExpansion allows custom methods to be added to
-// WorkloadSecurityPolicyLister.
-type WorkloadSecurityPolicyListerExpansion interface{}
-
-// WorkloadSecurityPolicyNamespaceListerExpansion allows custom methods to be added to
-// WorkloadSecurityPolicyNamespaceLister.
-type WorkloadSecurityPolicyNamespaceListerExpansion interface{}

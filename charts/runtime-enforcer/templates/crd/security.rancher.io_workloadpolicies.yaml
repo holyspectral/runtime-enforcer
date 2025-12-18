@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.1
-  name: workloadsecuritypolicies.security.rancher.io
+  name: workloadpolicies.security.rancher.io
 spec:
   group: security.rancher.io
   names:
-    kind: WorkloadSecurityPolicy
-    listKind: WorkloadSecurityPolicyList
-    plural: workloadsecuritypolicies
-    singular: workloadsecuritypolicy
+    kind: WorkloadPolicy
+    listKind: WorkloadPolicyList
+    plural: workloadpolicies
+    singular: workloadpolicy
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -28,8 +28,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: WorkloadSecurityPolicy is the Schema for the workloadsecuritypolicies
-          API.
+        description: WorkloadPolicy is the Schema for the workloadpolicies API.
         properties:
           apiVersion:
             description: |-

@@ -24,7 +24,7 @@ type WorkloadPolicyProposalReconciler struct {
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals/finalizers,verbs=update
-// +kubebuilder:rbac:groups=security.rancher.io,resources=workloadsecuritypolicies,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch;create;patch
 
 func (r *WorkloadPolicyProposalReconciler) Reconcile(
 	ctx context.Context,
@@ -52,7 +52,7 @@ func (r *WorkloadPolicyProposalReconciler) Reconcile(
 		return ctrl.Result{}, nil
 	}
 
-	policy := securityv1alpha1.WorkloadSecurityPolicy{
+	policy := securityv1alpha1.WorkloadPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      policyProposal.ObjectMeta.Name,
 			Namespace: policyProposal.ObjectMeta.Namespace,
@@ -60,7 +60,7 @@ func (r *WorkloadPolicyProposalReconciler) Reconcile(
 	}
 
 	_, err = controllerutil.CreateOrPatch(ctx, r.Client, &policy, func() error {
-		policy.Spec = policyProposal.Spec.IntoWorkloadSecurityPolicySpec()
+		policy.Spec = policyProposal.Spec.IntoWorkloadPolicySpec()
 		err = controllerutil.SetControllerReference(&policyProposal, &policy, r.Scheme)
 		if err != nil {
 			return fmt.Errorf("failed to set controller reference: %w", err)

@@ -1,7 +1,7 @@
 apiVersion: security.rancher.io/v1alpha1
-kind: WorkloadSecurityPolicy
+kind: WorkloadPolicy
 metadata:
-  name: workloadsecuritypolicy-sample
+  name: workloadpolicy-sample
 spec:
   mode: monitor # monitor/protect
   selector:

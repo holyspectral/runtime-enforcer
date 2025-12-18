@@ -79,7 +79,7 @@ func NewLearningReconciler(client client.Client, scheme *runtime.Scheme) *Learni
 // kubebuilder annotations for accessing policy proposals.
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals,verbs=create;get;list;watch;update;patch
 
-// Reconcile receives learning events and creates/updates WorkloadSecurityPolicyProposal resources accordingly.
+// Reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
 func (r *LearningReconciler) Reconcile(
 	ctx context.Context,
 	req eventscraper.KubeProcessInfo,

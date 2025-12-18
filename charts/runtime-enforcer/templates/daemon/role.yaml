@@ -16,6 +16,14 @@ rules:
 - apiGroups:
   - security.rancher.io
   resources:
+  - workloadpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security.rancher.io
+  resources:
   - workloadpolicyproposals
   verbs:
   - create
@@ -23,12 +31,4 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - security.rancher.io
-  resources:
-  - workloadsecuritypolicies
-  verbs:
-  - get
-  - list
   - watch

@@ -55,8 +55,8 @@ func (p *PolicyGenerator) allocPolicyID() policyID {
 	return id
 }
 
-func resourceCheck(logger *slog.Logger, prefix string, obj interface{}) *securityv1alpha1.WorkloadSecurityPolicy {
-	wp, ok := obj.(*securityv1alpha1.WorkloadSecurityPolicy)
+func resourceCheck(logger *slog.Logger, prefix string, obj interface{}) *securityv1alpha1.WorkloadPolicy {
+	wp, ok := obj.(*securityv1alpha1.WorkloadPolicy)
 	if !ok {
 		logger.Error("unexpected object type", "method", prefix, "object", obj)
 		return nil
@@ -64,7 +64,7 @@ func resourceCheck(logger *slog.Logger, prefix string, obj interface{}) *securit
 	return wp
 }
 
-func (p *PolicyGenerator) addPolicy(wp *securityv1alpha1.WorkloadSecurityPolicy) error {
+func (p *PolicyGenerator) addPolicy(wp *securityv1alpha1.WorkloadPolicy) error {
 	p.logger.Info(
 		"handler called",
 		"method", "add-policy",
@@ -120,7 +120,7 @@ func (p *PolicyGenerator) addPolicy(wp *securityv1alpha1.WorkloadSecurityPolicy)
 	return nil
 }
 
-func (p *PolicyGenerator) updatePolicy(oldWp, newWp *securityv1alpha1.WorkloadSecurityPolicy) error {
+func (p *PolicyGenerator) updatePolicy(oldWp, newWp *securityv1alpha1.WorkloadPolicy) error {
 	p.logger.Info(
 		"handler called",
 		"method", "update-policy",
@@ -158,7 +158,7 @@ func (p *PolicyGenerator) updatePolicy(oldWp, newWp *securityv1alpha1.WorkloadSe
 	return nil
 }
 
-func (p *PolicyGenerator) deletePolicy(wp *securityv1alpha1.WorkloadSecurityPolicy) error {
+func (p *PolicyGenerator) deletePolicy(wp *securityv1alpha1.WorkloadPolicy) error {
 	p.logger.Info(
 		"handler called",
 		"method", "delete",
