@@ -1,0 +1,18 @@
+vng_path: "vng"
+# Command/script to run inside the VM (path + arguments)
+cmd: "./tester -test.v"
+# Number of parallel VMs to run
+parallel: 4
+# Path to the output file for the report (if empty uses stdout)
+out_path: ""
+# show only the final report and not the individual VM outputs
+report_only: false
+# kernel versions to test
+kernel_versions:
+    - v5.10.247
+    - v5.15.197
+    - v6.1.159
+    - v6.6.119
+    - v6.12.62
+    - v6.17.12
+    - v6.18.1
