@@ -141,18 +141,16 @@ func TestNoVerifierFailures(t *testing.T) {
 	}
 	var verr *ebpf.VerifierError
 	if errors.As(err, &verr) {
+		t.Log("Verifier errors detected:")
 		for _, log := range verr.Log {
 			t.Log(log)
 		}
 	}
+	t.Log(err)
 	t.FailNow()
 }
 
-func TestLearning(t *testing.T) {
-	//////////////////////
-	// Start BPF manager
-	//////////////////////
-	enableLearning := true
+func startManager(t *testing.T, enableLearning bool) (*Manager, func()) {
 	manager, err := NewManager(newTestLogger(t), enableLearning, ebpf.LogLevelBranch)
 	require.NoError(t, err, "Failed to create BPF manager")
 	require.NotNil(t, manager, "BPF manager is nil")
@@ -162,10 +160,21 @@ func TestLearning(t *testing.T) {
 	g.Go(func() error {
 		return manager.Start(ctx)
 	})
-	defer func() {
+
+	cleanup := func() {
 		cancel()
 		require.NoError(t, g.Wait(), "Failed to stop BPF manager")
-	}()
+	}
+	return manager, cleanup
+}
+
+func TestLearning(t *testing.T) {
+	//////////////////////
+	// Start BPF manager
+	//////////////////////
+	enableLearning := true
+	manager, cleanup := startManager(t, enableLearning)
+	defer cleanup()
 
 	//////////////////////
 	// Setup the cgroup
@@ -185,24 +194,10 @@ func TestLearning(t *testing.T) {
 	require.NoError(t, err, "Failed to find learning event")
 }
 
-func TestMonitoringEnforcing(t *testing.T) {
-	//////////////////////
-	// Start BPF manager
-	//////////////////////
+func TestMonitorProtectMode(t *testing.T) {
 	enableLearning := false
-	manager, err := NewManager(newTestLogger(t), enableLearning, ebpf.LogLevelBranch)
-	require.NoError(t, err, "Failed to create BPF manager")
-	require.NotNil(t, manager, "BPF manager is nil")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return manager.Start(ctx)
-	})
-	defer func() {
-		cancel()
-		require.NoError(t, g.Wait(), "Failed to stop BPF manager")
-	}()
+	manager, cleanup := startManager(t, enableLearning)
+	defer cleanup()
 
 	//////////////////////
 	// Setup the cgroup
