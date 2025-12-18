@@ -427,11 +427,6 @@ static __always_inline u16 string_padded_len(u16 len) {
 
 	if(len <= STRING_MAPS_SIZE_6)
 		return STRING_MAPS_SIZE_6;
-
-	if(LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 11, 0)) {
-		return STRING_MAPS_SIZE_7;
-	}
-
 	if(len <= STRING_MAPS_SIZE_7)
 		return STRING_MAPS_SIZE_7;
 	if(len <= STRING_MAPS_SIZE_8)
@@ -442,13 +437,8 @@ static __always_inline u16 string_padded_len(u16 len) {
 }
 
 static __always_inline int string_map_index(u16 padded_len) {
-	if(padded_len < STRING_MAPS_SIZE_5)
+	if(padded_len < STRING_MAPS_SIZE_5) {
 		return (padded_len / STRING_MAPS_KEY_INC_SIZE) - 1;
-
-	if(LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 11, 0)) {
-		if(padded_len == STRING_MAPS_SIZE_6)
-			return 6;
-		return 7;
 	}
 
 	switch(padded_len) {
@@ -516,6 +506,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	// Only 5.11+ kernels support hash key lengths > 512 bytes
 	// https://github.com/cilium/tetragon/commit/834b5fe7d4063928cf7b89f61252637d833ca018
+	// From now on, we are sure that evt->path_len is <= STRING_MAPS_SIZE_7 if on <5.11
 	if(LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 11, 0)) {
 		if(evt->path_len > STRING_MAPS_SIZE_7) {
 			bpf_printk("Path length %d exceeds max supported length", evt->path_len);
