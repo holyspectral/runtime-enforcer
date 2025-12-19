@@ -88,22 +88,19 @@ func stringPaddedLen(s int) int {
 	if s <= stringMapSize6 {
 		return stringMapSize6
 	}
-	if kernels.CurrVersionIsGreaterOrEqualThan("5.11") {
-		if s <= stringMapSize7 {
-			return stringMapSize7
-		}
-		if s <= stringMapSize8 {
-			return stringMapSize8
-		}
-		if s <= stringMapSize9 {
-			return stringMapSize9
-		}
-		return stringMapSize10
+	if s <= stringMapSize7 {
+		return stringMapSize7
 	}
-	return stringMapSize7
+	if s <= stringMapSize8 {
+		return stringMapSize8
+	}
+	if s <= stringMapSize9 {
+		return stringMapSize9
+	}
+	return stringMapSize10
 }
 
-func argStringSelectorValue(v string, removeNul bool) ([MaxStringMapsSize]byte, int, error) {
+func argStringSelectorValue(v string, removeNul bool, currKernelVer int) ([MaxStringMapsSize]byte, int, error) {
 	if removeNul {
 		// Remove any trailing nul characters ("\0" or 0x00)
 		for v[len(v)-1] == 0 {
@@ -119,7 +116,7 @@ func argStringSelectorValue(v string, removeNul bool) ([MaxStringMapsSize]byte, 
 	}
 
 	switch {
-	case kernels.CurrVersionIsLowerThan("5.11"):
+	case kernels.VersionIsLowerThan(currKernelVer, "5.11"):
 		// Until 5.11 we have max size of 512
 		if s > stringMapSize7 {
 			return ret, 0, errors.New("string is too long")
@@ -137,7 +134,7 @@ func argStringSelectorValue(v string, removeNul bool) ([MaxStringMapsSize]byte, 
 }
 
 func putValueInMap(m SelectorStringMaps, v string) error {
-	value, size, err := argStringSelectorValue(v, false)
+	value, size, err := argStringSelectorValue(v, false, kernels.GetCurrKernelVersion())
 	if err != nil {
 		return fmt.Errorf("value %s invalid: %w", v, err)
 	}

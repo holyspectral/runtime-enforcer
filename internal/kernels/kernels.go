@@ -37,6 +37,15 @@ func getKernelVersionFromSystem() (int, error) {
 	return int(KernelStringToNumeric(release)), nil
 }
 
+func GetCurrKernelVersion() int {
+	return currKernelVersion
+}
+
+func VersionIsLowerThan(curr int, kernel string) bool {
+	intVersion := int(KernelStringToNumeric(kernel))
+	return curr < intVersion
+}
+
 func CurrVersionIsLowerThan(kernel string) bool {
 	intVersion := int(KernelStringToNumeric(kernel))
 	return currKernelVersion < intVersion

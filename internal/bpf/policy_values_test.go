@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/neuvector/runtime-enforcer/internal/kernels"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +45,7 @@ func TestStringPaddedLen(t *testing.T) {
 			expected: stringMapSize10,
 		},
 		{
-			// this method has no limits
+			// this method has no limits in input size
 			in:       stringMapSize10 * 10,
 			expected: stringMapSize10,
 		},
@@ -57,32 +58,45 @@ func TestStringPaddedLen(t *testing.T) {
 }
 
 func TestArgStringSelectorValue(t *testing.T) {
-	getExpectedValue := func(v string) [MaxStringMapsSize]byte {
-		ret := [MaxStringMapsSize]byte{}
-		copy(ret[:], []byte(v))
-		return ret
-	}
-
 	tests := []struct {
-		name string
-		in   string
+		kernelVer string
+		len       int
+		hasError  bool
 	}{
 		{
-			// example input taken from a kind cluster with cri-containerd
-			name: "less than 256 bytes",
-			in:   "/usr/bin/cri-containerd",
+			// this is ok
+			kernelVer: "5.9",
+			len:       stringMapSize7,
+			hasError:  false,
 		},
 		{
-			// example input taken from a kind cluster with cri-containerd
-			name: "more than 256 bytes",
-			in:   strings.Repeat("AB", 500),
+			kernelVer: "5.9",
+			len:       stringMapSize7 + 1,
+			hasError:  true,
+		},
+		{
+			kernelVer: "5.11",
+			len:       MaxStringMapsSize,
+			hasError:  false,
+		},
+		{
+			kernelVer: "5.11",
+			len:       MaxStringMapsSize + 1,
+			hasError:  true,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			outBytes, _, err := argStringSelectorValue(tt.in, false)
-			require.NoError(t, err)
-			require.Equal(t, getExpectedValue(tt.in), outBytes)
+		t.Run(fmt.Sprintf("kernel_%s_len_%d", tt.kernelVer, tt.len), func(t *testing.T) {
+			_, _, err := argStringSelectorValue(
+				strings.Repeat("a", tt.len),
+				false,
+				int(kernels.KernelStringToNumeric(tt.kernelVer)),
+			)
+			if tt.hasError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
