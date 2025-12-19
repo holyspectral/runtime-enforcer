@@ -6,8 +6,13 @@ import (
 	"log/slog"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/features"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/neuvector/runtime-enforcer/internal/cgroups"
+	"github.com/neuvector/runtime-enforcer/internal/kernels"
+
 	"golang.org/x/sync/errgroup"
 )
 
@@ -17,6 +22,9 @@ import (
 
 const (
 	loadTimeConfigBPFVar = "load_time_config"
+	policyMap8Name       = "pol_str_maps_8"
+	policyMap9Name       = "pol_str_maps_9"
+	policyMap10Name      = "pol_str_maps_10"
 )
 
 const (
@@ -53,9 +61,56 @@ type Manager struct {
 	monitoringEventChan chan ProcessEvent
 }
 
+func probeEbpfFeatures() error {
+	// For now known requirements are:
+	// - BPF_MAP_TYPE_RINGBUF
+	// - tracing prog with attach type BPF_MODIFY_RETURN
+
+	// Check for BPF_MAP_TYPE_RINGBUF
+	if err := features.HaveMapType(ebpf.RingBuf); err != nil {
+		return fmt.Errorf("BPF_MAP_TYPE_RINGBUF not supported: %w", err)
+	}
+
+	// Check for BPF_MODIFY_RETURN attach type
+	// Today there is no an helper function for attach type BPF_MODIFY_RETURN so we do it by hand.
+	prog, err := ebpf.NewProgram(&ebpf.ProgramSpec{
+		Name: "probe_fmodret",
+		Type: ebpf.Tracing,
+		Instructions: asm.Instructions{
+			asm.Mov.Imm(asm.R0, 0),
+			asm.Return(),
+		},
+		AttachType: ebpf.AttachModifyReturn,
+		License:    "MIT",
+		AttachTo:   "security_bprm_creds_for_exec",
+	})
+	if err != nil {
+		return err
+	}
+	defer prog.Close()
+
+	link, err := link.AttachTracing(link.TracingOptions{
+		Program: prog,
+	})
+	if err != nil {
+		return err
+	}
+	err = link.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func NewManager(logger *slog.Logger, enableLearning bool, eBPFLogLevel ebpf.LogLevel) (*Manager, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("failed to remove memlock: %w", err)
+	}
+
+	logger.Info("Probing eBPF features...")
+	if err := probeEbpfFeatures(); err != nil {
+		return nil, fmt.Errorf("failure during eBPF feature probing: %w", err)
 	}
 
 	spec, err := loadBpf()
@@ -77,6 +132,25 @@ func NewManager(logger *slog.Logger, enableLearning bool, eBPFLogLevel ebpf.LogL
 		"cgrp_fs_magic", cgroups.CgroupFsMagicString(conf.CgrpFsMagic),
 		"cgrp_v1_subsys_idx", conf.Cgrpv1SubsysIdx,
 		"debug_mode", conf.DebugMode)
+
+	// Only kernels >= 5.11 support hash key lengths > 512 bytes
+	// https://github.com/cilium/tetragon/commit/834b5fe7d4063928cf7b89f61252637d833ca018
+	// so we reduce the key size for older kernels, these maps won't be used anyway
+	if kernels.CurrVersionIsLowerThan("5.11") {
+		for _, mapName := range []string{policyMap8Name, policyMap9Name, policyMap10Name} {
+			policyMap, ok := spec.Maps[mapName]
+			if !ok {
+				return nil, fmt.Errorf("map %s not found in spec", mapName)
+			}
+			// Entries should be already set to 1 in the spec, but just in case
+			policyMap.MaxEntries = 1
+			if policyMap.InnerMap == nil {
+				return nil, fmt.Errorf("map %s is not a hash of maps", mapName)
+			}
+			// this is the max key size supported on older kernels
+			policyMap.InnerMap.KeySize = stringMapSize7
+		}
+	}
 
 	// We just load the objects here so that we can pass the maps to other components but we don't load ebpf progs yet
 	objs := bpfObjects{}

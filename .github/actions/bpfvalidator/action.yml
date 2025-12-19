@@ -1,0 +1,77 @@
+name: 'bpfvalidator'
+description: 'Run eBPF programs against a range of kernels.'
+
+inputs:
+  arch:
+    description: 'Architecture to test (e.g., amd64, arm64)'
+    required: true
+    type: string
+  args:
+    description: 'Command line to pass to bpfvalidator'
+    required: true
+    type: string
+  fail_on_validation:
+    description: 'fail the action if validation fails'
+    required: false
+    default: true
+    type: boolean
+  skip_dependencies:
+    description: 'skip installing dependencies'
+    required: false
+    default: false
+    type: boolean
+
+outputs:
+  report:
+    description: "Report of the validation"
+    value: ${{ steps.run-validator.outputs.report }}
+  outcome:
+    description: "Outcome of the validation"
+    value: ${{ steps.run-validator.outputs.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    # we hardcode the vng version here, since dependencies and build process could change among different versions, we shouldn't let the user choose the version
+    - name: Install deps
+      if: inputs.skip_dependencies != 'true'
+      shell: bash
+      run: |
+        sudo apt update
+        sudo apt install -y git qemu-system udev virtiofsd
+        git clone --single-branch --branch v1.36 --depth 1 --recurse-submodules https://github.com/arighi/virtme-ng.git
+        cd virtme-ng/
+        BUILD_VIRTME_NG_INIT=1 pip3 install . --break-system-packages
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    # Try to enable KVM if available
+    - name: KVM support
+      shell: bash
+      continue-on-error: true
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        sudo apt install -y qemu-kvm kmod
+
+    # we offer 2 possible ways to consume the output of bpfvalidator:
+    # 1. print it directly in the action log
+    # 2. set it as an output variable      
+    - name: Run bpfvalidator
+      # we don't want the action to fail immediately if bpfvalidator fails.
+      # so we remove `-eo pipefail` from the shell option.
+      # see https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#exit-codes-and-error-action-preference
+      shell: bash --noprofile --norc {0}
+      id: run-validator
+      working-directory: ${{ github.action_path }}
+      run: |
+        wget https://github.com/Andreagit97/bpfvalidator/releases/download/v0.3.0/bpfvalidator_0.3.0_linux_${{ inputs.arch }}.tar.gz
+        tar -xvf bpfvalidator_0.3.0_linux_${{ inputs.arch }}.tar.gz
+        ./bpfvalidator --out_path=/tmp/report.txt ${{ inputs.args }}
+        outcome=$?
+        echo "outcome=$outcome" >> $GITHUB_OUTPUT
+        echo "report=/tmp/report.txt" >> $GITHUB_OUTPUT
+        cat /tmp/report.txt
+        if [ $outcome -ne 0 ] && [ "${{ inputs.fail_on_validation }}" == "true" ]; then
+          exit $outcome
+        fi
