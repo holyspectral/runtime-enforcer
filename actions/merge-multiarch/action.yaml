@@ -50,6 +50,7 @@ runs:
       shell: bash
       run: |
         set -e
+        TARGET=""
 
         ARCHES=$(echo ${{ inputs.arch }} | tr ',' ' ')
 

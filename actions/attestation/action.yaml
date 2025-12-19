@@ -37,6 +37,9 @@ runs:
           tar xvf $INSTALL_DIR/crane.tar.gz -C $INSTALL_DIR
           rm $INSTALL_DIR/crane.tar.gz
           echo $INSTALL_DIR >> $GITHUB_PATH
+        env:
+          CRANE_VERSION: v0.20.5
+          CRANE_CHECKSUM: ad4cd9af2568c62c97e346de6d1295ee8c6ce3341f7b71cf02d41292b4532680
       - name: Login to GitHub Container Registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:

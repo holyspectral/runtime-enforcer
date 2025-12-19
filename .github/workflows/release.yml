@@ -68,9 +68,6 @@ jobs:
       packages: write # Uploading signed artifacts to ghcr.io
       id-token: write # Signing images with cosign
     runs-on: ubuntu-latest
-    env:
-      CRANE_VERSION: v0.20.5
-      CRANE_CHECKSUM: ad4cd9af2568c62c97e346de6d1295ee8c6ce3341f7b71cf02d41292b4532680
     steps:
       - name: Checkout code
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
