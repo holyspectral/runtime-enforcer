@@ -57,7 +57,7 @@ func getLearningModeTest() types.Feature {
 			return ctx
 		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
-		Assess("the workload security proposal is created successfully for each supported resource",
+		Assess("the workload policy proposal is created successfully for each supported resource",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				r := ctx.Value(key("client")).(*resources.Resources)
 

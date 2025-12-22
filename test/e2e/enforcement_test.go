@@ -54,7 +54,7 @@ func getEnforcementTest() types.Feature {
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
 		Assess("a namespace-scoped policy can be enforced correctly",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-				t.Log("create a security policy")
+				t.Log("create a policy")
 
 				r := ctx.Value(key("client")).(*resources.Resources)
 
