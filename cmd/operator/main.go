@@ -93,6 +93,13 @@ func SetupControllers(logger logr.Logger,
 ) error {
 	var err error
 
+	if err = (&controller.WorkloadPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("unable to create WorkloadPolicyReconciler controller: %w", err)
+	}
+
 	if err = (&controller.WorkloadPolicyProposalReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -250,7 +257,16 @@ func main() {
 		WithDefaulter(&controller.ProposalWebhook{Client: mgr.GetClient()}).
 		Complete()
 	if err != nil {
-		setupLog.Error(err, "unable to create a webhook")
+		setupLog.Error(err, "unable to create WorkloadPolicyProposal webhook")
+		os.Exit(1)
+	}
+
+	err = builder.WebhookManagedBy(mgr).
+		For(&securityv1alpha1.WorkloadPolicy{}).
+		WithDefaulter(&controller.PolicyWebhook{}).
+		Complete()
+	if err != nil {
+		setupLog.Error(err, "unable to create WorkloadPolicy webhook")
 		os.Exit(1)
 	}
 
