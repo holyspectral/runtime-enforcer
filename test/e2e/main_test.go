@@ -3,10 +3,13 @@ package e2e_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
+	"github.com/neuvector/runtime-enforcer/internal/policygenerator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +58,7 @@ func getMainTest() types.Feature {
 			return ctx
 		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
-		Assess("the workload security proposal is created successfully for the ubuntu pod",
+		Assess("the workload policy proposal is created successfully for the ubuntu pod",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				r := ctx.Value(key("client")).(*resources.Resources)
 
@@ -86,7 +89,7 @@ func getMainTest() types.Feature {
 				id := ctx.Value(key("group")).(string)
 				r := ctx.Value(key("client")).(*resources.Resources)
 
-				t.Log("waiting for security policy proposal to be created: ", id)
+				t.Log("waiting for workload policy proposal to be created: ", id)
 
 				proposal := v1alpha1.WorkloadPolicyProposal{
 					ObjectMeta: metav1.ObjectMeta{
@@ -113,9 +116,9 @@ func getMainTest() types.Feature {
 
 				return context.WithValue(ctx, key("proposal"), &proposal)
 			}).
-		Assess("a proposal is promoted to a security policy and the WP is created",
+		Assess("a proposal is promoted to a workload policy and the WP is created",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-				t.Log("create a security policy")
+				t.Log("create a workload policy")
 
 				r := ctx.Value(key("client")).(*resources.Resources)
 				proposal := ctx.Value(key("proposal")).(*v1alpha1.WorkloadPolicyProposal)
@@ -129,7 +132,7 @@ func getMainTest() types.Feature {
 						Mode:     "protect",
 						Selector: proposal.Spec.Selector,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,
@@ -173,15 +176,194 @@ func getMainTest() types.Feature {
 
 				return ctx
 			}).
-		Assess("delete security policy", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			r := ctx.Value(key("client")).(*resources.Resources)
-			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
+		Assess("the WorkloadPolicy has the finalizer set",
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+				r := ctx.Value(key("client")).(*resources.Resources)
+				policy := &v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-policy",
+						Namespace: workloadNamespace,
+					},
+				}
 
-			err := r.Delete(ctx, policy)
-			require.NoError(t, err)
+				err := wait.For(
+					conditions.New(r).ResourceMatch(
+						policy,
+						func(obj k8s.Object) bool {
+							wp := obj.(*v1alpha1.WorkloadPolicy)
+							return slices.Contains(wp.Finalizers, v1alpha1.WorkloadPolicyFinalizer)
+						},
+					),
+					wait.WithTimeout(DefaultOperationTimeout),
+				)
+				require.NoError(t, err, "WorkloadPolicy finalizer is not set")
 
-			return ctx
-		}).
+				return ctx
+			}).
+		Assess("Verify a non-referenced WorkloadPolicy can be deleted",
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+				var err error
+				r := ctx.Value(key("client")).(*resources.Resources)
+				nonReferencedPolicyName := "non-referenced-wp"
+
+				// Create a new WorkloadPolicy
+				nonReferencedPolicy := v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      nonReferencedPolicyName,
+						Namespace: workloadNamespace,
+					},
+					Spec: v1alpha1.WorkloadPolicySpec{
+						Mode: "monitor",
+						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
+								Executables: v1alpha1.WorkloadPolicyExecutables{
+									Allowed: []string{"/bin/true"},
+								},
+							},
+						},
+						Severity: 9,
+						Message:  "non-referenced-wp",
+						Tags:     []string{"non-referenced-wp-policy"},
+					},
+				}
+				require.NoError(
+					t,
+					r.Create(ctx, &nonReferencedPolicy),
+					"failed to create non-referenced WorkloadPolicy",
+				)
+
+				err = r.Delete(ctx, &nonReferencedPolicy)
+				require.NoError(t, err, "failed to delete non-referenced WorkloadPolicy")
+
+				// Wait for the WorkloadPolicy to be deleted
+				err = wait.For(
+					conditions.New(r).ResourceDeleted(&nonReferencedPolicy),
+					wait.WithTimeout(time.Minute*2),
+					wait.WithInterval(time.Second*5),
+				)
+				require.NoError(
+					t,
+					err,
+					"policy was not deleted within timeout",
+				)
+
+				return ctx
+			}).
+		Assess("Verify a referenced WorkloadPolicy cannot be deleted",
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+				var err error
+				r := ctx.Value(key("client")).(*resources.Resources)
+				referencedPolicyName := "referenced-wp"
+				podName := "referenced-wp-pod"
+
+				// Create a new WorkloadPolicy
+				referencedPolicy := v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      referencedPolicyName,
+						Namespace: workloadNamespace,
+					},
+					Spec: v1alpha1.WorkloadPolicySpec{
+						Mode: "monitor",
+						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
+								Executables: v1alpha1.WorkloadPolicyExecutables{
+									Allowed: []string{"/bin/true"},
+								},
+							},
+						},
+						Severity: 9,
+						Message:  "referenced-wp",
+						Tags:     []string{"referenced-wp-policy"},
+					},
+				}
+				require.NoError(
+					t,
+					r.Create(ctx, &referencedPolicy),
+					"failed to create referenced WorkloadPolicy",
+				)
+
+				pod := corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName,
+						Namespace: workloadNamespace,
+						Labels: map[string]string{
+							policygenerator.PolicyLabelKey: referencedPolicyName,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "pause",
+								Image: "registry.k8s.io/pause",
+							},
+						},
+					},
+				}
+				require.NoError(
+					t,
+					r.Create(ctx, &pod),
+					"failed to create Pod",
+				)
+
+				// Try to delete the referenced policy
+				require.NoError(
+					t,
+					r.Delete(ctx, &referencedPolicy),
+					"failed to issue delete request for WorkloadPolicy",
+				)
+
+				// Verify the policy still exists (should not be deleted due to finalizer)
+				err = wait.For(
+					conditions.New(r).ResourceMatch(
+						&referencedPolicy,
+						func(obj k8s.Object) bool {
+							wp := obj.(*v1alpha1.WorkloadPolicy)
+							return wp.DeletionTimestamp != nil &&
+								slices.Contains(wp.Finalizers, v1alpha1.WorkloadPolicyFinalizer)
+						},
+					),
+					wait.WithTimeout(30*time.Second),
+					wait.WithInterval(5*time.Second),
+				)
+				require.NoError(
+					t,
+					err,
+					"WorkloadPolicy should still exist while referenced by Pod",
+				)
+
+				// Clean up pod, then policy should be deleted automatically
+				require.NoError(
+					t,
+					r.Delete(ctx, &pod),
+					"failed to delete Pod",
+				)
+
+				// Wait for the pod to be deleted
+				err = wait.For(
+					conditions.New(r).ResourceDeleted(&pod),
+					wait.WithTimeout(2*time.Minute),
+					wait.WithInterval(5*time.Second),
+				)
+				require.NoError(
+					t,
+					err,
+					"Pod was not deleted within timeout",
+				)
+
+				// Now the policy should be deleted automatically
+				err = wait.For(
+					conditions.New(r).ResourceDeleted(&referencedPolicy),
+					wait.WithTimeout(2*time.Minute),
+					wait.WithInterval(5*time.Second),
+				)
+				require.NoError(
+					t,
+					err,
+					"WorkloadPolicy should be deleted after Pod is removed",
+				)
+
+				return ctx
+			}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("uninstalling test resources")
 

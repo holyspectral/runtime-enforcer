@@ -14,6 +14,10 @@ const (
 
 	DeployedState = "Deployed"
 	ErrorState    = "Error"
+
+	// WorkloadPolicyFinalizer is added to WorkloadPolicy resources to ensure
+	// they are not deleted while still in use by Pods.
+	WorkloadPolicyFinalizer = "workloadpolicy.security.rancher.io/finalizer"
 )
 
 // todo!: we should support `AllowedPrefixes`.

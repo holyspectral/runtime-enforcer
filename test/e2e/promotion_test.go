@@ -55,7 +55,7 @@ func getPromotionTest() types.Feature {
 			return ctx
 		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
-		Assess("the workload security proposal is created successfully for the ubuntu pod",
+		Assess("the workload proposal is created successfully for the ubuntu pod",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 				r := ctx.Value(key("client")).(*resources.Resources)
 
@@ -86,7 +86,7 @@ func getPromotionTest() types.Feature {
 				id := ctx.Value(key("group")).(string)
 				r := ctx.Value(key("client")).(*resources.Resources)
 
-				t.Log("waiting for security policy proposal to be created: ", id)
+				t.Log("waiting for policy proposal to be created: ", id)
 
 				proposal := v1alpha1.WorkloadPolicyProposal{
 					ObjectMeta: metav1.ObjectMeta{
@@ -117,9 +117,9 @@ func getPromotionTest() types.Feature {
 
 				return context.WithValue(ctx, key("proposal"), &proposal)
 			}).
-		Assess("a proposal is promoted to a security policy through labeling and the workloadPolicy is created",
+		Assess("a proposal is promoted to a policy through labeling and the workloadPolicy is created",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-				t.Log("create a security policy")
+				t.Log("create a policy")
 
 				r := ctx.Value(key("client")).(*resources.Resources)
 				proposal := ctx.Value(key("proposal")).(*v1alpha1.WorkloadPolicyProposal)
@@ -147,7 +147,7 @@ func getPromotionTest() types.Feature {
 					Spec: v1alpha1.WorkloadPolicySpec{
 						Mode: "monitor",
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,
@@ -190,7 +190,7 @@ func getPromotionTest() types.Feature {
 
 				return ctx
 			}).
-		Assess("delete security policy", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+		Assess("delete policy", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			r := ctx.Value(key("client")).(*resources.Resources)
 			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
 			proposal := ctx.Value(key("proposal")).(*v1alpha1.WorkloadPolicyProposal)

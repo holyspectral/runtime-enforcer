@@ -266,7 +266,7 @@ func getMonitoringTest() types.Feature {
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
 		Assess("a namespace-scoped policy can monitor behaviors correctly",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-				t.Log("create a security policy")
+				t.Log("create a policy")
 				namespace := ctx.Value(key("namespace")).(string)
 
 				policy := &v1alpha1.WorkloadPolicy{
@@ -277,7 +277,7 @@ func getMonitoringTest() types.Feature {
 					Spec: v1alpha1.WorkloadPolicySpec{
 						Mode: "monitor",
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed: []string{
 										"/usr/bin/ls",
