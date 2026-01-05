@@ -33,8 +33,20 @@ daemon:
     args:
     - ""
     containerSecurityContext:
-      # todo!: evaluate the list of capabilities needed and drop the unneeded ones
-      privileged: true
+      # Minimal capabilities required for eBPF operations:
+      # - CAP_BPF: Required for loading eBPF programs
+      # - CAP_PERFMON: Required for attaching tracing programs (kprobes/tracepoints)
+      # - CAP_SYS_RESOURCE: Required for removing memlock limits (rlimit.RemoveMemlock)
+      # - CAP_SYS_PTRACE: Required to access host cgroup filesystem
+      allowPrivilegeEscalation: false
+      capabilities:
+        add:
+          - BPF
+          - PERFMON
+          - SYS_RESOURCE
+          - SYS_PTRACE
+        drop:
+          - ALL
     image:
       repository: ghcr.io/neuvector/runtime-enforcer/daemon
       tag: v0.0.2
@@ -47,8 +59,10 @@ daemon:
         cpu: 10m
         memory: 64Mi
   customCRISocketPath: ""
+  hostPID: true
   podSecurityContext:
-    privileged: true
+    seccompProfile:
+      type: RuntimeDefault
   serviceAccount:
     annotations: {}
 kubernetesClusterDomain: cluster.local

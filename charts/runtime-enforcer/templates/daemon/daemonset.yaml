@@ -78,6 +78,7 @@ spec:
           mountPath: {{ .Values.daemon.customCRISocketPath }}
           readOnly: true
         {{- end }}
+      hostPID: {{ .Values.daemon.hostPID }}
       securityContext: {{- toYaml .Values.daemon.podSecurityContext | nindent 8 }}
       serviceAccountName: {{ include "runtime-enforcer.fullname" . }}-daemon
       terminationGracePeriodSeconds: 10
