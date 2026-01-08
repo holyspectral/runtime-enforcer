@@ -181,7 +181,6 @@ func (r *Resolver) deletePod(pod *corev1.Pod) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// We are in a create we should not have the pod already in the cache
 	state, ok := r.podCache[PodID(pod.UID)]
 	if !ok {
 		r.logger.Error(
@@ -263,11 +262,10 @@ func (r *Resolver) updatePodContainers(state *podState, newContainers map[Contai
 	}
 }
 
-func (r *Resolver) updatePod(oldPod, newPod *corev1.Pod) {
+func (r *Resolver) updatePod(_ *corev1.Pod, newPod *corev1.Pod) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// We are in a create we should not have the pod already in the cache
 	state, ok := r.podCache[PodID(newPod.UID)]
 	if !ok {
 		r.logger.Error("update-pod: pod does not exist in podCache",
@@ -277,18 +275,6 @@ func (r *Resolver) updatePod(oldPod, newPod *corev1.Pod) {
 			newPod.Namespace,
 			"pod-uid",
 			newPod.UID)
-		return
-	}
-
-	// Sanity check: make sure the oldPod matches the state we have
-	if state.info.labels.Cmp(oldPod.Labels) {
-		r.logger.Error(
-			"update-pod: old pod labels are different from the ones in the state",
-			"old pod labels",
-			oldPod.Labels,
-			"state labels",
-			state.info.labels,
-		)
 		return
 	}
 

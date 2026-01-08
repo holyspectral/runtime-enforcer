@@ -11,10 +11,9 @@ import (
 // Taken and adapted from: https://github.com/cilium/tetragon/blob/7f09bfd2ca0123867bc7c2ab0155ac8efbc29ede/pkg/watcher/pod.go#L17
 
 const (
-	containerIDLen  = 15
-	ContainerIdx    = "containers-ids"
-	PodIdx          = "pod-ids"
-	podInformerName = "pod"
+	containerIDLen = 15
+	ContainerIdx   = "containers-ids"
+	PodIdx         = "pod-ids"
 )
 
 var (
