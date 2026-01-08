@@ -147,7 +147,7 @@ func getPromotionTest() types.Feature {
 					Spec: v1alpha1.WorkloadPolicySpec{
 						Mode: "monitor",
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,

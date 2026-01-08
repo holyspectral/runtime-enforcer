@@ -129,7 +129,7 @@ func getMainTest() types.Feature {
 						Mode:     "protect",
 						Selector: proposal.Spec.Selector,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,

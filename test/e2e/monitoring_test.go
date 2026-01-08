@@ -277,7 +277,7 @@ func getMonitoringTest() types.Feature {
 					Spec: v1alpha1.WorkloadPolicySpec{
 						Mode: "monitor",
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-							"ubuntu": &v1alpha1.WorkloadPolicyRules{
+							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
 									Allowed: []string{
 										"/usr/bin/ls",
