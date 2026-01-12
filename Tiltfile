@@ -118,7 +118,8 @@ local_resource(
         "cmd/daemon",
         "api",
         "internal",
-        "pkg"
+        "pkg",
+        "bpf"
     ],
     ignore = exclusions,
 )
