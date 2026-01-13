@@ -10,12 +10,18 @@ import (
 // WorkloadPolicyProposalConditionApplyConfiguration represents a declarative configuration of the WorkloadPolicyProposalCondition type for use
 // with apply.
 type WorkloadPolicyProposalConditionApplyConfiguration struct {
-	Type               *string             `json:"type,omitempty"`
-	Status             *v1.ConditionStatus `json:"status,omitempty"`
-	LastProbeTime      *metav1.Time        `json:"lastProbeTime,omitempty"`
-	LastTransitionTime *metav1.Time        `json:"lastTransitionTime,omitempty"`
-	Reason             *string             `json:"reason,omitempty"`
-	Message            *string             `json:"message,omitempty"`
+	Type   *string             `json:"type,omitempty"`
+	Status *v1.ConditionStatus `json:"status,omitempty"`
+	// lastProbeTime is the time we probed the condition.
+	LastProbeTime *metav1.Time `json:"lastProbeTime,omitempty"`
+	// lastTransitionTime is the time the condition transitioned from one status to another.
+	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
+	// reason is a unique, this should be a short, machine understandable string that gives the reason
+	// for condition's last transition. If it reports "ResizeStarted" that means the underlying
+	// persistent volume is being resized.
+	Reason *string `json:"reason,omitempty"`
+	// message is the human-readable message indicating details about last transition.
+	Message *string `json:"message,omitempty"`
 }
 
 // WorkloadPolicyProposalConditionApplyConfiguration constructs a declarative configuration of the WorkloadPolicyProposalCondition type for use with

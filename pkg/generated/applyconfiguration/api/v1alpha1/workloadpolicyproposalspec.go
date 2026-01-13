@@ -9,8 +9,13 @@ import (
 
 // WorkloadPolicyProposalSpecApplyConfiguration represents a declarative configuration of the WorkloadPolicyProposalSpec type for use
 // with apply.
+//
+// WorkloadPolicyProposalSpec defines the desired state of WorkloadPolicyProposal.
 type WorkloadPolicyProposalSpecApplyConfiguration struct {
-	Selector         *v1.LabelSelectorApplyConfiguration         `json:"selector,omitempty"`
+	// selector is a kubernetes label selector used to match
+	// workloads using its pod labels.
+	Selector *v1.LabelSelectorApplyConfiguration `json:"selector,omitempty"`
+	// rulesByContainer specifies the rules this policy contains, per-container.
 	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
 

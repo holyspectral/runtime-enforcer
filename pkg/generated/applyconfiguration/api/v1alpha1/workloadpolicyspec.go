@@ -10,12 +10,19 @@ import (
 // WorkloadPolicySpecApplyConfiguration represents a declarative configuration of the WorkloadPolicySpec type for use
 // with apply.
 type WorkloadPolicySpecApplyConfiguration struct {
-	Mode             *string                                     `json:"mode,omitempty"`
-	Selector         *v1.LabelSelectorApplyConfiguration         `json:"selector,omitempty"`
+	// mode decides the behavior of this policy.
+	Mode *string `json:"mode,omitempty"`
+	// selector is a kubernetes label selector used to match
+	// workloads using its pod labels.
+	Selector *v1.LabelSelectorApplyConfiguration `json:"selector,omitempty"`
+	// rules specifies the rules this policy contains
 	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
-	Severity         *int                                        `json:"severity,omitempty"`
-	Tags             []string                                    `json:"tags,omitempty"`
-	Message          *string                                     `json:"message,omitempty"`
+	// severity specifies the severity when this policy is violated.
+	Severity *int `json:"severity,omitempty"`
+	// tags field is used to label this policy and its associated security events
+	Tags []string `json:"tags,omitempty"`
+	// message defines the human readable message that will show up in security events
+	Message *string `json:"message,omitempty"`
 }
 
 // WorkloadPolicySpecApplyConfiguration constructs a declarative configuration of the WorkloadPolicySpec type for use with

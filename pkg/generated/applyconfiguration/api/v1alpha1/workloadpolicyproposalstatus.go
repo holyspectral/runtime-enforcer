@@ -4,6 +4,8 @@ package v1alpha1
 
 // WorkloadPolicyProposalStatusApplyConfiguration represents a declarative configuration of the WorkloadPolicyProposalStatus type for use
 // with apply.
+//
+// WorkloadPolicyProposalStatus defines the observed state of WorkloadPolicyProposal.
 type WorkloadPolicyProposalStatusApplyConfiguration struct {
 	Conditions []WorkloadPolicyProposalConditionApplyConfiguration `json:"conditions,omitempty"`
 }

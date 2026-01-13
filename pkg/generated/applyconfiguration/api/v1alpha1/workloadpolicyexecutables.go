@@ -4,8 +4,12 @@ package v1alpha1
 
 // WorkloadPolicyExecutablesApplyConfiguration represents a declarative configuration of the WorkloadPolicyExecutables type for use
 // with apply.
+//
+// todo!: we should support `AllowedPrefixes`.
 type WorkloadPolicyExecutablesApplyConfiguration struct {
-	Allowed         []string `json:"allowed,omitempty"`
+	// allowed defines a list of executables that are allowed to run
+	Allowed []string `json:"allowed,omitempty"`
+	// allowedPrefixes defines a list of prefix with which executables are allowed to run
 	AllowedPrefixes []string `json:"allowedPrefixes,omitempty"`
 }
 

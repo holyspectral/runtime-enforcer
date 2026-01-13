@@ -10,6 +10,8 @@ import (
 
 // WorkloadPolicyProposalApplyConfiguration represents a declarative configuration of the WorkloadPolicyProposal type for use
 // with apply.
+//
+// WorkloadPolicyProposal is the Schema for the workloadpolicyproposals API.
 type WorkloadPolicyProposalApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -27,6 +29,7 @@ func WorkloadPolicyProposal(name, namespace string) *WorkloadPolicyProposalApply
 	b.WithAPIVersion("security.rancher.io/v1alpha1")
 	return b
 }
+
 func (b WorkloadPolicyProposalApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
