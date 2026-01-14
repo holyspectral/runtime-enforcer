@@ -91,6 +91,19 @@ func (r *LearningReconciler) Reconcile(
 	var err error
 	var proposalName string
 
+	if req.WorkloadKind == "Pod" {
+		// We don't support learning on standalone pods
+
+		log.V(3).Info( //nolint:mnd // 3 is the verbosity level for detailed debug info
+			"Ignoring learning event",
+			"workload", req.Workload,
+			"workload_kind", req.WorkloadKind,
+			"exe", req.ExecutablePath,
+		)
+
+		return ctrl.Result{}, nil
+	}
+
 	proposalName, err = GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get proposal name: %w", err)
