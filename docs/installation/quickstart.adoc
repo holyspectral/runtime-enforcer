@@ -1,0 +1,323 @@
+= Runtime-Enforcer Quick Start
+
+Welcome to the Runtime-Enforcer Quick Start!
+
+This guide will walk you through the following steps:
+
+* Deploying the Runtime-Enforcer in a Kubernetes cluster
+* Deploying a simple workload and looking at the generated WorkloadPolicyProposal.
+* Converting the WorkloadPolicyProposal into a WorkloadPolicy in monitor mode and observing the alert.
+* Switching the WorkloadPolicy to protect mode and seeing enforcement in action.
+
+'''
+
+== Prerequisites
+
+Before deployment, you need to prepare the following:
+
+* A Kubernetes cluster (for example, link:https://minikube.sigs.k8s.io/docs/[minikube] with CRI-O or containerd; Docker is not supported)
+* `helm` installed locally
+* `kubectl` installed locally
+* `cert-manager` installed in the cluster
+* `otel-collector` installed in the cluster
+
+[WARNING]
+====
+Please ensure your environment satisfies the minimum link:../compatibility.adoc[runtime enforcer requirements].
+====
+
+=== Install cert-manager
+
+To install cert-manager, you can run the following commands:
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+
+helm repo update
+
+helm install cert-manager jetstack/cert-manager \
+	--namespace cert-manager \
+	--create-namespace \
+	--set crds.enabled=true \
+	--wait
+```
+
+[NOTE]
+====
+For more information on configuring cert-manager, please visit the link:https://cert-manager.io/docs/installation/helm[cert-manager documentation].
+====
+
+'''
+
+=== Install otel-collector
+
+The OpenTelemetry Collector is required to observe policy notifications.
+To install it, run the following commands:
+
+```bash
+helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+
+helm repo update
+
+helm install otel-collector open-telemetry/opentelemetry-collector \
+  --namespace otel-collector \
+  --create-namespace \
+  --values ./docs/yaml/otel-config.yaml \
+  --wait
+```
+
+== Deploy Runtime-Enforcer
+
+Follow these simple steps from your local machine to get Runtime-Enforcer up and running:
+
+=== Install the Helm chart
+
+[NOTE]
+====
+Since we have not yet published a public release and the repo is not yet open source, we need to load the images into the cluster manually.
+====
+
+From the root directory of the project, run the following commands:
+
+```bash
+# Build the Docker images locally
+# operator image
+make build-operator-image
+
+# daemon image
+make build-daemon-image
+
+# If you are using minikube, load the images into the cluster
+minikube image load ghcr.io/neuvector/runtime-enforcer/daemon:latest
+minikube image load ghcr.io/neuvector/runtime-enforcer/operator:latest
+
+# Install the Helm chart (using Linux capabilities instead of privileged mode)
+helm install runtime-enforcer ./charts/runtime-enforcer \
+  --namespace runtime-enforcer \
+  --create-namespace \
+  --set "daemon.daemon.containerSecurityContext.capabilities.add[0]=SYS_ADMIN" \
+  --set "daemon.daemon.containerSecurityContext.capabilities.add[1]=SYS_RESOURCE" \
+  --set "daemon.daemon.containerSecurityContext.capabilities.add[2]=SYS_PTRACE" \
+  --set operator.manager.image.tag=latest \
+  --set daemon.daemon.image.tag=latest \
+  --set telemetry.mode=custom \
+  --set telemetry.tracing=true \
+  --set telemetry.custom.endpoint=http://otel-collector-opentelemetry-collector.otel-collector.svc.cluster.local:4317 \
+  --set telemetry.custom.insecure=true \
+  --wait
+
+# or
+
+# Install the Helm chart (using privileged mode)
+helm install runtime-enforcer ./charts/runtime-enforcer \
+  --namespace runtime-enforcer \
+  --create-namespace \
+  --set daemon.daemon.containerSecurityContext.privileged=true \
+  --set daemon.daemon.containerSecurityContext.allowPrivilegeEscalation=true \
+  --set operator.manager.image.tag=latest \
+  --set daemon.daemon.image.tag=latest \
+  --set telemetry.mode=custom \
+  --set telemetry.tracing=true \
+  --set telemetry.custom.endpoint=http://otel-collector-opentelemetry-collector.otel-collector.svc.cluster.local:4317 \
+  --set telemetry.custom.insecure=true \
+  --wait
+```
+
+=== Verify the Deployment
+
+After installation, ensure all pods are running:
+
+```bash
+kubectl get pods -n runtime-enforcer
+```
+
+Example output:
+
+```bash
+runtime-enforcer   runtime-enforcer-controller-manager-bfbd8774d-bvjjn   1/1     Running
+runtime-enforcer   runtime-enforcer-daemon-lsxt4                         1/1     Running
+```
+
+=== Summary
+
+At this point, Runtime-Enforcer is up and running. You're now ready to write some policies.
+
+== WorkloadPolicyProposal generation
+
+When Runtime-Enforcer starts, it observes newly started processes on the node.
+For each Kubernetes workload, it generates a `WorkloadPolicyProposal` containing the list of observed executables.
+Executables that ran before the agent started won't be visible in the proposal.
+
+=== Deploy a simple application
+
+Let's create a fresh new Ubuntu Deployment.
+
+```bash
+# we use the local path since the repo is not published yet
+kubectl apply -f ./docs/yaml/ubuntu-deployment.yaml
+# wait for the pod to be ready
+kubectl wait --for=condition=Ready pod -l app=ubuntu-deployment --timeout=300s
+```
+
+=== Proposal generation
+
+After a few seconds, you should see a new `WorkloadPolicyProposal` resource created for the Ubuntu deployment.
+
+```bash
+kubectl get workloadpolicyproposals.security.rancher.io deploy-ubuntu-deployment -o yaml
+```
+
+```yaml
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicyProposal
+metadata:
+  name: deploy-ubuntu-deployment
+  namespace: default
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: Deployment
+    name: ubuntu-deployment
+    uid: f5e1a25e-8a80-4c2a-b21a-b70f28a0651c
+  uid: 6aeac998-d4b6-4e17-9ce1-4d76bc4def61
+spec:
+  rulesByContainer:
+    ubuntu:
+      executables:
+        allowed:
+        - /usr/bin/ls
+        - /usr/bin/sleep
+  selector:
+    matchLabels:
+      app: ubuntu
+      type: deployment
+```
+
+Some notes on this proposal:
+* The proposal includes a list of observed executables for the `ubuntu` container. As expected, it captured the `ls` and `sleep` commands.
+* As the name suggests, this is only a proposal and not a definitive policy yet, so nothing is enforced at this stage. To enforce it, we will create a `WorkloadPolicy`.
+* This proposal is tied to a specific workload. Its name is always in the form of `<workload-type>-<workload-name>`. There is also an owner reference to the Deployment so that when the workload is deleted, the proposal can be cleaned up automatically.
+
+== WorkloadPolicy (monitor mode)
+
+This proposal looks reasonable for our Deployment, so the next step is converting it into a definitive policy.
+To do that, we label the `WorkloadPolicyProposal` with the appropriate label.
+
+```bash
+kubectl label workloadpolicyproposals.security.rancher.io deploy-ubuntu-deployment security.rancher.io/policy-ready=true
+```
+
+After a few seconds, you should see a new Custom Resource called `WorkloadPolicy`.
+
+```bash
+kubectl get workloadpolicy.security.rancher.io deploy-ubuntu-deployment -o yaml
+```
+
+```yaml
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: deploy-ubuntu-deployment
+  namespace: default
+  ownerReferences:
+  - apiVersion: security.rancher.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: WorkloadPolicyProposal
+    name: deploy-ubuntu-deployment
+    uid: 3dcb1758-cbde-4523-bbbf-4170758aa1dd
+  uid: 394449cb-db06-4a15-aec0-6274d1f34d8e
+spec:
+  mode: monitor
+  rulesByContainer:
+    ubuntu:
+      executables:
+        allowed:
+        - /usr/bin/ls
+        - /usr/bin/sleep
+  selector:
+    matchLabels:
+      app: ubuntu-deployment
+```
+
+The syntax is very similar to the proposal, but there is one important difference: the `spec.mode: monitor` field.
+`monitor` is a passive mode: violations of the executable list are reported but not blocked.
+This means that if a process other than `ls` or `sleep` is executed, it will be reported as an OTEL trace, but it won't be blocked.
+
+Converting a proposal into a policy isn't enough to apply it to a workload: the workload needs to bind itself to the policy.
+This is done by adding a label to the workload pods.
+Since we are using a Deployment, the correct approach is to add the label to the Deployment's pod template.
+
+```bash
+kubectl patch deployment ubuntu-deployment --type=merge -p '{"spec":{"template":{"metadata":{"labels":{"security.rancher.io/policy":"deploy-ubuntu-deployment"}}}}}'
+# wait for the new pods to be ready
+kubectl wait --for=condition=Ready pod -l security.rancher.io/policy=deploy-ubuntu-deployment --timeout=300s
+```
+
+[WARNING]
+====
+This label update will cause a deployment rollout. If you want to avoid this, you should put the label on the workload at creation time.
+====
+
+After the rollout, the policy will be applied. Let's test it.
+
+In one terminal, follow the OpenTelemetry Collector logs:
+
+```bash
+kubectl logs -n otel-collector deploy/otel-collector-opentelemetry-collector -f
+```
+
+In another terminal, run an allowed command:
+
+```bash
+kubectl exec -n default deployment/ubuntu-deployment -- ls
+```
+
+Nothing should be reported.
+
+Now, run a command that is not in the allowlist:
+
+```bash
+kubectl exec -n default deployment/ubuntu-deployment -- ps
+```
+
+In the otel logs you should see a trace for the `ps` command being executed.
+
+```txt
+monitor 3f3235e0e92e6143965d46b967691cc1 9a6b46fa3165e86d evt.time=2026-01-14T10:39:01Z evt.rawtime=1768387141935180372 policy.name=deploy-ubuntu-deployment k8s.ns.name=default k8s.workload.name=ubuntu-deployment k8s.workload.kind=Deployment k8s.pod.name=ubuntu-deployment-f69df6b94-7s7f4 container.full_id=2f6eb089830e2c281551274e8d0e94bdb182a5444fc1a4ab7316f33dff8a5017 container.name=ubuntu proc.exepath=/usr/bin/ps action=monitor
+```
+
+== WorkloadPolicy (protect mode)
+
+Once we are confident in our policy and we want to enforce it, we can change the mode to `protect`.
+From now on, every violation of the executable list will be blocked.
+
+```bash
+kubectl patch workloadpolicy deploy-ubuntu-deployment -n default --type='json' -p='[{"op": "replace", "path": "/spec/mode", "value": "protect"}]'
+```
+
+Now we can try again an allowed binary, nothing should be reported.
+
+```bash
+kubectl exec -n default deployment/ubuntu-deployment -- ls
+```
+
+This time, if we run a not allowed binary, we should see not only a report but also the process being blocked.
+
+```bash
+kubectl exec -n default deployment/ubuntu-deployment -- ps
+```
+
+The terminal tells us the process is blocked with `EPERM`.
+
+```txt
+exec /usr/bin/ps: operation not permitted
+command terminated with exit code 255
+```
+
+And we have a log entry for it:
+
+```txt
+protect 37298bcde8726ade2516b5d3c63aa663 cb28aa0b03259160 evt.time=2026-01-14T10:49:11Z evt.rawtime=1768387751471907924 policy.name=deploy-ubuntu-deployment k8s.ns.name=default k8s.workload.name=ubuntu-deployment k8s.workload.kind=Deployment k8s.pod.name=ubuntu-deployment-f69df6b94-7s7f4 container.full_id=2f6eb089830e2c281551274e8d0e94bdb182a5444fc1a4ab7316f33dff8a5017 container.name=ubuntu proc.exepath=/usr/bin/ps action=protect
+```

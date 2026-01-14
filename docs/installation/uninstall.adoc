@@ -1,0 +1,25 @@
+= Runtime-Enforcer Uninstall
+
+You can remove the Runtime-Enforcer and all the policies created by uninstalling the `helm` chart as follows:
+
+```bash
+helm uninstall runtime-enforcer --namespace runtime-enforcer
+```
+
+Please note that this command will delete all existing WorkloadPolicy and WorkloadPolicyProposal in an irreversible way.
+
+Finally, delete the namespace where Runtime-Enforcer was deployed:
+
+```bash
+kubectl delete ns runtime-enforcer
+```
+
+You can also delete the otel-collector and the cert-manager:
+
+```bash
+helm uninstall otel-collector --namespace otel-collector
+kubectl delete ns otel-collector
+
+helm uninstall cert-manager --namespace cert-manager
+kubectl delete ns cert-manager
+```
