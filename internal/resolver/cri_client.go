@@ -64,9 +64,10 @@ func newCRIResolver(ctx context.Context, logger *slog.Logger) (*criResolver, err
 		criClient.endpoint = ep
 		criClient.client, err = newClientTry(criClient.endpoint)
 		if err == nil {
+			criClient.logger.InfoContext(ctx, "created CRI client", "endpoint", criClient.endpoint)
 			return criClient, nil
 		}
-		criClient.logger.ErrorContext(ctx, "cannot create CRI client", "endpoint", criClient.endpoint, "error", err)
+		criClient.logger.InfoContext(ctx, "cannot create CRI client", "endpoint", criClient.endpoint, "error", err)
 	}
 	return nil, err
 }
@@ -203,6 +204,7 @@ func (c *criResolver) getCgroupPath(containerID string) (string, error) {
 	var path, containerJSON string
 	if infoJSON, ok := info["info"]; ok {
 		containerJSON = infoJSON
+		// this path doesn't work for cri-dockerd. Minikube by default runs with cri-dockerd.
 		path = "runtimeSpec.linux.cgroupsPath"
 	} else {
 		return "", errors.New("could not find info")
