@@ -48,7 +48,6 @@ var _ = Describe("WorkloadPolicy Controller", func() {
 									},
 								},
 							},
-							Severity: 10,
 						},
 					}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

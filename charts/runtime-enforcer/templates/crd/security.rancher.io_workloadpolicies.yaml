@@ -127,11 +127,6 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
-              severity:
-                description: severity specifies the severity when this policy is violated.
-                maximum: 10
-                minimum: 1
-                type: integer
             required:
             - mode
             type: object

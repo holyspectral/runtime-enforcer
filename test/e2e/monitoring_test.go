@@ -288,7 +288,6 @@ func getMonitoringTest() types.Feature {
 								},
 							},
 						},
-						Severity: 9,
 					},
 				}
 

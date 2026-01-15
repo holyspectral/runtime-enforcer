@@ -17,8 +17,6 @@ type WorkloadPolicySpecApplyConfiguration struct {
 	Selector *v1.LabelSelectorApplyConfiguration `json:"selector,omitempty"`
 	// rules specifies the rules this policy contains
 	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
-	// severity specifies the severity when this policy is violated.
-	Severity *int `json:"severity,omitempty"`
 }
 
 // WorkloadPolicySpecApplyConfiguration constructs a declarative configuration of the WorkloadPolicySpec type for use with
@@ -54,13 +52,5 @@ func (b *WorkloadPolicySpecApplyConfiguration) WithRulesByContainer(entries map[
 	for k, v := range entries {
 		b.RulesByContainer[k] = v
 	}
-	return b
-}
-
-// WithSeverity sets the Severity field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Severity field is set to the value of the last call.
-func (b *WorkloadPolicySpecApplyConfiguration) WithSeverity(value int) *WorkloadPolicySpecApplyConfiguration {
-	b.Severity = &value
 	return b
 }

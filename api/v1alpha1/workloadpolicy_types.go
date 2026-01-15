@@ -51,13 +51,6 @@ type WorkloadPolicySpec struct {
 
 	// rules specifies the rules this policy contains
 	RulesByContainer map[string]*WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
-
-	// severity specifies the severity when this policy is violated.
-	//
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=10
-	// +optional
-	Severity int `json:"severity"`
 }
 
 type WorkloadPolicyStatus struct {

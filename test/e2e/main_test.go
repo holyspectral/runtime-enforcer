@@ -139,7 +139,6 @@ func getMainTest() types.Feature {
 								},
 							},
 						},
-						Severity: 9,
 					},
 				}
 				err := r.Create(ctx, &policy)
@@ -219,7 +218,6 @@ func getMainTest() types.Feature {
 								},
 							},
 						},
-						Severity: 9,
 					},
 				}
 				require.NoError(
@@ -267,7 +265,6 @@ func getMainTest() types.Feature {
 								},
 							},
 						},
-						Severity: 9,
 					},
 				}
 				require.NoError(

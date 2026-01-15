@@ -88,7 +88,6 @@ func getPolicyUpdateTest() types.Feature {
 								},
 							},
 						},
-						Severity: 9,
 					},
 				}
 

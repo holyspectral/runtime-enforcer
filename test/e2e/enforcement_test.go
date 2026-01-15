@@ -132,7 +132,6 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 									Executables: tc.AllowedExecutables,
 								},
 							},
-							Severity: 9,
 						},
 					}
 
@@ -238,7 +237,6 @@ func getEnforcementOnNewPodsTest() types.Feature {
 									Executables: tc.AllowedExecutables,
 								},
 							},
-							Severity: 9,
 						},
 					}
 
