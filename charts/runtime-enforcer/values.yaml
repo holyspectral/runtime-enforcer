@@ -33,13 +33,17 @@ daemon:
     args:
     - ""
     containerSecurityContext:
+      privileged: true
+      allowPrivilegeEscalation: true
+      # In some environments it is possible to run without full privileges.
+      # To do that put `privileged: false` and `allowPrivilegeEscalation: false`.
+      #
       # Minimal capabilities required for eBPF operations:
       # - CAP_BPF: Required for loading eBPF programs
       # - CAP_PERFMON: Required for attaching tracing programs (kprobes/tracepoints)
       # - CAP_SYS_RESOURCE: Required for removing memlock limits (rlimit.RemoveMemlock)
       # - CAP_SYS_PTRACE: Required to access host cgroup filesystem
-      # - CAP_SYS_ADMIN: Required for accessing BTF in older kernels
-      allowPrivilegeEscalation: false
+      # - CAP_SYS_ADMIN: mitigation required for accessing BTF in older kernels (see: https://github.com/neuvector/runtime-enforcer/issues/152)
       capabilities:
         add:
           - BPF
