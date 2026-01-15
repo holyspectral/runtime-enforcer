@@ -27,43 +27,14 @@ type ProposalWebhook struct {
 // +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get
 
-// getSelectorFromObject parses unstructured object and returns the label selector stored
-// at the specified location.
-func (p *ProposalWebhook) getSelectorFromObject(
-	obj *unstructured.Unstructured,
-	fields ...string,
-) (*metav1.LabelSelector, error) {
-	rawSelector, found, err := unstructured.NestedFieldNoCopy(obj.Object, fields...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get raw selector: %w", err)
-	}
-
-	if !found {
-		return nil, errors.New("failed to find selector")
-	}
-
-	rawData, ok := rawSelector.(map[string]interface{})
-
-	if !ok {
-		return nil, errors.New("failed to convert selector")
-	}
-
-	var selector metav1.LabelSelector
-	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(rawData, &selector); err != nil {
-		return nil, err
-	}
-
-	return &selector, nil
-}
-
 func (p *ProposalWebhook) updateResource(
 	ctx context.Context,
 	proposal *securityv1alpha1.WorkloadPolicyProposal,
 ) error {
 	var res schema.GroupVersionKind
-	var selector *metav1.LabelSelector
 	ownerRef := proposal.OwnerReferences[0]
 
+	// the proposal contains a partial owner reference so that here we can understand which resource to query.
 	switch ownerRef.Kind {
 	case "Deployment":
 		res = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: ownerRef.Kind}
@@ -92,12 +63,6 @@ func (p *ProposalWebhook) updateResource(
 	if err != nil {
 		return fmt.Errorf("failed to get %s %s %s: %w", ownerRef.Kind, proposal.Namespace, ownerRef.Name, err)
 	}
-
-	selector, err = p.getSelectorFromObject(obj, "spec", "selector")
-	if err != nil {
-		return fmt.Errorf("failed to get selector: %w", err)
-	}
-	proposal.Spec.Selector = selector
 
 	proposal.OwnerReferences = []metav1.OwnerReference{
 		{

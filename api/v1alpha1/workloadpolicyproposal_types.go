@@ -19,10 +19,6 @@ const (
 
 // WorkloadPolicyProposalSpec defines the desired state of WorkloadPolicyProposal.
 type WorkloadPolicyProposalSpec struct {
-	// selector is a kubernetes label selector used to match
-	// workloads using its pod labels.
-	// +optional
-	Selector *metav1.LabelSelector `json:"selector,omitempty"`
 
 	// rulesByContainer specifies the rules this policy contains, per-container.
 	RulesByContainer map[string]*WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
@@ -129,10 +125,9 @@ func (p *WorkloadPolicyProposal) AddPartialOwnerReferenceDetails(workloadKind st
 }
 
 func (p *WorkloadPolicyProposalSpec) IntoWorkloadPolicySpec() WorkloadPolicySpec {
-	// Setting severity to 10 and enforcement mode to "monitor" by default.
+	// enforcement mode to "monitor" by default.
 	return WorkloadPolicySpec{
 		Mode:             policymode.MonitorString,
-		Selector:         p.Selector,
 		RulesByContainer: p.RulesByContainer,
 	}
 }

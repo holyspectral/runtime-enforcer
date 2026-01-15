@@ -25,13 +25,7 @@ var _ = Describe("WorkloadPolicyProposal Webhook", func() {
 				Name:      "deploy-ubuntu-deployment",
 				Namespace: "default",
 			},
-			Spec: securityv1alpha1.WorkloadPolicyProposalSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": "ubuntu",
-					},
-				},
-			},
+			Spec: securityv1alpha1.WorkloadPolicyProposalSpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -120,13 +114,7 @@ var _ = Describe("WorkloadPolicyProposal Webhook", func() {
 								},
 							},
 						},
-						Spec: securityv1alpha1.WorkloadPolicyProposalSpec{
-							Selector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"app": "ubuntu",
-								},
-							},
-						},
+						Spec: securityv1alpha1.WorkloadPolicyProposalSpec{},
 					},
 					Success: true,
 				},

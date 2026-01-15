@@ -23,11 +23,6 @@ var _ = Describe("WorkloadPolicy Webhook", func() {
 				},
 				Spec: v1alpha1.WorkloadPolicySpec{
 					Mode: policymode.MonitorString,
-					Selector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"app": "test",
-						},
-					},
 					RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 						"container1": {
 							Executables: v1alpha1.WorkloadPolicyExecutables{

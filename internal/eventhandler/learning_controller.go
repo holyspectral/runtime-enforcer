@@ -65,6 +65,8 @@ type LearningReconciler struct {
 	Scheme    *runtime.Scheme
 	eventChan chan event.TypedGenericEvent[eventscraper.KubeProcessInfo]
 	tracer    trace.Tracer
+	// OwnerRefEnricher can be overridden during testing
+	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
 }
 
 func NewLearningReconciler(client client.Client, scheme *runtime.Scheme) *LearningReconciler {
@@ -73,6 +75,14 @@ func NewLearningReconciler(client client.Client, scheme *runtime.Scheme) *Learni
 		Scheme:    scheme,
 		eventChan: make(chan event.TypedGenericEvent[eventscraper.KubeProcessInfo], DefaultEventChannelBufferSize),
 		tracer:    otel.Tracer("runtime-enforcer-learner"),
+		OwnerRefEnricher: func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string) {
+			wp.OwnerReferences = []metav1.OwnerReference{
+				{
+					Kind: workloadKind,
+					Name: workload,
+				},
+			}
+		},
 	}
 }
 
@@ -126,16 +136,18 @@ func (r *LearningReconciler) Reconcile(
 			return nil
 		}
 
-		if innerErr := policyProposal.AddProcess(req.ContainerName, req.ExecutablePath); innerErr != nil {
-			return fmt.Errorf("failed to add process to policy proposal: %w", innerErr)
+		if err = policyProposal.AddProcess(req.ContainerName, req.ExecutablePath); err != nil {
+			return fmt.Errorf("failed to add process to policy proposal: %w", err)
 		}
 
-		// We do not inject partial owner reference when selector is available.
-		// This is to facilitate unit tests.
-		if len(policyProposal.OwnerReferences) == 0 && policyProposal.Spec.Selector == nil {
-			policyProposal.AddPartialOwnerReferenceDetails(req.WorkloadKind, req.Workload)
+		// If the owner reference is already there we do nothing.
+		// We should always have the owner reference populated unless we are creating the resource for the first time.
+		if len(policyProposal.OwnerReferences) != 0 {
+			return nil
 		}
 
+		// if we don't populate a partial owner reference here the webhook won't be able to populate the owner reference because it doesn't know who is the owner.
+		r.OwnerRefEnricher(policyProposal, req.WorkloadKind, req.Workload)
 		return nil
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to run CreateOrUpdate: %w", err)

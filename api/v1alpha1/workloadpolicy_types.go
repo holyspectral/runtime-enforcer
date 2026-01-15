@@ -44,11 +44,6 @@ type WorkloadPolicySpec struct {
 	// +kubebuilder:validation:Required
 	Mode string `json:"mode,omitempty"`
 
-	// selector is a kubernetes label selector used to match
-	// workloads using its pod labels.
-	// +optional
-	Selector *metav1.LabelSelector `json:"selector,omitempty"`
-
 	// rules specifies the rules this policy contains
 	RulesByContainer map[string]*WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
