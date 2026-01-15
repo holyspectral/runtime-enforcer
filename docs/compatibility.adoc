@@ -28,7 +28,7 @@ Runtime Enforcer uses eBPF (Extended Berkeley Packet Filter) to monitor and enfo
 
 |*Container Runtime*
 |CRI-O or containerd with NRI enabled.
-|Docker is not supported, at the moment see https://github.com/neuvector/runtime-enforcer/issues/176
+|
 
 |*Kubernetes*
 |To be determined
