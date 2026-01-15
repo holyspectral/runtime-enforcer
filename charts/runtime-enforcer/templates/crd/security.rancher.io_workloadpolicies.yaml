@@ -49,11 +49,6 @@ spec:
             type: object
           spec:
             properties:
-              message:
-                description: message defines the human readable message that will
-                  show up in security events
-                maxLength: 200
-                type: string
               mode:
                 description: mode decides the behavior of this policy.
                 enum:

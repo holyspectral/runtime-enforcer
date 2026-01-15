@@ -133,7 +133,6 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 								},
 							},
 							Severity: 9,
-							Message:  "test-policy",
 						},
 					}
 
@@ -240,7 +239,6 @@ func getEnforcementOnNewPodsTest() types.Feature {
 								},
 							},
 							Severity: 9,
-							Message:  "test-policy",
 						},
 					}
 

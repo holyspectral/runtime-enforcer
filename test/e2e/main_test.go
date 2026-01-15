@@ -140,7 +140,6 @@ func getMainTest() types.Feature {
 							},
 						},
 						Severity: 9,
-						Message:  "test-policy",
 					},
 				}
 				err := r.Create(ctx, &policy)
@@ -221,7 +220,6 @@ func getMainTest() types.Feature {
 							},
 						},
 						Severity: 9,
-						Message:  "non-referenced-wp",
 					},
 				}
 				require.NoError(
@@ -270,7 +268,6 @@ func getMainTest() types.Feature {
 							},
 						},
 						Severity: 9,
-						Message:  "referenced-wp",
 					},
 				}
 				require.NoError(

@@ -19,8 +19,6 @@ type WorkloadPolicySpecApplyConfiguration struct {
 	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 	// severity specifies the severity when this policy is violated.
 	Severity *int `json:"severity,omitempty"`
-	// message defines the human readable message that will show up in security events
-	Message *string `json:"message,omitempty"`
 }
 
 // WorkloadPolicySpecApplyConfiguration constructs a declarative configuration of the WorkloadPolicySpec type for use with
@@ -64,13 +62,5 @@ func (b *WorkloadPolicySpecApplyConfiguration) WithRulesByContainer(entries map[
 // If called multiple times, the Severity field is set to the value of the last call.
 func (b *WorkloadPolicySpecApplyConfiguration) WithSeverity(value int) *WorkloadPolicySpecApplyConfiguration {
 	b.Severity = &value
-	return b
-}
-
-// WithMessage sets the Message field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Message field is set to the value of the last call.
-func (b *WorkloadPolicySpecApplyConfiguration) WithMessage(value string) *WorkloadPolicySpecApplyConfiguration {
-	b.Message = &value
 	return b
 }

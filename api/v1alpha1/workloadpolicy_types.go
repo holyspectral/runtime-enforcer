@@ -58,12 +58,6 @@ type WorkloadPolicySpec struct {
 	// +kubebuilder:validation:Maximum=10
 	// +optional
 	Severity int `json:"severity"`
-
-	// message defines the human readable message that will show up in security events
-	//
-	// +kubebuilder:validation:MaxLength=200
-	// +optional
-	Message string `json:"message"`
 }
 
 type WorkloadPolicyStatus struct {
