@@ -134,7 +134,6 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 							},
 							Severity: 9,
 							Message:  "test-policy",
-							Tags:     []string{"test-policy"},
 						},
 					}
 
@@ -242,7 +241,6 @@ func getEnforcementOnNewPodsTest() types.Feature {
 							},
 							Severity: 9,
 							Message:  "test-policy",
-							Tags:     []string{"test-policy"},
 						},
 					}
 

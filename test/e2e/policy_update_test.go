@@ -90,7 +90,6 @@ func getPolicyUpdateTest() types.Feature {
 						},
 						Severity: 9,
 						Message:  "test-policy",
-						Tags:     []string{"test-policy"},
 					},
 				}
 

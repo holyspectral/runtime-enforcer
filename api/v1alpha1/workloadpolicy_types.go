@@ -59,12 +59,6 @@ type WorkloadPolicySpec struct {
 	// +optional
 	Severity int `json:"severity"`
 
-	// tags field is used to label this policy and its associated security events
-	//
-	// +kubebuilder:validation:MaxItems=12
-	// +optional
-	Tags []string `json:"tags"`
-
 	// message defines the human readable message that will show up in security events
 	//
 	// +kubebuilder:validation:MaxLength=200

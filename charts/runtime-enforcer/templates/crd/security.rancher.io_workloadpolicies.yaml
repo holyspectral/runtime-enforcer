@@ -137,13 +137,6 @@ spec:
                 maximum: 10
                 minimum: 1
                 type: integer
-              tags:
-                description: tags field is used to label this policy and its associated
-                  security events
-                items:
-                  type: string
-                maxItems: 12
-                type: array
             required:
             - mode
             type: object
