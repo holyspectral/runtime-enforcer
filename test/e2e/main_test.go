@@ -128,8 +128,7 @@ func getMainTest() types.Feature {
 						Namespace: proposal.ObjectMeta.Namespace,
 					},
 					Spec: v1alpha1.WorkloadPolicySpec{
-						Mode:     "protect",
-						Selector: proposal.Spec.Selector,
+						Mode: "protect",
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{

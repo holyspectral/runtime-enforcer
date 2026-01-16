@@ -4,7 +4,6 @@ package v1alpha1
 
 import (
 	apiv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
 // WorkloadPolicySpecApplyConfiguration represents a declarative configuration of the WorkloadPolicySpec type for use
@@ -12,9 +11,6 @@ import (
 type WorkloadPolicySpecApplyConfiguration struct {
 	// mode decides the behavior of this policy.
 	Mode *string `json:"mode,omitempty"`
-	// selector is a kubernetes label selector used to match
-	// workloads using its pod labels.
-	Selector *v1.LabelSelectorApplyConfiguration `json:"selector,omitempty"`
 	// rules specifies the rules this policy contains
 	RulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
@@ -30,14 +26,6 @@ func WorkloadPolicySpec() *WorkloadPolicySpecApplyConfiguration {
 // If called multiple times, the Mode field is set to the value of the last call.
 func (b *WorkloadPolicySpecApplyConfiguration) WithMode(value string) *WorkloadPolicySpecApplyConfiguration {
 	b.Mode = &value
-	return b
-}
-
-// WithSelector sets the Selector field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Selector field is set to the value of the last call.
-func (b *WorkloadPolicySpecApplyConfiguration) WithSelector(value *v1.LabelSelectorApplyConfiguration) *WorkloadPolicySpecApplyConfiguration {
-	b.Selector = value
 	return b
 }
 

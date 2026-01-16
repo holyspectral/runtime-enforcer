@@ -3,11 +3,12 @@ package eventhandler_test
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
 	"github.com/neuvector/runtime-enforcer/internal/eventhandler"
 	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
+	"golang.org/x/sync/errgroup"
+	"k8s.io/apimachinery/pkg/api/errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -20,6 +21,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+func newTestLearningReconciler(client client.Client, scheme *runtime.Scheme) *eventhandler.LearningReconciler {
+	reconciler := eventhandler.NewLearningReconciler(client, scheme)
+	// we don't want owner references to be added in tests because the webhook won't complete it and the api server will reject the resource creation with a partial ownerReference.
+	reconciler.OwnerRefEnricher = func(_ *securityv1alpha1.WorkloadPolicyProposal, _ string, _ string) {}
+	return reconciler
+}
 
 var _ = Describe("Learning", func() {
 	Context("When reconciling a resource", func() {
@@ -35,13 +43,7 @@ var _ = Describe("Learning", func() {
 				Name:      "deploy-ubuntu-deployment",
 				Namespace: "default",
 			},
-			Spec: securityv1alpha1.WorkloadPolicyProposalSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": "ubuntu",
-					},
-				},
-			},
+			Spec: securityv1alpha1.WorkloadPolicyProposalSpec{},
 		}
 
 		deployment := &appsv1.Deployment{
@@ -115,45 +117,49 @@ var _ = Describe("Learning", func() {
 				expectedAllowList = append(expectedAllowList, fmt.Sprintf("/usr/bin/sleep%d", i))
 			}
 
-			var wg sync.WaitGroup
+			g, groupCtx := errgroup.WithContext(ctx)
 
 			for i := range workerNum {
-				workerFunc := func() {
+				index := i
+				g.Go(func() error {
 					var err error
 					var perWorkerClient client.Client
-					name := fmt.Sprintf("worker%d", i)
-
+					name := fmt.Sprintf("worker%d", index)
 					logf.Log.Info("worker started", "name", name)
 
 					scheme := runtime.NewScheme()
 					err = securityv1alpha1.AddToScheme(scheme)
-					Expect(err).NotTo(HaveOccurred())
+					if err != nil {
+						return fmt.Errorf("failed to add scheme: %w", err)
+					}
 
 					perWorkerClient, err = client.New(cfg, client.Options{
 						Scheme: scheme,
 					})
-					Expect(err).NotTo(HaveOccurred())
-
-					reconciler := eventhandler.NewLearningReconciler(perWorkerClient, perWorkerClient.Scheme())
-
-					for _, learningEvent := range eventsToProcess {
-						var lastErr error
-						for range 5 {
-							if _, lastErr = reconciler.Reconcile(ctx, learningEvent); lastErr != nil {
-								logf.Log.Info("error:", "error", lastErr)
-							} else {
-								lastErr = nil
-								break
-							}
-						}
-						Expect(lastErr).NotTo(HaveOccurred())
+					if err != nil {
+						return fmt.Errorf("failed to create client: %w", err)
 					}
 
+					reconciler := newTestLearningReconciler(perWorkerClient, perWorkerClient.Scheme())
+					for _, learningEvent := range eventsToProcess {
+						for {
+							_, err = reconciler.Reconcile(groupCtx, learningEvent)
+							if err == nil {
+								break
+							}
+							if !errors.IsConflict(err) {
+								return err
+							}
+						}
+					}
 					logf.Log.Info("worker finished", "name", name)
-				}
-				wg.Go(workerFunc)
+					return nil
+				})
 			}
-			wg.Wait()
+
+			if err := g.Wait(); err != nil {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			proposalResult := securityv1alpha1.WorkloadPolicyProposal{
 				ObjectMeta: metav1.ObjectMeta{
@@ -245,7 +251,7 @@ var _ = Describe("Learning", func() {
 				},
 			}
 
-			reconciler := eventhandler.NewLearningReconciler(k8sClient, k8sClient.Scheme())
+			reconciler := newTestLearningReconciler(k8sClient, k8sClient.Scheme())
 
 			for _, tc := range tcs {
 				// Create an empty policy proposal
