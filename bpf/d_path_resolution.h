@@ -13,6 +13,8 @@
 #define DELETED_STRING " (deleted)"
 
 #define SAFE_PATH_LEN(x) (x) & (MAX_PATH_LEN - 1)
+// we need `MAX_PATH_LEN * 2 -1` because we need to tell the verifier that
+// our offset will never cross the second `MAX_PATH_LEN` segment.
 #define SAFE_PATH_ACCESS(x) (x) & (MAX_PATH_LEN * 2 - 1)
 #define SAFE_COMPONENT_ACCESS(x) (x) & (MAX_COMPONENT_LEN - 1)
 
@@ -52,6 +54,7 @@ static __always_inline bool d_unlinked(struct dentry *dentry) {
 static __always_inline void copy_name(char *buf, int *buflen, struct dentry *dentry) {
 	struct qstr d_name = {};
 	bpf_core_read(&d_name, bpf_core_type_size(struct qstr), &dentry->d_name);
+	// d_name.len doesn't contain the terminator. we do +1 to reserve space for the initial '/'
 	*buflen -= (d_name.len + 1);
 	// before the new path component, we need to add a '/'
 	buf[SAFE_PATH_ACCESS(*buflen)] = '/';
@@ -97,7 +100,27 @@ static __always_inline long path_read(struct path_read_data *data) {
 }
 
 // this method is inspired by Tetragon https://github.com/cilium/tetragon/pull/90
-// but simplified and reworked in light of our specific use case
+// but simplified and reworked in light of our specific use case.
+//
+// Our `buf` is composed of 3 segments of size `MAX_PATH_LEN`
+// - the first segment is not used in this method. it is left empty. it will be used to copy the
+//   final path in following methods.
+// - the second segment is used to store the progressive path reconstruction.
+// - the third segment has a double role:
+//   - it is used to please the verifier with some free space.
+//   - it is used as padding for the final comparison.
+//
+// | MAX_PATH_LEN | MAX_PATH_LEN | MAX_PATH_LEN |
+//                               |
+//                               | <- `off` we start here
+//                            /cat
+//                        /bin/cat
+//                    /usr/bin/cat
+//  path reconstruction goes in this direction (<-). We don't copy the terminator of each string
+//  since we don't need it among `/`. For the final terminator, we use the first empty byte of
+//  the third `MAX_PATH_LEN` segment.
+//
+// `bpf_d_path_approx` returns the offset of the last written byte in the buffer.
 static __always_inline int bpf_d_path_approx(const struct path *path, char *buf) {
 	int off = MAX_PATH_LEN * 2;
 	struct dentry *dentry = NULL;
@@ -106,9 +129,9 @@ static __always_inline int bpf_d_path_approx(const struct path *path, char *buf)
 	}
 
 	if(d_unlinked(dentry)) {
-		// todo!: not sure if we need also the final \0 in the string
-		off -= sizeof(DELETED_STRING);
-		memcpy(&buf[SAFE_PATH_ACCESS(off)], DELETED_STRING, sizeof(DELETED_STRING));
+		// we don't need the terminator since the next `MAX_PATH_LEN` segment
+		off -= (sizeof(DELETED_STRING) - 1);
+		memcpy(&buf[SAFE_PATH_ACCESS(off)], DELETED_STRING, sizeof(DELETED_STRING) - 1);
 	}
 
 	struct path_read_data data = {
@@ -156,6 +179,15 @@ static __always_inline int bpf_d_path_approx(const struct path *path, char *buf)
 				break;
 			}
 		}
+	}
+
+	// memfd files have no path in the filesystem so we never decremented the `curr_off`.
+	// As our last resort we try to read the current dentry.
+	if(data.curr_off == MAX_PATH_LEN * 2) {
+		// if we arrive here `data.resolved` could be:
+		// - `true` if there is no path like in case of memfd files.
+		// - `false` if we never found the final path root. In this case we will just return -1.
+		copy_name(data.bptr, &data.curr_off, data.dentry);
 	}
 
 	if(data.resolved) {

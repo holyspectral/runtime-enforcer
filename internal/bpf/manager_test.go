@@ -2,6 +2,8 @@
 package bpf
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 )
 
 func TestLearning(t *testing.T) {
@@ -18,6 +21,36 @@ func TestLearning(t *testing.T) {
 
 	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
 		command:         "/usr/bin/true",
+		channel:         learningChannel,
+		shouldFindEvent: true,
+	}))
+}
+
+func TestMemfdBinaryLearning(t *testing.T) {
+	runner, err := newCgroupRunner(t)
+	require.NoError(t, err, "Failed to create cgroup runner")
+	defer runner.close()
+
+	// Create memfd
+	name := "memfd_test"
+	memfd, err := unix.MemfdCreate(name, unix.MFD_CLOEXEC)
+	require.NoError(t, err, "Failed to create memfd")
+
+	memFile := os.NewFile(uintptr(memfd), name)
+	require.NotNil(t, memFile, "Failed to create memfd file")
+	defer memFile.Close()
+
+	// copy the content of an existing binary inside the memfd
+	srcFile, err := os.Open("/usr/bin/true")
+	require.NoError(t, err, "Failed to open source file")
+	defer srcFile.Close()
+
+	_, err = io.Copy(memFile, srcFile)
+	require.NoError(t, err, "Failed to copy data to memfd")
+
+	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
+		command:         fmt.Sprintf("/proc/self/fd/%d", memfd),
+		expectedPath:    fmt.Sprintf("/memfd:%s", name),
 		channel:         learningChannel,
 		shouldFindEvent: true,
 	}))

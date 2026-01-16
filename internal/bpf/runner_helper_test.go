@@ -105,7 +105,7 @@ func checkManagerIsStarted(m *Manager) error {
 	}
 }
 
-func (m *Manager) findEventInChannel(ty ChannelType, cgID uint64, command string) error {
+func (m *Manager) findEventInChannel(ty ChannelType, cgID uint64, expectedPath string) error {
 	// We chose the channel to extract events from based on the learning flag
 	var channel <-chan ProcessEvent
 	switch ty {
@@ -123,7 +123,7 @@ func (m *Manager) findEventInChannel(ty ChannelType, cgID uint64, command string
 			m.logger.Info("Received event", "event", event)
 			if event.CgroupID == cgID &&
 				event.CgTrackerID == 0 &&
-				event.ExePath == command {
+				event.ExePath == expectedPath {
 				m.logger.Info("Found event", "event", event)
 				return nil
 			}
@@ -153,6 +153,8 @@ type runCommandArgs struct {
 	channel         ChannelType
 	shouldEPERM     bool
 	shouldFindEvent bool
+	// use it when command is != from the path we want to find in the buffer.
+	expectedPath string
 }
 
 func (r *cgroupRunner) runAndFindCommand(args *runCommandArgs) error {
@@ -165,8 +167,16 @@ func (r *cgroupRunner) runAndFindCommand(args *runCommandArgs) error {
 		return fmt.Errorf("failed to run %s in cgroup: %w", args.command, err)
 	}
 
+	// usually the path is equal to the command but this is not always true
+	// for example, when using memfd. if `expectedPath` is set, we use the command string
+	// to run it and the expectedPath to assert inside the buffer.
+	matchPath := args.command
+	if args.expectedPath != "" {
+		matchPath = args.expectedPath
+	}
+
 	// Get the event
-	err = r.manager.findEventInChannel(args.channel, r.cgInfo.id, args.command)
+	err = r.manager.findEventInChannel(args.channel, r.cgInfo.id, matchPath)
 	if args.shouldFindEvent {
 		if err != nil {
 			return fmt.Errorf(

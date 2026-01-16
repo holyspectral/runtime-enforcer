@@ -328,7 +328,7 @@ struct process_evt {
 	// MAX_PATH_LEN for the final path +
 	// MAX_PATH_LEN for storing the progressive path +
 	// MAX_PATH_LEN of empty space for padding when we do the string map lookups
-	char path[MAX_PATH_LEN * 4];
+	char path[MAX_PATH_LEN * 3];
 	// todo!: we need to add the atomic value for concurrency, see
 	// https://github.com/falcosecurity/libs/issues/2719
 };
@@ -368,9 +368,21 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 		bpf_printk("Failed to resolve path for execve");
 		return 0;
 	}
+	if(current_offset == MAX_PATH_LEN * 2) {
+		bpf_printk("Found empty path");
+		return 0;
+	}
+	// path_len doesn't contain the string terminator `\0`, the userspace doesn't need it.
 	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
+	// here we are copying the resolved path into the first segment of the buffer.
+	// please note: in the first segment of the path we will already have the path written by
+	// the previous program execution, what we are doing here is to overwrite the path with the new
+	// content. Example:
+	// - previous: `/usr/bin/nginx-controller\0`
+	// - new one:  `/usr/bin/cat\0x-controller\0`
+	// we need the +1 because we want to copy also the `\0` terminator
 	int err = bpf_probe_read_kernel(evt->path,
-	                                SAFE_PATH_LEN(evt->path_len),
+	                                SAFE_PATH_LEN(evt->path_len + 1),
 	                                &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
 		bpf_printk("Failed to copy path for execve %d", err);
@@ -468,15 +480,6 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		return 0;
 	}
 
-	// We get some scratch space
-	//  Input buffer layout:
-	//        4096  |  4096  |  4096
-	//  ----------------------------------
-	//  |                  <--           |
-	//  ----------------------------------
-	//                       ^
-	//                       |-we write here
-
 	int zero = 0;
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
@@ -496,6 +499,10 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	int current_offset = bpf_d_path_approx(path_arg, evt->path);
 	if(current_offset <= 0) {
 		bpf_printk("Failed to resolve path for execve");
+		return 0;
+	}
+	if(current_offset == MAX_PATH_LEN * 2) {
+		bpf_printk("Found empty path");
 		return 0;
 	}
 	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
@@ -526,6 +533,14 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	// the missing map as a not allowed event.
 	__u8 *match = NULL;
 	if(string_map) {
+		// Note that string_map will contain strings padded with extra NUL bytes
+		// (e.g.`/usr/bin/cat\0\0\0\0\0\0\0`). To have a fair comparison we need to account for the
+		// padding and that's the reason why our third segment in the buffer is full of NUL bytes.
+		//
+		//  buf   | MAX_PATH_LEN | MAX_PATH_LEN | MAX_PATH_LEN |
+		//                          /usr/bin/cat\0\0\0\0\0\0\0
+		//                          ^
+		// current_offset points here
 		match = bpf_map_lookup_elem(string_map, &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	}
 
@@ -540,7 +555,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	// we move the data at the beginning of the buffer so that we can send them
 	int err = bpf_probe_read_kernel(evt->path,
-	                                SAFE_PATH_LEN(evt->path_len),
+	                                SAFE_PATH_LEN(evt->path_len + 1),
 	                                &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
 		bpf_printk("Failed to copy path for execve %d", err);
