@@ -1,0 +1,208 @@
+// Generated documentation. Please do not edit.
+:anchor_prefix: k8s-api
+
+[id="{p}-api-reference"]
+== API Reference
+
+.Packages
+- xref:{anchor_prefix}-security-rancher-io-v1alpha1[$$security.rancher.io/v1alpha1$$]
+
+
+[id="{anchor_prefix}-security-rancher-io-v1alpha1"]
+=== security.rancher.io/v1alpha1
+
+Package v1alpha1 contains API Schema definitions for the security v1alpha1 API group.
+
+.Resource Types
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicy[$$WorkloadPolicy$$]
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicylist[$$WorkloadPolicyList$$]
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposal[$$WorkloadPolicyProposal$$]
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposallist[$$WorkloadPolicyProposalList$$]
+
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicy"]
+==== WorkloadPolicy
+
+
+
+WorkloadPolicy is the Schema for the workloadpolicies API.
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicylist[$$WorkloadPolicyList$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`apiVersion`* __string__ | `security.rancher.io/v1alpha1` | |
+| *`kind`* __string__ | `WorkloadPolicy` | |
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+ |  | 
+| *`spec`* __xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyspec[$$WorkloadPolicySpec$$]__ |  |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyexecutables"]
+==== WorkloadPolicyExecutables
+
+
+
+
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyrules[$$WorkloadPolicyRules$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`allowed`* __string array__ | allowed defines a list of executables that are allowed to run + |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicylist"]
+==== WorkloadPolicyList
+
+
+
+WorkloadPolicyList contains a list of WorkloadPolicy.
+
+
+
+
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`apiVersion`* __string__ | `security.rancher.io/v1alpha1` | |
+| *`kind`* __string__ | `WorkloadPolicyList` | |
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#listmeta-v1-meta[$$ListMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+ |  | 
+| *`items`* __xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicy[$$WorkloadPolicy$$] array__ |  |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposal"]
+==== WorkloadPolicyProposal
+
+
+
+WorkloadPolicyProposal is the Schema for the workloadpolicyproposals API.
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposallist[$$WorkloadPolicyProposalList$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`apiVersion`* __string__ | `security.rancher.io/v1alpha1` | |
+| *`kind`* __string__ | `WorkloadPolicyProposal` | |
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+ |  | 
+| *`spec`* __xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposalspec[$$WorkloadPolicyProposalSpec$$]__ |  |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposallist"]
+==== WorkloadPolicyProposalList
+
+
+
+WorkloadPolicyProposalList contains a list of WorkloadPolicyProposal.
+
+
+
+
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`apiVersion`* __string__ | `security.rancher.io/v1alpha1` | |
+| *`kind`* __string__ | `WorkloadPolicyProposalList` | |
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#listmeta-v1-meta[$$ListMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+ |  | 
+| *`items`* __xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposal[$$WorkloadPolicyProposal$$] array__ |  |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposalspec"]
+==== WorkloadPolicyProposalSpec
+
+
+
+WorkloadPolicyProposalSpec defines the desired state of WorkloadPolicyProposal.
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposal[$$WorkloadPolicyProposal$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`rulesByContainer`* __object (keys:string, values:xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyrules[$$WorkloadPolicyRules$$])__ | rulesByContainer specifies for each container the list of rules to apply. + |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyrules"]
+==== WorkloadPolicyRules
+
+
+
+
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyproposalspec[$$WorkloadPolicyProposalSpec$$]
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyspec[$$WorkloadPolicySpec$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`executables`* __xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyexecutables[$$WorkloadPolicyExecutables$$]__ | executables defines a security policy for executables. + |  | 
+|===
+
+
+[id="{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyspec"]
+==== WorkloadPolicySpec
+
+
+
+
+
+
+
+.Appears In:
+****
+- xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicy[$$WorkloadPolicy$$]
+****
+
+[cols="20a,50a,15a,15a", options="header"]
+|===
+| Field | Description | Default | Validation
+| *`mode`* __string__ | mode defines the execution mode of this policy. Can be set to +
+either "protect" or "monitor". In "protect" mode, the policy +
+blocks and reports violations, while in "monitor" mode, +
+it only reports violations. + |  | Enum: [monitor protect] +
+Required: \{} +
+
+| *`rulesByContainer`* __object (keys:string, values:xref:{anchor_prefix}-github-com-neuvector-runtime-enforcer-api-v1alpha1-workloadpolicyrules[$$WorkloadPolicyRules$$])__ | rulesByContainer specifies for each container the list of rules to apply. + |  | 
+|===
+
+

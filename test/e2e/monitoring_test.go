@@ -284,7 +284,6 @@ func getMonitoringTest() types.Feature {
 										"/usr/bin/bash",
 										"/usr/bin/sleep",
 									},
-									AllowedPrefixes: []string{},
 								},
 							},
 						},

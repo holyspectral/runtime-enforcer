@@ -38,7 +38,6 @@ func getEnforcementTestCases() []enforcementTestCase {
 					"/usr/bin/bash",
 					"/usr/bin/sleep",
 				},
-				AllowedPrefixes: []string{},
 			},
 			expectedResults: []struct {
 				Commands []string
@@ -54,28 +53,6 @@ func getEnforcementTestCases() []enforcementTestCase {
 				},
 			},
 		},
-		// todo!: we don't support prefixes yet
-		// {
-		// 	AllowedExecutables: v1alpha1.WorkloadPolicyExecutables{
-		// 		Allowed: []string{},
-		// 		AllowedPrefixes: []string{
-		// 			"/usr/bin/",
-		// 		},
-		// 	},
-		// 	expectedResults: []struct {
-		// 		Commands []string
-		// 		Allowed  bool
-		// 	}{
-		// 		{
-		// 			Commands: []string{"/usr/bin/ls"},
-		// 			Allowed:  true,
-		// 		},
-		// 		{
-		// 			Commands: []string{"/usr/bin/bash", "-c", "echo hello"},
-		// 			Allowed:  true,
-		// 		},
-		// 	},
-		// },
 	}
 }
 

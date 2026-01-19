@@ -65,7 +65,7 @@ TARGET=operator daemon
 $(foreach T,$(TARGET),$(eval $(call BUILD_template,$(T))))
 
 .PHONY: generate
-generate: manifests generate-ebpf generate-api
+generate: manifests generate-ebpf generate-api generate-crd-docs
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
@@ -79,6 +79,10 @@ vet: ## Run go vet against code.
 .PHONY: generate-ebpf
 generate-ebpf: ## Generate eBPF artifacts.
 	go generate ./internal/bpf
+
+.PHONY: generate-crd-docs
+generate-crd-docs: ## Generate CRD documentation.
+	make -C docs/crds asciidoc
 
 .PHONY: test
 test: generate-ebpf vet setup-envtest ## Run tests.

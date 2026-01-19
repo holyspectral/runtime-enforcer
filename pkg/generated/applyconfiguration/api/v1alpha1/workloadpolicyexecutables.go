@@ -4,13 +4,9 @@ package v1alpha1
 
 // WorkloadPolicyExecutablesApplyConfiguration represents a declarative configuration of the WorkloadPolicyExecutables type for use
 // with apply.
-//
-// todo!: we should support `AllowedPrefixes`.
 type WorkloadPolicyExecutablesApplyConfiguration struct {
 	// allowed defines a list of executables that are allowed to run
 	Allowed []string `json:"allowed,omitempty"`
-	// allowedPrefixes defines a list of prefix with which executables are allowed to run
-	AllowedPrefixes []string `json:"allowedPrefixes,omitempty"`
 }
 
 // WorkloadPolicyExecutablesApplyConfiguration constructs a declarative configuration of the WorkloadPolicyExecutables type for use with
@@ -25,16 +21,6 @@ func WorkloadPolicyExecutables() *WorkloadPolicyExecutablesApplyConfiguration {
 func (b *WorkloadPolicyExecutablesApplyConfiguration) WithAllowed(values ...string) *WorkloadPolicyExecutablesApplyConfiguration {
 	for i := range values {
 		b.Allowed = append(b.Allowed, values[i])
-	}
-	return b
-}
-
-// WithAllowedPrefixes adds the given value to the AllowedPrefixes field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the AllowedPrefixes field.
-func (b *WorkloadPolicyExecutablesApplyConfiguration) WithAllowedPrefixes(values ...string) *WorkloadPolicyExecutablesApplyConfiguration {
-	for i := range values {
-		b.AllowedPrefixes = append(b.AllowedPrefixes, values[i])
 	}
 	return b
 }

@@ -149,8 +149,7 @@ func getPromotionTest() types.Feature {
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
-									Allowed:         proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
-									AllowedPrefixes: proposal.Spec.RulesByContainer["ubuntu"].Executables.AllowedPrefixes,
+									Allowed: proposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
 								},
 							},
 						},
