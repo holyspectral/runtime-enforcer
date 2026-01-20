@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"sync"
 
+	"github.com/containerd/nri/pkg/api"
 	"github.com/neuvector/runtime-enforcer/internal/bpf"
+	"github.com/neuvector/runtime-enforcer/internal/cgroups"
 	"github.com/neuvector/runtime-enforcer/internal/labels"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,12 +27,20 @@ type Resolver struct {
 	mu     sync.Mutex
 	logger *slog.Logger
 	// todo!: we should add a cache with deleted pods/containers so that we can resolve also recently deleted ones
-	podCache                    map[PodID]*podState
-	cgroupIDToPodID             map[CgroupID]PodID
-	policies                    []policy
+	podCache        map[PodID]*podState
+	cgroupIDToPodID map[CgroupID]PodID
+	policies        []policy
+	criResolver     *criResolver
+
 	cgTrackerUpdateFunc         func(cgID uint64, cgroupPath string) error
 	cgroupToPolicyMapUpdateFunc func(polID PolicyID, cgroupIDs []CgroupID, op bpf.CgroupPolicyOperation) error
-	criResolver                 *criResolver
+	nriSettings                 NriSettings
+}
+
+type NriSettings struct {
+	Enabled        bool
+	NriSocketPath  string
+	NriPluginIndex string
 }
 
 func NewResolver(
@@ -38,6 +49,7 @@ func NewResolver(
 	informer cmCache.Informer,
 	cgTrackerUpdateFunc func(cgID uint64, cgroupPath string) error,
 	cgroupToPolicyMapUpdateFunc func(polID PolicyID, cgroupIDs []CgroupID, op bpf.CgroupPolicyOperation) error,
+	nriSettings NriSettings,
 ) (*Resolver, error) {
 	var err error
 	r := &Resolver{
@@ -46,11 +58,19 @@ func NewResolver(
 		cgroupIDToPodID:             make(map[CgroupID]PodID),
 		cgTrackerUpdateFunc:         cgTrackerUpdateFunc,
 		cgroupToPolicyMapUpdateFunc: cgroupToPolicyMapUpdateFunc,
+		nriSettings:                 nriSettings,
 	}
 
 	r.criResolver, err = newCRIResolver(ctx, r.logger)
 	if err != nil {
 		return nil, err
+	}
+
+	if r.nriSettings.Enabled {
+		err = r.StartNriPluginWithRetry(ctx, r.StartNriPlugin)
+		if err != nil {
+			return nil, fmt.Errorf("failed to start nri plugin: %w", err)
+		}
 	}
 
 	// We deliberately ignore the returned cache.ResourceEventHandlerRegistration and error here because
@@ -101,6 +121,28 @@ func (r *Resolver) recomputePodPolicies(state *podState) {
 			}
 		}
 	}
+}
+
+func (r *Resolver) GetPolicyIDForContainer(
+	pod *api.PodSandbox,
+	container *api.Container,
+) (PolicyID, bool) {
+	for _, pol := range r.policies {
+		if !pol.podInfoMatches(&podInfo{
+			namespace: pod.GetNamespace(),
+			labels:    pod.GetLabels(),
+		}) {
+			continue
+		}
+
+		if !pol.containerMatchesFields(&containerInfo{
+			name: container.GetName(),
+		}) {
+			continue
+		}
+		return pol.id, true
+	}
+	return 0, false
 }
 
 func (r *Resolver) applyPoliciesToPod(state *podState) {
@@ -451,5 +493,113 @@ func (r *Resolver) DeletePolicy(polID PolicyID) error {
 	}
 
 	r.logger.Info("finished deleting policy", "policy_id", polID)
+	return nil
+}
+
+func (r *Resolver) checkPolicyFromNRI(
+	ctx context.Context,
+	pod *api.PodSandbox,
+	container *api.Container,
+	cgID uint64,
+) error {
+	var err error
+	polID, ok := r.GetPolicyIDForContainer(pod, container)
+	if !ok {
+		r.logger.DebugContext(
+			ctx,
+			"no policy for the container",
+			"podName",
+			pod.GetName(),
+			"namespace",
+			pod.GetNamespace(),
+		)
+		return nil
+	}
+
+	r.logger.InfoContext(
+		ctx,
+		"assigning policy via NRI",
+		"namespace",
+		pod.GetNamespace(),
+		"podName",
+		pod.GetName(),
+		"containerName",
+		container.GetName(),
+		"cgID",
+		cgID,
+		"policyID",
+		polID,
+	)
+
+	if err = r.cgroupToPolicyMapUpdateFunc(polID, []CgroupID{cgID}, bpf.AddPolicyToCgroups); err != nil {
+		r.logger.ErrorContext(ctx, "failed to update the cgroup path and policy id in cgPath ebpf map", "error", err)
+		return err
+	}
+	return nil
+}
+
+func (r *Resolver) updateCgroupTrackerFromNRI(
+	ctx context.Context,
+	cgID uint64,
+	cgPath string,
+	podID string,
+) error {
+	var err error
+
+	r.cgroupIDToPodID[cgID] = podID
+	if err = r.cgTrackerUpdateFunc(cgID, cgPath); err != nil {
+		return fmt.Errorf("failed to update cgroup tracker: %w", err)
+	}
+
+	r.logger.InfoContext(
+		ctx,
+		"updating cgroup tracker",
+		"cgID",
+		cgID,
+		"cgPath",
+		cgPath,
+		"podID",
+		podID,
+	)
+	return nil
+}
+
+func (r *Resolver) AddPodFromNRI(
+	ctx context.Context,
+	pod *api.PodSandbox,
+	container *api.Container,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// 1. retrieve cgroup ID
+	cgroupPath, err := ParseCgroupsPath(container.GetLinux().GetCgroupsPath())
+	if err != nil {
+		return fmt.Errorf("failed to parse cgroup path: %w", err)
+	}
+
+	cgRoot, err := cgroups.GetHostCgroupRoot()
+	if err != nil {
+		return fmt.Errorf("failed to get host cgroup root: %w", err)
+	}
+
+	cgPath := filepath.Join(cgRoot, cgroupPath)
+
+	cgID, err := cgroups.GetCgroupIDFromPath(cgPath)
+	if err != nil {
+		return fmt.Errorf("failed to get cgroup ID from path %s: %w", cgPath, err)
+	}
+
+	// 2. Update cgroup tracker, so we can track execve events
+	err = r.updateCgroupTrackerFromNRI(ctx, cgID, cgPath, pod.GetUid())
+	if err != nil {
+		return fmt.Errorf("failed to update cgroup tracker: %w", err)
+	}
+
+	// 3. check if a policy should be applied.
+	err = r.checkPolicyFromNRI(ctx, pod, container, cgID)
+	if err != nil {
+		return fmt.Errorf("failed to update policy: %w", err)
+	}
 	return nil
 }
