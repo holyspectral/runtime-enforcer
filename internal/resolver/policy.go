@@ -19,6 +19,7 @@ const (
 	PolicyIDNone PolicyID = 0
 )
 
+// this must be called with the resolver lock held.
 func (r *Resolver) allocPolicyID() PolicyID {
 	id := r.nextPolicyID
 	r.nextPolicyID++
@@ -30,7 +31,7 @@ func (r *Resolver) applyPolicyToPod(state *podState, polByContainer policyByCont
 	for _, container := range state.containers {
 		polID, ok := polByContainer[container.name]
 		if !ok {
-			r.logger.Error("container unprotected",
+			r.logger.Info("container unprotected",
 				"pod name", state.podName(),
 				"policy", state.policyLabel(),
 				"container", container.name)
@@ -67,6 +68,7 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 	return r.applyPolicyToPod(state, pol)
 }
 
+// addWP adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
 func (r *Resolver) addWP(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"add-wp-policy",
@@ -76,8 +78,7 @@ func (r *Resolver) addWP(wp *v1alpha1.WorkloadPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// the key is namespace + / + policyName
-	wpKey := wp.Namespace + "/" + wp.Name
+	wpKey := wp.NamespacedName()
 	if _, exists := r.wpState[wpKey]; exists {
 		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
 	}
@@ -120,6 +121,7 @@ func (r *Resolver) addWP(wp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
+// updateWP listen for changes in the executable list and policy mode and applies them to the BPF maps.
 func (r *Resolver) updateWP(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"update-wp-policy",
@@ -129,7 +131,7 @@ func (r *Resolver) updateWP(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	wpKey := newWp.Namespace + "/" + newWp.Name
+	wpKey := newWp.NamespacedName()
 	state, exists := r.wpState[wpKey]
 	if !exists {
 		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
@@ -184,6 +186,7 @@ func (r *Resolver) updateWP(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
+// deleteWP removes a workload policy from the resolver cache and updates the BPF maps accordingly.
 func (r *Resolver) deleteWP(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"delete-wp-policy",
@@ -193,7 +196,7 @@ func (r *Resolver) deleteWP(wp *v1alpha1.WorkloadPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	wpKey := wp.Namespace + "/" + wp.Name
+	wpKey := wp.NamespacedName()
 	state, exists := r.wpState[wpKey]
 	if !exists {
 		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
