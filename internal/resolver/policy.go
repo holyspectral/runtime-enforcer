@@ -68,8 +68,8 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 	return r.applyPolicyToPod(state, pol)
 }
 
-// addWP adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
-func (r *Resolver) addWP(wp *v1alpha1.WorkloadPolicy) error {
+// handleWPAdd adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
+func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"add-wp-policy",
 		"policy-name", wp.Name,
@@ -121,8 +121,8 @@ func (r *Resolver) addWP(wp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
-// updateWP listen for changes in the executable list and policy mode and applies them to the BPF maps.
-func (r *Resolver) updateWP(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
+// handleWPUpdate listen for changes in the executable list and policy mode and applies them to the BPF maps.
+func (r *Resolver) handleWPUpdate(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"update-wp-policy",
 		"policy-name", newWp.Name,
@@ -186,8 +186,8 @@ func (r *Resolver) updateWP(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
-// deleteWP removes a workload policy from the resolver cache and updates the BPF maps accordingly.
-func (r *Resolver) deleteWP(wp *v1alpha1.WorkloadPolicy) error {
+// handleWPDelete removes a workload policy from the resolver cache and updates the BPF maps accordingly.
+func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"delete-wp-policy",
 		"policy-name", wp.Name,
@@ -239,7 +239,7 @@ func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 			if wp == nil {
 				return
 			}
-			if err := r.addWP(wp); err != nil {
+			if err := r.handleWPAdd(wp); err != nil {
 				// todo!: we need to populate an internal status to report the failure to the user
 				r.logger.Error("failed to add policy", "error", err)
 				return
@@ -254,7 +254,7 @@ func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 			if oldWp == nil {
 				return
 			}
-			if err := r.updateWP(oldWp, newWp); err != nil {
+			if err := r.handleWPUpdate(oldWp, newWp); err != nil {
 				r.logger.Error("failed to update policy", "error", err)
 				return
 			}
@@ -264,7 +264,7 @@ func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 			if wp == nil {
 				return
 			}
-			if err := r.deleteWP(wp); err != nil {
+			if err := r.handleWPDelete(wp); err != nil {
 				r.logger.Error("failed to delete policy", "error", err)
 				return
 			}
