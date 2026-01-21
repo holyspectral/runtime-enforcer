@@ -10,6 +10,7 @@ import (
 	"github.com/neuvector/runtime-enforcer/internal/bpf"
 	"github.com/neuvector/runtime-enforcer/internal/eventhandler"
 	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
+	"github.com/neuvector/runtime-enforcer/internal/nri"
 	"github.com/neuvector/runtime-enforcer/internal/podinformer"
 	"github.com/neuvector/runtime-enforcer/internal/resolver"
 	"k8s.io/apimachinery/pkg/fields"
@@ -119,14 +120,25 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		bpfManager.GetCgroupPolicyUpdateFunc(),
 		bpfManager.GetPolicyUpdateBinariesFunc(),
 		bpfManager.GetPolicyModeUpdateFunc(),
-		resolver.NriSettings{
-			Enabled:        config.enableNri,
-			NriSocketPath:  config.nriSocketPath,
-			NriPluginIndex: config.nriPluginIdx,
-		},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create resolver: %w", err)
+	}
+
+	//////////////////////
+	// Create NRI handler
+	//////////////////////
+
+	if config.enableNri {
+		nriHandler := nri.NewNRIHandler(
+			config.nriSocketPath,
+			config.nriPluginIdx,
+			logger,
+			resolver,
+		)
+		if err = ctrlMgr.Add(nriHandler); err != nil {
+			return fmt.Errorf("failed to add NRI handler to controller manager: %w", err)
+		}
 	}
 
 	//////////////////////

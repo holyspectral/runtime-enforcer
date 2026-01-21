@@ -35,13 +35,6 @@ type Resolver struct {
 	policyModeUpdateFunc        func(policyID PolicyID, mode policymode.Mode, op bpf.PolicyModeOperation) error
 	cgTrackerUpdateFunc         func(cgID uint64, cgroupPath string) error
 	cgroupToPolicyMapUpdateFunc func(polID PolicyID, cgroupIDs []CgroupID, op bpf.CgroupPolicyOperation) error
-	nriSettings                 NriSettings
-}
-
-type NriSettings struct {
-	Enabled        bool
-	NriSocketPath  string
-	NriPluginIndex string
 }
 
 func NewResolver(
@@ -51,7 +44,6 @@ func NewResolver(
 	cgroupToPolicyMapUpdateFunc func(polID PolicyID, cgroupIDs []CgroupID, op bpf.CgroupPolicyOperation) error,
 	policyUpdateBinariesFunc func(policyID uint64, values []string, op bpf.PolicyValuesOperation) error,
 	policyModeUpdateFunc func(policyID uint64, mode policymode.Mode, op bpf.PolicyModeOperation) error,
-	nriSettings NriSettings,
 ) (*Resolver, error) {
 	var err error
 	r := &Resolver{
@@ -60,7 +52,6 @@ func NewResolver(
 		cgroupIDToPodID:             make(map[CgroupID]PodID),
 		cgTrackerUpdateFunc:         cgTrackerUpdateFunc,
 		cgroupToPolicyMapUpdateFunc: cgroupToPolicyMapUpdateFunc,
-		nriSettings:                 nriSettings,
 		policyUpdateBinariesFunc:    policyUpdateBinariesFunc,
 		policyModeUpdateFunc:        policyModeUpdateFunc,
 		wpState:                     make(map[namespacedPolicyName]policyByContainer),
@@ -70,13 +61,6 @@ func NewResolver(
 	r.criResolver, err = newCRIResolver(ctx, r.logger)
 	if err != nil {
 		return nil, err
-	}
-
-	if r.nriSettings.Enabled {
-		err = r.StartNriPluginWithRetry(ctx, r.StartNriPlugin)
-		if err != nil {
-			return nil, fmt.Errorf("failed to start nri plugin: %w", err)
-		}
 	}
 
 	// todo!: we can do a first scan of all existing containers to populate the cache initially
