@@ -95,3 +95,9 @@ func TestPolicyUpdate(t *testing.T) {
 
 	testEnv.Test(t, getPolicyUpdateTest())
 }
+
+func TestPolicyPerContainer(t *testing.T) {
+	t.Log("test policy per container")
+
+	testEnv.Test(t, getPolicyPerContainerTest())
+}
