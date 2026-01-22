@@ -31,6 +31,7 @@ func (r *Resolver) applyPolicyToPod(state *podState, polByContainer policyByCont
 		polID, ok := polByContainer[container.name]
 		if !ok {
 			r.logger.Info("container unprotected",
+				"namespace", state.podNamespace(),
 				"pod name", state.podName(),
 				"policy", state.policyLabel(),
 				"container", container.name)
@@ -71,8 +72,8 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"add-wp-policy",
-		"policy-name", wp.Name,
-		"policy-namespace", wp.Namespace,
+		"name", wp.Name,
+		"namespace", wp.Namespace,
 	)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -124,8 +125,8 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 func (r *Resolver) handleWPUpdate(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"update-wp-policy",
-		"policy-name", newWp.Name,
-		"policy-namespace", newWp.Namespace,
+		"name", newWp.Name,
+		"namespace", newWp.Namespace,
 	)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -189,8 +190,8 @@ func (r *Resolver) handleWPUpdate(oldWp, newWp *v1alpha1.WorkloadPolicy) error {
 func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"delete-wp-policy",
-		"policy-name", wp.Name,
-		"policy-namespace", wp.Namespace,
+		"name", wp.Name,
+		"namespace", wp.Namespace,
 	)
 	r.mu.Lock()
 	defer r.mu.Unlock()
