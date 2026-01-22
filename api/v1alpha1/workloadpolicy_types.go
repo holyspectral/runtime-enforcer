@@ -61,6 +61,16 @@ type WorkloadPolicy struct {
 	Spec WorkloadPolicySpec `json:"spec,omitempty"`
 }
 
+// NamespacedName returns a string in the form "<namespace>/<name>".
+//
+// This is useful when storing/retrieving WorkloadPolicy-related state in maps.
+func (wp *WorkloadPolicy) NamespacedName() string {
+	if wp == nil {
+		return ""
+	}
+	return wp.Namespace + "/" + wp.Name
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

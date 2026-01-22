@@ -10,7 +10,6 @@ import (
 	"github.com/neuvector/runtime-enforcer/internal/bpf"
 	"github.com/neuvector/runtime-enforcer/internal/eventhandler"
 	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
-	"github.com/neuvector/runtime-enforcer/internal/policygenerator"
 	"github.com/neuvector/runtime-enforcer/internal/resolver"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -135,6 +134,8 @@ func startDaemon(ctx context.Context, logger *slog.Logger, config Config) error 
 		podInformer,
 		bpfManager.GetCgroupTrackerUpdateFunc(),
 		bpfManager.GetCgroupPolicyUpdateFunc(),
+		bpfManager.GetPolicyUpdateBinariesFunc(),
+		bpfManager.GetPolicyModeUpdateFunc(),
 		resolver.NriSettings{
 			Enabled:        config.enableNri,
 			NriSocketPath:  config.nriSocketPath,
@@ -166,13 +167,7 @@ func startDaemon(ctx context.Context, logger *slog.Logger, config Config) error 
 	if err != nil {
 		return fmt.Errorf("cannot get workload policy informer: %w", err)
 	}
-	policygenerator.SetupPolicyGenerator(
-		logger,
-		workloadPolicyInformer,
-		resolver,
-		bpfManager.GetPolicyValuesUpdateFunc(),
-		bpfManager.GetPolicyModeUpdateFunc(),
-	)
+	_, _ = workloadPolicyInformer.AddEventHandler(resolver.PolicyEventHandlers())
 
 	logger.InfoContext(ctx, "starting manager")
 	if err = ctrlMgr.Start(ctx); err != nil {
@@ -198,7 +193,7 @@ func main() {
 	flag.BoolVar(&config.enableTracing, "enable-tracing", false, "Enable tracing collection")
 	flag.BoolVar(&config.enableOtelSidecar, "enable-otel-sidecar", false, "Enable OpenTelemetry sidecar")
 	flag.BoolVar(&config.enableLearning, "enable-learning", false, "Enable learning mode")
-	flag.BoolVar(&config.enableNri, "enable-nri", true, "Enable NRI")
+	flag.BoolVar(&config.enableNri, "enable-nri", false, "Enable NRI")
 	flag.StringVar(&config.nriSocketPath, "nri-socket-path", "/var/run/nri/nri.sock", "NRI socket path")
 	flag.StringVar(&config.nriPluginIdx, "nri-plugin-index", "00", "NRI plugin index")
 
