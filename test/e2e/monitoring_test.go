@@ -119,7 +119,6 @@ func verifyExpectedResult(
 	}
 
 	for _, expectedEvent := range tc.ExpectedEvents {
-		// todo!: Not sure what was the initial issue but it seems solved now.
 		err = waitExpectedEvent(ctx, t, expectedEvent)
 		require.NoError(t, err, "the otel events should be created as expected")
 	}
