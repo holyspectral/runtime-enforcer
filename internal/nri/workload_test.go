@@ -162,25 +162,14 @@ func TestGetPodInfo(t *testing.T) {
 			wantType: workloadkind.Pod,
 		},
 		{
-			name: "replicaset",
+			name: "replicaset ignored",
 			pod: &api.PodSandbox{
 				Name:        "ubuntu-replicaset-rnswg",
 				Labels:      map[string]string{},
 				Annotations: map[string]string{},
 			},
-			wantName: "ubuntu-replicaset",
-			wantType: workloadkind.ReplicaSet,
-		},
-		{
-			// this is the reason why we cannot trust only the suffix to determine the type
-			name: "wrong replicaset classification",
-			pod: &api.PodSandbox{
-				Name:        "pod-ubunt",
-				Labels:      map[string]string{},
-				Annotations: map[string]string{},
-			},
-			wantName: "pod",
-			wantType: workloadkind.ReplicaSet,
+			wantName: "ubuntu-replicaset-rnswg",
+			wantType: workloadkind.Pod,
 		},
 	}
 	for _, tt := range tests {

@@ -82,14 +82,6 @@ func getLearningModeTest() types.Feature {
 							return &deployment
 						},
 					},
-					"ReplicaSet": {
-						ParseFunc: func() k8s.Object {
-							var replicaset appsv1.ReplicaSet
-							err := decoder.DecodeFile(testdata, "ubuntu-replicaset.yaml", &replicaset)
-							require.NoError(t, err)
-							return &replicaset
-						},
-					},
 					"StatefulSet": {
 						ParseFunc: func() k8s.Object {
 							var statefulset appsv1.StatefulSet

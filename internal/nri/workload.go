@@ -12,9 +12,6 @@ import (
 // final 8-10 digits.
 var cronJobNameRegexp = regexp.MustCompile(`(.+)-\d{8,10}$`)
 
-// final 5 alphanumeric characters.
-var possibleReplicaSetRegexp = regexp.MustCompile(`(.+)-[a-z0-9]{5}$`)
-
 const (
 	// known labels.
 	podTemplateHashLabel = "pod-template-hash"
@@ -143,13 +140,7 @@ func getWorkloadInfo(pod *api.PodSandbox) (string, workloadkind.Kind) {
 		return parseJobCronJob(jobName)
 	}
 
-	// POSSIBLE REPLICASET
-	// We are still interested in detecting replicasets but we have no actual parsing logic for them. What we do is we check if the pod has at least the final `-[random-5chars]`. If yes we elect it as a potential replicaset. If it doesn't, we mark it as a pod.
-	// todo!: we need to add a k8s client to be sure
-	m := possibleReplicaSetRegexp.FindStringSubmatch(podName)
-	if len(m) == 2 { //nolint:mnd // m[0] is the full match, m[1] is the replicaset name
-		return m[1], workloadkind.ReplicaSet
-	}
+	// Everything that is not a known workload type is considered a regular pod.
 
 	return podName, workloadkind.Pod
 }
