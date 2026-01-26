@@ -26,8 +26,8 @@ import (
 	"github.com/go-logr/logr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
-	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	"github.com/neuvector/runtime-enforcer/internal/controller"
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

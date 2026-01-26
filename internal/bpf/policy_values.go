@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cilium/ebpf"
-	"github.com/neuvector/runtime-enforcer/internal/kernels"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/kernels"
 )
 
 type PolicyValuesOperation int

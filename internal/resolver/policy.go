@@ -3,9 +3,9 @@ package resolver
 import (
 	"fmt"
 
-	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	"github.com/neuvector/runtime-enforcer/internal/bpf"
-	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
+	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"k8s.io/client-go/tools/cache"
 )
 

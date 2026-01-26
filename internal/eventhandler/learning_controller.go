@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

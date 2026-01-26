@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 
-	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )

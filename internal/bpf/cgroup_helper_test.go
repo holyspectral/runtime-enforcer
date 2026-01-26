@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/neuvector/runtime-enforcer/internal/cgroups"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
 )
 
 type cgroupInfo struct {

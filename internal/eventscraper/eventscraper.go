@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	"github.com/neuvector/runtime-enforcer/internal/bpf"
-	"github.com/neuvector/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

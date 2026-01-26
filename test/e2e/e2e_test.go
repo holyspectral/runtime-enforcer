@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/neuvector/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

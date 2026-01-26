@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/containerd/nri/pkg/api"
-	"github.com/neuvector/runtime-enforcer/internal/types/workloadkind"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 	"github.com/stretchr/testify/require"
 )
 

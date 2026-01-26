@@ -3,7 +3,7 @@ package cgroups_test
 import (
 	"testing"
 
-	"github.com/neuvector/runtime-enforcer/internal/cgroups"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
 	"github.com/stretchr/testify/require"
 )
 

@@ -3,7 +3,7 @@ package kernels_test
 import (
 	"testing"
 
-	"github.com/neuvector/runtime-enforcer/internal/kernels"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/kernels"
 	"github.com/stretchr/testify/assert"
 )
 
