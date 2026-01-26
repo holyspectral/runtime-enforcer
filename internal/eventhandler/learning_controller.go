@@ -69,10 +69,9 @@ type LearningReconciler struct {
 	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
 }
 
-func NewLearningReconciler(client client.Client, scheme *runtime.Scheme) *LearningReconciler {
+func NewLearningReconciler(client client.Client) *LearningReconciler {
 	return &LearningReconciler{
 		Client:    client,
-		Scheme:    scheme,
 		eventChan: make(chan event.TypedGenericEvent[eventscraper.KubeProcessInfo], DefaultEventChannelBufferSize),
 		tracer:    otel.Tracer("runtime-enforcer-learner"),
 		OwnerRefEnricher: func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string) {

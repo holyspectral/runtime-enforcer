@@ -22,8 +22,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTestLearningReconciler(client client.Client, scheme *runtime.Scheme) *eventhandler.LearningReconciler {
-	reconciler := eventhandler.NewLearningReconciler(client, scheme)
+func newTestLearningReconciler(client client.Client) *eventhandler.LearningReconciler {
+	reconciler := eventhandler.NewLearningReconciler(client)
 	// we don't want owner references to be added in tests because the webhook won't complete it and the api server will reject the resource creation with a partial ownerReference.
 	reconciler.OwnerRefEnricher = func(_ *securityv1alpha1.WorkloadPolicyProposal, _ string, _ string) {}
 	return reconciler
@@ -140,7 +140,7 @@ var _ = Describe("Learning", func() {
 						return fmt.Errorf("failed to create client: %w", err)
 					}
 
-					reconciler := newTestLearningReconciler(perWorkerClient, perWorkerClient.Scheme())
+					reconciler := newTestLearningReconciler(perWorkerClient)
 					for _, learningEvent := range eventsToProcess {
 						for {
 							_, err = reconciler.Reconcile(groupCtx, learningEvent)
@@ -251,7 +251,7 @@ var _ = Describe("Learning", func() {
 				},
 			}
 
-			reconciler := newTestLearningReconciler(k8sClient, k8sClient.Scheme())
+			reconciler := newTestLearningReconciler(k8sClient)
 
 			for _, tc := range tcs {
 				// Create an empty policy proposal
@@ -314,7 +314,7 @@ var _ = Describe("Learning", func() {
 				},
 			}
 
-			reconciler := eventhandler.NewLearningReconciler(k8sClient, k8sClient.Scheme())
+			reconciler := eventhandler.NewLearningReconciler(k8sClient)
 
 			testProposal := proposal.DeepCopy()
 			testProposal.Namespace = testNamespace

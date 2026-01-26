@@ -100,7 +100,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	}
 
 	if config.enableLearning {
-		learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient(), ctrlMgr.GetScheme())
+		learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient())
 		if err = learningReconciler.SetupWithManager(ctrlMgr); err != nil {
 			return fmt.Errorf("unable to create learning reconciler: %w", err)
 		}
