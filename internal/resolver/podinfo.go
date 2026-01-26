@@ -3,8 +3,6 @@ package resolver
 import (
 	"errors"
 	"fmt"
-
-	"github.com/neuvector/runtime-enforcer/internal/labels"
 )
 
 const (
@@ -18,7 +16,7 @@ type podInfo struct {
 	name         string
 	workloadName string
 	workloadType string
-	labels       labels.Labels
+	labels       Labels
 }
 
 type KubeInfo struct {
@@ -29,7 +27,7 @@ type KubeInfo struct {
 	WorkloadName  string
 	WorkloadType  string
 	ContainerID   string
-	Labels        labels.Labels
+	Labels        Labels
 }
 
 var (
