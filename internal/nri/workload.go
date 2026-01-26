@@ -21,9 +21,13 @@ const (
 	daemonsetLabel       = "controller-revision-hash"
 	// we want to keep the suffix within 5 chars to avoid exceeding the 63 character limit.
 	truncatedSuffix = "-trnc"
+	// k8s random suffix len of deployment/daemonset.
+	randomSuffixLen = 5
+	// we want to find at least 5 characters of the pod template hash to avoid false positives.
+	minTemplateHashMatch = 5
 )
 
-func parseDeployment(podName string) (string, workloadkind.Kind) {
+func parseDeployment(podName, templateHash string) (string, workloadkind.Kind) {
 	// Usually the pod-name for a pod managed by a deployment has the format:
 	// pod-name: [deployment-name]-[hash]-[random]
 	// But we need to take into account that the pod-name has a maximum length of 63 characters,
@@ -37,31 +41,33 @@ func parseDeployment(podName string) (string, workloadkind.Kind) {
 	//    pod-name: ubuntu-deployment
 	//
 	// 2. 63 characters
-	//    deployment-name: ubuntu-deploymenttttttttttttttttttttttttttttttttttttttttttttttt
+	//    deployment-name: ubuntu-deploymentttttttttttttttttttttttttttttttttttttttttttttt
 	//    pod-name: ubuntu-deploymenttttttttttttttttttttttttttttttttttttttttttq8fcg
-	//    In this case we have just the final [random] without the `-`. The name of the daemonset is truncated.
+	//    In this case we have just the final [random(q8fcg)] without the `-`. The name of the deployment is truncated.
 	//
 	// 3. 56 characters
-	//    deployment-name: ubuntu-deploymentttttttttttttttttttttttttttttttttttttttt
-	//    pod-name: ubuntu-deploymentttttttttttttttttttttttttttttttttttttttt-65fb8c
+	//    deployment-name: ubuntu-deploymentttttttttttttttttttttttttttttttttttttt-t
+	//    pod-name: ubuntu-deploymentttttttttttttttttttttttttttttttttttttt-t-65fb8c
 	//    In this case `-[hash]-[random]` are just collapsed into `-65fb8c` but the name is not truncated
 
-	// we check if there is at least a `-`
-	firstDashIndex := strings.LastIndex(podName, "-")
-	if firstDashIndex == -1 {
-		// if no `-` is present, we consider the name as truncated, we remove the suffix of 5 chars and we append our truncated suffix
-		return podName[:len(podName)-5] + truncatedSuffix, workloadkind.Deployment
+	// first we trim the random suffix, we always have it.
+	// Example:
+	// from: ubuntu-deployment-674bcc58f4-pwvps
+	// to: ubuntu-deployment-674bcc58f4-
+	podPrefixWithPartialHash := podName[:len(podName)-randomSuffixLen]
+
+	// we first try a match with the exactPattern, if we don't find it we will look for a partial match
+	exactPattern := "-" + templateHash + "-"
+	for i := len(exactPattern); i >= minTemplateHashMatch; i-- {
+		targetPartialHash := exactPattern[:i]
+		if strings.HasSuffix(podPrefixWithPartialHash, targetPartialHash) {
+			return podPrefixWithPartialHash[:len(podPrefixWithPartialHash)-len(targetPartialHash)], workloadkind.Deployment
+		}
 	}
 
-	remainingName := podName[:firstDashIndex]
-	// we check if there is another `-`.
-	secondDashIndex := strings.LastIndex(remainingName, "-")
-	if secondDashIndex == -1 {
-		// if no it means the hash was collapsed but the name of the deployment was not truncated.
-		return remainingName, workloadkind.Deployment
-	}
-	// if there is a second `-` the name of the deployment is everything before it
-	return remainingName[:secondDashIndex], workloadkind.Deployment
+	// If we are not sure, we just keep the name without the random suffix and we add our truncated suffix.
+	// it is possible we still have the `-` so we trim it.
+	return strings.TrimSuffix(podPrefixWithPartialHash, "-") + truncatedSuffix, workloadkind.Deployment
 }
 
 func parseDaemonSet(podName string) (string, workloadkind.Kind) {
@@ -81,7 +87,7 @@ func parseDaemonSet(podName string) (string, workloadkind.Kind) {
 	//    So the name of the daemonset is truncated and the `-` will be omitted.
 
 	// we remove the suffix that is always present
-	nameWithoutSuffix := podName[:len(podName)-5]
+	nameWithoutSuffix := podName[:len(podName)-randomSuffixLen]
 
 	if strings.HasSuffix(nameWithoutSuffix, "-") {
 		return strings.TrimSuffix(nameWithoutSuffix, "-"), workloadkind.DaemonSet
@@ -114,8 +120,8 @@ func getWorkloadInfo(pod *api.PodSandbox) (string, workloadkind.Kind) {
 
 	// DEPLOYMENT
 	// if a pod is created by a deployment it has the template hash label
-	if _, ok := labels[podTemplateHashLabel]; ok {
-		return parseDeployment(podName)
+	if hash, ok := labels[podTemplateHashLabel]; ok {
+		return parseDeployment(podName, hash)
 	}
 
 	// STATEFULSET

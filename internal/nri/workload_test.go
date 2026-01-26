@@ -30,27 +30,52 @@ func TestGetPodInfo(t *testing.T) {
 			wantType: workloadkind.Deployment,
 		},
 		{
-			name: "deployment truncated",
+			name: "deployment recognized partial template hash",
 			pod: &api.PodSandbox{
-				Name: strings.Repeat("a", 58) + "q8fcg",
+				Name: "aaa-" + strings.Repeat("a", 49) + "-674b" + "q8fcg",
 				Labels: map[string]string{
 					podTemplateHashLabel: "674bcc58f4",
 				},
 				Annotations: map[string]string{},
 			},
-			wantName: strings.Repeat("a", 58) + truncatedSuffix,
+			wantName: "aaa-" + strings.Repeat("a", 49),
 			wantType: workloadkind.Deployment,
 		},
 		{
-			name: "deployment with one dash",
+			name: "deployment unrecognized partial template hash",
 			pod: &api.PodSandbox{
-				Name: strings.Repeat("a", 56) + "-65fb8c",
+				Name: "aaa-" + strings.Repeat("a", 50) + "-674" + "q8fcg",
 				Labels: map[string]string{
 					podTemplateHashLabel: "674bcc58f4",
 				},
 				Annotations: map[string]string{},
 			},
-			wantName: strings.Repeat("a", 56),
+			wantName: "aaa-" + strings.Repeat("a", 50) + "-674" + truncatedSuffix,
+			wantType: workloadkind.Deployment,
+		},
+		{
+			name: "deployment no template hash but dash",
+			pod: &api.PodSandbox{
+				Name: strings.Repeat("a", 57) + "-q8fcg",
+				Labels: map[string]string{
+					podTemplateHashLabel: "674bcc58f4",
+				},
+				Annotations: map[string]string{},
+			},
+			wantName: strings.Repeat("a", 57) + truncatedSuffix,
+			wantType: workloadkind.Deployment,
+		},
+		{
+			name: "deployment no template hash",
+			pod: &api.PodSandbox{
+				// `-a` is part of the original deployment name not part of the template hash
+				Name: "aaa-" + strings.Repeat("a", 52) + "-a" + "q8fcg",
+				Labels: map[string]string{
+					podTemplateHashLabel: "674bcc58f4",
+				},
+				Annotations: map[string]string{},
+			},
+			wantName: "aaa-" + strings.Repeat("a", 52) + "-a" + truncatedSuffix,
 			wantType: workloadkind.Deployment,
 		},
 		{
@@ -91,6 +116,19 @@ func TestGetPodInfo(t *testing.T) {
 				Annotations: map[string]string{},
 			},
 			wantName: strings.Repeat("a", 58) + truncatedSuffix,
+			wantType: workloadkind.DaemonSet,
+		},
+		{
+			name: "daemonset truncated with dash inside",
+			pod: &api.PodSandbox{
+				Name: "aaa-" + strings.Repeat("a", 54) + "q8fcg",
+				Labels: map[string]string{
+					daemonsetLabel:            "568bcd7685",
+					"pod-template-generation": "1",
+				},
+				Annotations: map[string]string{},
+			},
+			wantName: "aaa-" + strings.Repeat("a", 54) + truncatedSuffix,
 			wantType: workloadkind.DaemonSet,
 		},
 		{
