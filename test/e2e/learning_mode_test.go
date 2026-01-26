@@ -98,7 +98,14 @@ func getLearningModeTest() types.Feature {
 							return &job
 						},
 					},
-					// "ubuntu-cronjob.yaml",
+					"CronJob": {
+						ParseFunc: func() k8s.Object {
+							var cronjob batchv1.CronJob
+							err := decoder.DecodeFile(testdata, "ubuntu-cronjob.yaml", &cronjob)
+							require.NoError(t, err)
+							return &cronjob
+						},
+					},
 				}
 
 				for kind, tc := range testcases {

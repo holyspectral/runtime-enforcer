@@ -46,7 +46,7 @@ func (p *ProposalWebhook) updateResource(
 	case "Job":
 		res = schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: ownerRef.Kind}
 	case "CronJob":
-		fallthrough
+		res = schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: ownerRef.Kind}
 	default:
 		return fmt.Errorf("not supported resource type: %s", ownerRef.Kind)
 	}
