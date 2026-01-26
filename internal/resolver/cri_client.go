@@ -7,10 +7,8 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"path/filepath"
 
 	"github.com/neuvector/runtime-enforcer/internal/cgroups"
-	"github.com/tidwall/gjson"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	criapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -92,51 +90,4 @@ func newClientTry(endpoint string) (criapi.RuntimeServiceClient, error) {
 		return nil, fmt.Errorf("validate CRI v1 runtime API for endpoint %q: %w", endpoint, err)
 	}
 	return rtcli, nil
-}
-
-func (c *criResolver) getCgroupPath(containerID string) (string, error) {
-	req := criapi.ContainerStatusRequest{
-		ContainerId: containerID,
-		Verbose:     true,
-	}
-	// todo!: we need to handle the case in which we need to recreate the client
-	res, err := c.client.ContainerStatus(c.ctx, &req)
-	if err != nil {
-		return "", err
-	}
-
-	info := res.GetInfo()
-	if info == nil {
-		return "", errors.New("no container info")
-	}
-
-	var path, containerJSON string
-	if infoJSON, ok := info["info"]; ok {
-		containerJSON = infoJSON
-		// this path doesn't work for cri-dockerd. Minikube by default runs with cri-dockerd.
-		path = "runtimeSpec.linux.cgroupsPath"
-	} else {
-		return "", errors.New("could not find info")
-	}
-
-	ret := gjson.Get(containerJSON, path).String()
-	if ret == "" {
-		return "", errors.New("failed to find cgroupsPath in json")
-	}
-	return cgroups.ParseCgroupsPath(ret)
-}
-
-func (c *criResolver) resolveCgroup(containerID string) (uint64, string, error) {
-	// this is extracted from the container runtime
-	cgPath, err := c.getCgroupPath(containerID)
-	if err != nil {
-		return 0, "", err
-	}
-
-	path := filepath.Join(c.cgroupRoot, cgPath)
-	cgID, err := cgroups.GetCgroupIDFromPath(path)
-	if err != nil {
-		return 0, "", err
-	}
-	return cgID, path, nil
 }
