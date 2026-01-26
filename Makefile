@@ -44,9 +44,9 @@ help: ## Display this help.
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=operator-role crd webhook paths="./api/v1alpha1" paths="./internal/controller" output:crd:artifacts:config=charts/runtime-enforcer/templates/crd output:rbac:artifacts:config=charts/runtime-enforcer/templates/operator
-	$(CONTROLLER_GEN) rbac:roleName=daemon-role paths="./cmd/daemon" paths="./internal/eventhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/daemon
+	$(CONTROLLER_GEN) rbac:roleName=agent-role paths="./cmd/agent" paths="./internal/eventhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/agent
 	sed -i 's/operator-role/{{ include "runtime-enforcer.fullname" . }}-operator/' charts/runtime-enforcer/templates/operator/role.yaml
-	sed -i 's/daemon-role/{{ include "runtime-enforcer.fullname" . }}-daemon/' charts/runtime-enforcer/templates/daemon/role.yaml
+	sed -i 's/agent-role/{{ include "runtime-enforcer.fullname" . }}-agent/' charts/runtime-enforcer/templates/agent/role.yaml
 
 REPO ?= ghcr.io/neuvector/runtime-enforcer
 TAG ?= latest
@@ -61,7 +61,7 @@ build-$(1)-image:
 E2E_DEPS += build-$(1)-image
 endef
 
-TARGET=operator daemon
+TARGET=operator agent
 $(foreach T,$(TARGET),$(eval $(call BUILD_template,$(T))))
 
 .PHONY: generate
@@ -121,9 +121,9 @@ operator: generate-ebpf fmt ## Build manager binary.
 test-bpf: generate-ebpf ## Run bpf tests.
 	go test -v ./internal/bpf -count=1 -exec "sudo -E"
 
-.PHONY: daemon
-daemon: generate-ebpf fmt ## Build daemon binary.
-	CGO_ENABLED=0 GOOS=linux go build -o bin/daemon ./cmd/daemon
+.PHONY: agent
+agent: generate-ebpf fmt ## Build agent binary.
+	CGO_ENABLED=0 GOOS=linux go build -o bin/agent ./cmd/agent
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

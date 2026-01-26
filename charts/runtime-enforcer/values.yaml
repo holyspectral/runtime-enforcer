@@ -28,8 +28,8 @@ operator:
   replicas: 1
   serviceAccount:
     annotations: {}
-daemon:
-  daemon:
+agent:
+  agent:
     args:
     - ""
     containerSecurityContext:
@@ -54,7 +54,7 @@ daemon:
         drop:
           - ALL
     image:
-      repository: ghcr.io/neuvector/runtime-enforcer/daemon
+      repository: ghcr.io/neuvector/runtime-enforcer/agent
       tag: v0.0.2
       pullPolicy: IfNotPresent
     resources:

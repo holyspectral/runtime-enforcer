@@ -92,7 +92,7 @@ helm install runtime-enforcer ./charts/runtime-enforcer \
   --create-namespace \
   --set "imagePullSecrets[0].name=github-auth" \
   --set operator.manager.image.tag=latest \
-  --set daemon.daemon.image.tag=latest \
+  --set agent.agent.image.tag=latest \
   --set telemetry.mode=custom \
   --set telemetry.tracing=true \
   --set telemetry.custom.endpoint=http://otel-collector-opentelemetry-collector.otel-collector.svc.cluster.local:4317 \
@@ -112,7 +112,7 @@ Example output:
 
 ```bash
 runtime-enforcer   runtime-enforcer-controller-manager-bfbd8774d-bvjjn   1/1     Running
-runtime-enforcer   runtime-enforcer-daemon-lsxt4                         1/1     Running
+runtime-enforcer   runtime-enforcer-agent-lsxt4                         1/1     Running
 ```
 
 === Summary

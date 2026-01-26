@@ -25,20 +25,20 @@ questions:
       Number of replicas of the Operator Deployment
     group: Operator
 
+###############################################################################
+  # Agent
   ###############################################################################
-  # Daemon
-  ###############################################################################
-  - variable: daemon.daemon.image.pullPolicy
+  - variable: agent.agent.image.pullPolicy
     type: enum
     options:
       - Always
       - IfNotPresent
       - Never
     default: IfNotPresent
-    label: Daemon Image Pull Policy
+    label: Agent Image Pull Policy
     description: |
-      Pull policy of the Daemon DaemonSet
-    group: Daemon
+      Pull policy of Agent DaemonSet
+    group: Agent
 
   ###############################################################################
   # Learning

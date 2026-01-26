@@ -67,7 +67,7 @@ func newControllerManager() (manager.Manager, error) {
 	return mgr, nil
 }
 
-func startDaemon(ctx context.Context, logger *slog.Logger, config Config) error {
+func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	var err error
 
 	//////////////////////
@@ -201,7 +201,7 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
-	})).With("component", "daemon")
+	})).With("component", "agent")
 	slog.SetDefault(logger)
 
 	if config.enableTracing {
@@ -216,8 +216,8 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// This function blocks if everything is alright.
-	if err = startDaemon(ctx, logger, config); err != nil {
-		logger.ErrorContext(ctx, "failed to start daemon", "error", err)
+	if err = startAgent(ctx, logger, config); err != nil {
+		logger.ErrorContext(ctx, "failed to start agent", "error", err)
 		os.Exit(1)
 	}
 

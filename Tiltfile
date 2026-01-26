@@ -43,19 +43,19 @@ helm_resource(
 
 
 operator_image = settings.get("operator").get("image")
-daemon_image = settings.get("daemon").get("image")
+agent_image = settings.get("agent").get("image")
 
 helm_options = [
         "operator.manager.image.repository=" + operator_image,
-        "daemon.daemon.image.repository=" + daemon_image,
+        "agent.agent.image.repository=" + agent_image,
         "operator.replicas=1",
         "operator.manager.containerSecurityContext.runAsUser=null",
         "operator.podSecurityContext.runAsNonRoot=false",
-        "daemon.daemon.containerSecurityContext.runAsUser=null",
-        "daemon.podSecurityContext.runAsNonRoot=false",
+        "agent.agent.containerSecurityContext.runAsUser=null",
+        "agent.podSecurityContext.runAsNonRoot=false",
 ]
 
-if settings.get("daemon").get("enable-otel-tracing"):
+if settings.get("agent").get("enable-otel-tracing"):
     helm_options += [
         "telemetry.mode=custom",
         "telemetry.tracing=true",
@@ -110,12 +110,12 @@ exclusions = [
 ]
 
 local_resource(
-    "daemon_tilt",
-    "make daemon",
+    "agent_tilt",
+    "make agent",
     deps=[
         "go.mod",
         "go.sum",
-        "cmd/daemon",
+        "cmd/agent",
         "api",
         "internal",
         "pkg",
@@ -124,22 +124,22 @@ local_resource(
     ignore = exclusions,
 )
 
-entrypoint = ["/daemon"]
+entrypoint = ["/agent"]
 # We use a specific Dockerfile since tilt can't run on a scratch container.
-dockerfile = "./hack/Dockerfile.daemon.tilt"
+dockerfile = "./hack/Dockerfile.agent.tilt"
 
 load("ext://restart_process", "docker_build_with_restart")
 docker_build_with_restart(
-    daemon_image,
+    agent_image,
     ".",
     dockerfile=dockerfile,
     entrypoint=entrypoint,
     # `only` here is important, otherwise, the container will get updated
     # on _any_ file change.
     only=[
-        "./bin/daemon",
+        "./bin/agent",
     ],
     live_update=[
-        sync("./bin/daemon", "/daemon"),
+        sync("./bin/agent", "/agent"),
     ],
 )

@@ -32,7 +32,7 @@ targets:
     spec:
       files:
         - package/Dockerfile.operator
-        - package/Dockerfile.daemon
+        - package/Dockerfile.agent
       instruction:
         keyword: FROM
         matcher: docker.io/library/golang

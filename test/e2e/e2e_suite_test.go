@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 			"--mode",
 			"direct"),
 		envfuncs.LoadImageToCluster(kindClusterName,
-			"ghcr.io/neuvector/runtime-enforcer/daemon:latest",
+			"ghcr.io/neuvector/runtime-enforcer/agent:latest",
 			"--verbose",
 			"--mode",
 			"direct"),
@@ -101,7 +101,7 @@ func InstallRuntimeEnforcer() env.Func {
 			helm.WithNamespace(namespace),
 			helm.WithChart("../../charts/runtime-enforcer/"),
 			helm.WithArgs("--set", "operator.manager.image.tag=latest"),
-			helm.WithArgs("--set", "daemon.daemon.image.tag=latest"),
+			helm.WithArgs("--set", "agent.agent.image.tag=latest"),
 			helm.WithArgs("--set", "telemetry.mode=custom"),
 			helm.WithArgs("--set", "telemetry.tracing=true"),
 			helm.WithArgs(

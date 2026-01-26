@@ -1,4 +1,4 @@
-suite: "Daemon DaemonSet Tests"
+suite: "Agent DaemonSet Tests"
 templates:
   - "templates/operator/deployment.yaml"
 
@@ -9,7 +9,7 @@ tests:
         manager:
           replicas: 5
           image:
-            repository: somewhere/daemon
+            repository: somewhere/operator
             tag: v9.9.9
             pullPolicy: Always
     asserts:
@@ -18,7 +18,7 @@ tests:
           value: 5
       - equal:
           path: "spec.template.spec.containers[0].image"
-          value: "somewhere/daemon:v9.9.9"
+          value: "somewhere/operator:v9.9.9"
       - equal:
           path: "spec.template.spec.containers[0].imagePullPolicy"
           value: "Always"

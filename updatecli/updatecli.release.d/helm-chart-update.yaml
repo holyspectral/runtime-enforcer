@@ -78,11 +78,11 @@ targets:
     spec:
       file: charts/runtime-enforcer/values.yaml
       key: $.operator.manager.image.tag
-  update_daemon_version:
+  update_agent_version:
     scmid: default
-    name: Update Helm chart daemon version
+    name: Update Helm chart agent version
     kind: yaml
     sourceid: releaseVersion
     spec:
       file: charts/runtime-enforcer/values.yaml
-      key: $.daemon.daemon.image.tag
+      key: $.agent.agent.image.tag

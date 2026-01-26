@@ -9,7 +9,7 @@ jobs:
   build:
     strategy:
       matrix:
-        component: [operator, daemon]
+        component: [operator, agent]
         arch: [amd64]
         include:
           - arch: amd64
@@ -40,7 +40,7 @@ jobs:
       id-token: write # Signing images with cosign
     strategy:
       matrix:
-        component: [operator, daemon]
+        component: [operator, agent]
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -56,7 +56,7 @@ jobs:
     name: Sign attestations and upload as artifacts
     strategy:
       matrix:
-        component: [operator, daemon]
+        component: [operator, agent]
         arch: [amd64]
         include:
           - arch: amd64
@@ -121,10 +121,10 @@ jobs:
             let fs = require('fs');
             let path = require('path');
             let files = [
-                'RuntimeEnforcer-daemon-attestation-amd64-provenance.intoto.jsonl',
-                'RuntimeEnforcer-daemon-attestation-amd64-provenance.intoto.jsonl.bundle.sigstore',
-                'RuntimeEnforcer-daemon-attestation-amd64-sbom.json',
-                'RuntimeEnforcer-daemon-attestation-amd64-sbom.json.bundle.sigstore',
+                'RuntimeEnforcer-agent-attestation-amd64-provenance.intoto.jsonl',
+                'RuntimeEnforcer-agent-attestation-amd64-provenance.intoto.jsonl.bundle.sigstore',
+                'RuntimeEnforcer-agent-attestation-amd64-sbom.json',
+                'RuntimeEnforcer-agent-attestation-amd64-sbom.json.bundle.sigstore',
                 'RuntimeEnforcer-operator-attestation-amd64-provenance.intoto.jsonl',
                 'RuntimeEnforcer-operator-attestation-amd64-provenance.intoto.jsonl.bundle.sigstore',
                 'RuntimeEnforcer-operator-attestation-amd64-sbom.json',

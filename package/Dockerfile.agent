@@ -11,10 +11,10 @@ COPY bpf/ /src/bpf/
 COPY internal/ /src/internal
 COPY go.mod go.sum /src/
 COPY Makefile /src/
-RUN make daemon
+RUN make agent
 
 FROM scratch
 WORKDIR /
-COPY --from=builder /src/bin/daemon /daemon
+COPY --from=builder /src/bin/agent /agent
 
-ENTRYPOINT ["/daemon"]
+ENTRYPOINT ["/agent"]
