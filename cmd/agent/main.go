@@ -12,20 +12,16 @@ import (
 	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
 	"github.com/neuvector/runtime-enforcer/internal/nri"
 	"github.com/neuvector/runtime-enforcer/internal/resolver"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
 	"github.com/neuvector/runtime-enforcer/internal/traces"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/node/v1alpha1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	cmCache "sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"log/slog"
 )
@@ -39,26 +35,13 @@ type Config struct {
 }
 
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
-// used by the resolver
-// +kubebuilder:rbac:groups="",resources=pods;nodes,verbs=get;list;watch
 
 func newControllerManager() (manager.Manager, error) {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(securityv1alpha1.AddToScheme(scheme))
-	cacheOptions := cmCache.Options{
-		ByObject: map[client.Object]cmCache.ByObject{
-			&corev1.Pod{}: {
-				Field: fields.OneTermEqualSelector("spec.nodeName", os.Getenv("NODE_NAME")),
-			},
-			// todo!: not clear if we need to watch these nodes
-			&corev1.Node{}: {
-				Field: fields.SelectorFromSet(fields.Set{"metadata.name": os.Getenv("NODE_NAME")}),
-			},
-		},
-	}
-	controllerOptions := ctrl.Options{Scheme: scheme, Cache: cacheOptions}
+	controllerOptions := ctrl.Options{Scheme: scheme}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), controllerOptions)
 	if err != nil {
 		return nil, fmt.Errorf("unable to start manager: %w", err)
