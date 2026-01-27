@@ -64,6 +64,11 @@ agent:
       requests:
         cpu: 10m
         memory: 64Mi
+  updateStrategy: 
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   hostPID: true
   podSecurityContext:
     seccompProfile:

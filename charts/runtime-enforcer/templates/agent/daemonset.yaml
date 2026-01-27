@@ -9,6 +9,8 @@ spec:
     matchLabels:
       app.kubernetes.io/component: agent
     {{- include "runtime-enforcer.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+  {{- toYaml .Values.agent.updateStrategy | nindent 4 }}
   template:
     metadata:
       labels:
