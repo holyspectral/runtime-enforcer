@@ -111,7 +111,6 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	// Create the resolver
 	//////////////////////
 	resolver, err := resolver.NewResolver(
-		ctx,
 		logger,
 		bpfManager.GetCgroupTrackerUpdateFunc(),
 		bpfManager.GetCgroupPolicyUpdateFunc(),

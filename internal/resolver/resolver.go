@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"context"
 	"log/slog"
 	"sync"
 
@@ -31,7 +30,6 @@ type Resolver struct {
 }
 
 func NewResolver(
-	_ context.Context,
 	logger *slog.Logger,
 	cgTrackerUpdateFunc func(cgID uint64, cgroupPath string) error,
 	cgroupToPolicyMapUpdateFunc func(polID PolicyID, cgroupIDs []CgroupID, op bpf.CgroupPolicyOperation) error,
@@ -50,6 +48,5 @@ func NewResolver(
 		nextPolicyID:                PolicyID(1),
 	}
 
-	// todo!: we can do a first scan of all existing containers to populate the cache initially
 	return r, nil
 }
