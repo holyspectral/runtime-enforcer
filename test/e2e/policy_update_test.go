@@ -164,6 +164,355 @@ func getPolicyUpdateTest() types.Feature {
 
 				return ctx
 			}).
+		Assess("policy update can add enforcement for a new container",
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+				r := ctx.Value(key("client")).(*resources.Resources)
+
+				policyName := "test-policy-add-container"
+				podName := "multi-container-pod-add"
+
+				t.Log("creating multi-container pod with policy label (only main initially protected)")
+
+				pod := corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName,
+						Namespace: workloadNamespace,
+						Labels: map[string]string{
+							v1alpha1.PolicyLabelKey: policyName,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:    "main",
+								Image:   "ubuntu",
+								Command: []string{"sleep", "3600"},
+							},
+							{
+								Name:    "sidecar",
+								Image:   "ubuntu",
+								Command: []string{"sleep", "3600"},
+							},
+						},
+					},
+				}
+
+				err := r.Create(ctx, &pod)
+				require.NoError(t, err, "failed to create multi-container pod for add-container scenario")
+
+				t.Log("creating initial policy protecting only main container")
+				policy := v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      policyName,
+						Namespace: workloadNamespace,
+					},
+					Spec: v1alpha1.WorkloadPolicySpec{
+						Mode: "protect",
+						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
+							"main": {
+								Executables: v1alpha1.WorkloadPolicyExecutables{
+									Allowed: []string{
+										"/usr/bin/ls",
+										"/usr/bin/bash",
+										"/usr/bin/sleep",
+									},
+								},
+							},
+							// sidecar intentionally omitted at first
+						},
+					},
+				}
+
+				err = r.Create(ctx, &policy)
+				require.NoError(t, err, "failed to create initial policy for add-container scenario")
+
+				waitForWorkloadPolicyStatusToBeUpdated()
+
+				// 1. Verify that /usr/bin/mkdir is blocked in main but allowed in sidecar
+				t.Log("verifying /usr/bin/mkdir is blocked in main and allowed in sidecar before update")
+
+				var stdout, stderr bytes.Buffer
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"main",
+					[]string{"/usr/bin/mkdir", "/tmp/main-dir-add"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should be blocked in main container before adding sidecar rules")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in main container before update",
+				)
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"sidecar",
+					[]string{"/usr/bin/mkdir", "/tmp/sidecar-dir-add"},
+					&stdout,
+					&stderr,
+				)
+				require.NoError(t, err, "mkdir should be allowed in sidecar container before it is added to the policy")
+
+				// 2. Update the policy to add the sidecar container to RulesByContainer
+				t.Log("updating policy to add sidecar container rules")
+
+				var updatedPolicy v1alpha1.WorkloadPolicy
+				err = r.Get(ctx, policyName, workloadNamespace, &updatedPolicy)
+				require.NoError(t, err, "failed to get policy for add-container update")
+
+				updatedPolicy.Spec.RulesByContainer["sidecar"] = &v1alpha1.WorkloadPolicyRules{
+					Executables: v1alpha1.WorkloadPolicyExecutables{
+						Allowed: []string{
+							"/usr/bin/ls",
+							"/usr/bin/bash",
+							"/usr/bin/sleep",
+						},
+					},
+				}
+
+				err = r.Update(ctx, &updatedPolicy)
+				require.NoError(t, err, "failed to update policy to add sidecar rules")
+
+				waitForWorkloadPolicyStatusToBeUpdated()
+
+				// 3. Verify both main and sidecar are now protected (mkdir blocked in both)
+				t.Log("verifying both main and sidecar are protected after update")
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"main",
+					[]string{"/usr/bin/mkdir", "/tmp/main-dir-add-2"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should still be blocked in main container after adding sidecar rules")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in main container after update",
+				)
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"sidecar",
+					[]string{"/usr/bin/mkdir", "/tmp/sidecar-dir-add-2"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should be blocked in sidecar container after it is added to the policy")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in sidecar container after update",
+				)
+
+				t.Log("cleaning up pod")
+				err = r.Delete(ctx, &pod)
+				require.NoError(t, err, "failed to delete pod in add-container scenario")
+
+				t.Log("cleaning up policy")
+				err = r.Delete(ctx, &updatedPolicy)
+				require.NoError(t, err, "failed to delete policy in add-container scenario")
+
+				return ctx
+			}).
+		Assess("policy update can disable enforcement for a single container",
+			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
+				r := ctx.Value(key("client")).(*resources.Resources)
+
+				policyName := "test-policy-disable-container"
+				podName := "multi-container-pod"
+
+				t.Log("creating multi-container pod with policy label")
+
+				pod := corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podName,
+						Namespace: workloadNamespace,
+						Labels: map[string]string{
+							v1alpha1.PolicyLabelKey: policyName,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:    "main",
+								Image:   "ubuntu",
+								Command: []string{"sleep", "3600"},
+							},
+							{
+								Name:    "sidecar",
+								Image:   "ubuntu",
+								Command: []string{"sleep", "3600"},
+							},
+						},
+						RestartPolicy: corev1.RestartPolicyNever,
+					},
+				}
+
+				err := r.Create(ctx, &pod)
+				require.NoError(t, err, "failed to create multi-container pod")
+
+				t.Log("creating initial policy protecting both containers")
+				policy := v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      policyName,
+						Namespace: workloadNamespace,
+					},
+					Spec: v1alpha1.WorkloadPolicySpec{
+						Mode: "protect",
+						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
+							"main": {
+								Executables: v1alpha1.WorkloadPolicyExecutables{
+									Allowed: []string{
+										"/usr/bin/ls",
+										"/usr/bin/bash",
+										"/usr/bin/sleep",
+									},
+								},
+							},
+							"sidecar": {
+								Executables: v1alpha1.WorkloadPolicyExecutables{
+									Allowed: []string{
+										"/usr/bin/ls",
+										"/usr/bin/bash",
+										"/usr/bin/sleep",
+									},
+								},
+							},
+						},
+					},
+				}
+
+				err = r.Create(ctx, &policy)
+				require.NoError(t, err, "failed to create initial policy")
+
+				waitForWorkloadPolicyStatusToBeUpdated()
+
+				// 1. Verify that /usr/bin/mkdir is blocked in both containers
+				t.Log("verifying /usr/bin/mkdir is initially blocked in both containers")
+
+				var stdout, stderr bytes.Buffer
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"main",
+					[]string{"/usr/bin/mkdir", "/tmp/main-dir"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should be blocked in main container before update")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in main container",
+				)
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"sidecar",
+					[]string{"/usr/bin/mkdir", "/tmp/sidecar-dir"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should be blocked in sidecar container before update")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in sidecar container",
+				)
+
+				// 2. Update the policy to remove the sidecar container from RulesByContainer
+				t.Log("updating policy to remove sidecar container rules")
+
+				var updatedPolicy v1alpha1.WorkloadPolicy
+				err = r.Get(ctx, policyName, workloadNamespace, &updatedPolicy)
+				require.NoError(t, err, "failed to get policy for update")
+
+				delete(updatedPolicy.Spec.RulesByContainer, "sidecar")
+
+				err = r.Update(ctx, &updatedPolicy)
+				require.NoError(t, err, "failed to update policy to remove sidecar rules")
+
+				waitForWorkloadPolicyStatusToBeUpdated()
+
+				// 3. Verify main is still protected (mkdir blocked) while sidecar is now unprotected (mkdir allowed)
+				t.Log("verifying main container remains protected and sidecar is unprotected after update")
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"main",
+					[]string{"/usr/bin/mkdir", "/tmp/main-dir-2"},
+					&stdout,
+					&stderr,
+				)
+				require.Error(t, err, "mkdir should still be blocked in main container after update")
+				require.Contains(
+					t,
+					stderr.String(),
+					"operation not permitted",
+					"stderr should contain 'operation not permitted' when mkdir is blocked in main container after update",
+				)
+
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(
+					ctx,
+					workloadNamespace,
+					podName,
+					"sidecar",
+					[]string{"/usr/bin/mkdir", "/tmp/sidecar-dir-2"},
+					&stdout,
+					&stderr,
+				)
+				require.NoError(t, err, "mkdir should be allowed in sidecar container after its rules are removed")
+
+				t.Log("cleaning up pod")
+				err = r.Delete(ctx, &pod)
+				require.NoError(t, err, "failed to delete pod")
+
+				t.Log("cleaning up policy")
+				err = r.Delete(ctx, &updatedPolicy)
+				require.NoError(t, err, "failed to delete policy")
+
+				return ctx
+			}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("uninstalling test resources")
 			r := ctx.Value(key("client")).(*resources.Resources)
