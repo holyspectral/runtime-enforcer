@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
@@ -18,10 +19,11 @@ const (
 )
 
 type Handler struct {
-	socketPath  string
-	pluginIndex string
-	logger      *slog.Logger
-	resolver    *resolver.Resolver
+	socketPath   string
+	pluginIndex  string
+	logger       *slog.Logger
+	resolver     *resolver.Resolver
+	synchronized bool
 }
 
 func NewNRIHandler(socketPath, pluginIndex string, logger *slog.Logger, r *resolver.Resolver) (*Handler, error) {
@@ -73,9 +75,14 @@ func (h *Handler) checkNRISupport() error {
 func (h *Handler) startNRIPlugin(ctx context.Context) error {
 	var err error
 
+	defer func() {
+		h.synchronized = false
+	}()
+
 	p := &plugin{
-		logger:   h.logger.With("component", "nri-plugin"),
-		resolver: h.resolver,
+		logger:       h.logger.With("component", "nri-plugin"),
+		resolver:     h.resolver,
+		synchronized: &h.synchronized,
 	}
 
 	opts := []stub.Option{
@@ -124,4 +131,12 @@ func (h *Handler) Start(ctx context.Context) error {
 			)
 		}),
 	)
+}
+
+func (h *Handler) Ping(_ *http.Request) error {
+	if !h.synchronized {
+		h.logger.Warn("NRI handler has not yet synchronized")
+		return errors.New("NRI handler has not yet synchronized")
+	}
+	return nil
 }

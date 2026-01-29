@@ -12,9 +12,10 @@ import (
 )
 
 type plugin struct {
-	stub     stub.Stub
-	logger   *slog.Logger
-	resolver *resolver.Resolver
+	stub         stub.Stub
+	logger       *slog.Logger
+	resolver     *resolver.Resolver
+	synchronized *bool
 }
 
 func (p *plugin) getWorkloadInfoAndLog(ctx context.Context, pod *api.PodSandbox) (string, workloadkind.Kind) {
@@ -92,6 +93,9 @@ func (p *plugin) Synchronize(
 			p.logger.ErrorContext(ctx, "failed to add pod container from NRI",
 				"error", err)
 		}
+	}
+	if p.synchronized != nil {
+		*p.synchronized = true
 	}
 	return nil, nil
 }

@@ -61,6 +61,12 @@ spec:
           | default .Chart.AppVersion }}
         imagePullPolicy: {{ .Values.agent.agent.image.pullPolicy }}
         name: agent
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources: {{- toYaml .Values.agent.agent.resources | nindent 10 }}
         securityContext: {{- toYaml .Values.agent.agent.containerSecurityContext | nindent 10 }}
         volumeMounts:
