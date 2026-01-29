@@ -1,6 +1,6 @@
 package resolver
 
-import "github.com/neuvector/runtime-enforcer/api/v1alpha1"
+import "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 
 type podState struct {
 	info       *podInfo

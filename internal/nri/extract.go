@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/nri/pkg/api"
-	"github.com/neuvector/runtime-enforcer/internal/cgroups"
-	"github.com/neuvector/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 )
 
 func cgroupFromContainer(container *api.Container) (resolver.CgroupID, error) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
-	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 )
 
 type mode int

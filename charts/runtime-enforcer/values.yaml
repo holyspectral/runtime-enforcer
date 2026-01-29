@@ -11,7 +11,7 @@ operator:
         drop:
         - ALL
     image:
-      repository: ghcr.io/neuvector/runtime-enforcer/operator
+      repository: ghcr.io/rancher-sandbox/runtime-enforcer/operator
       tag: v0.0.2
       pullPolicy: IfNotPresent
     resources:
@@ -43,7 +43,7 @@ agent:
       # - CAP_PERFMON: Required for attaching tracing programs (kprobes/tracepoints)
       # - CAP_SYS_RESOURCE: Required for removing memlock limits (rlimit.RemoveMemlock)
       # - CAP_SYS_PTRACE: Required to access host cgroup filesystem
-      # - CAP_SYS_ADMIN: mitigation required for accessing BTF in older kernels (see: https://github.com/neuvector/runtime-enforcer/issues/152)
+      # - CAP_SYS_ADMIN: mitigation required for accessing BTF in older kernels (see: https://github.com/rancher-sandbox/runtime-enforcer/issues/152)
       capabilities:
         add:
           - BPF
@@ -54,7 +54,7 @@ agent:
         drop:
           - ALL
     image:
-      repository: ghcr.io/neuvector/runtime-enforcer/agent
+      repository: ghcr.io/rancher-sandbox/runtime-enforcer/agent
       tag: v0.0.2
       pullPolicy: IfNotPresent
     resources:

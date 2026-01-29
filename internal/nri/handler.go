@@ -10,7 +10,7 @@ import (
 
 	retry "github.com/avast/retry-go/v4"
 	"github.com/containerd/nri/pkg/stub"
-	"github.com/neuvector/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 )
 
 const (

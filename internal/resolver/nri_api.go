@@ -3,7 +3,7 @@ package resolver
 import (
 	"fmt"
 
-	"github.com/neuvector/runtime-enforcer/internal/bpf"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 )
 
 type ContainerData struct {

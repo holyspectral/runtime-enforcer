@@ -11,8 +11,8 @@ import (
 	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/neuvector/runtime-enforcer/internal/cgroups"
-	"github.com/neuvector/runtime-enforcer/internal/kernels"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/kernels"
 
 	"golang.org/x/sync/errgroup"
 )

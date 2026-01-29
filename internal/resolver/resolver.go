@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/neuvector/runtime-enforcer/internal/bpf"
-	"github.com/neuvector/runtime-enforcer/internal/types/policymode"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 )
 
 type CgroupID = uint64

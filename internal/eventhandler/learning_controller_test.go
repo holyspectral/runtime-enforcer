@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	securityv1alpha1 "github.com/neuvector/runtime-enforcer/api/v1alpha1"
-	"github.com/neuvector/runtime-enforcer/internal/eventhandler"
-	"github.com/neuvector/runtime-enforcer/internal/eventscraper"
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/errors"
 

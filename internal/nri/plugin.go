@@ -7,8 +7,8 @@ import (
 
 	"github.com/containerd/nri/pkg/api"
 	"github.com/containerd/nri/pkg/stub"
-	"github.com/neuvector/runtime-enforcer/internal/resolver"
-	"github.com/neuvector/runtime-enforcer/internal/types/workloadkind"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 )
 
 type plugin struct {

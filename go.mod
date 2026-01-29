@@ -1,4 +1,4 @@
-module github.com/neuvector/runtime-enforcer
+module github.com/rancher-sandbox/runtime-enforcer
 
 go 1.25.6
 

@@ -48,7 +48,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	sed -i 's/operator-role/{{ include "runtime-enforcer.fullname" . }}-operator/' charts/runtime-enforcer/templates/operator/role.yaml
 	sed -i 's/agent-role/{{ include "runtime-enforcer.fullname" . }}-agent/' charts/runtime-enforcer/templates/agent/role.yaml
 
-REPO ?= ghcr.io/neuvector/runtime-enforcer
+REPO ?= ghcr.io/rancher-sandbox/runtime-enforcer
 TAG ?= latest
 
 define BUILD_template =
