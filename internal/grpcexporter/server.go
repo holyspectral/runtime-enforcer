@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
@@ -21,6 +22,8 @@ const (
 	tlsCertFile = "tls.crt"
 	tlsKeyFile  = "tls.key"
 	caCertFile  = "ca.crt"
+
+	gracefulGRPCTimeout = 5 * time.Second
 )
 
 type Config struct {
@@ -123,5 +126,39 @@ func (s *Server) Start(ctx context.Context) error {
 	grpcServer := grpc.NewServer(s.getConnCredentials())
 	pb.RegisterAgentObserverServer(grpcServer, newAgentObserver(s.logger, s.resolver))
 	s.logger.InfoContext(ctx, "Starting gRPC exporter", "addr", addr, "mTLS", s.conf.MTLSEnabled)
-	return grpcServer.Serve(listener)
+
+	serveErrCh := make(chan error, 1)
+	go func() {
+		serveErrCh <- grpcServer.Serve(listener)
+	}()
+
+	select {
+	case err = <-serveErrCh:
+		if err != nil {
+			return fmt.Errorf("gRPC server.Serve error: %w", err)
+		}
+		return nil
+
+	case <-ctx.Done():
+		done := make(chan struct{})
+		go func() {
+			grpcServer.GracefulStop()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// graceful stop completed
+		case <-time.After(gracefulGRPCTimeout):
+			s.logger.WarnContext(ctx, "GracefulStop timed out; forcing Stop()", "timeout", gracefulGRPCTimeout.String())
+			grpcServer.Stop()
+		}
+
+		// wait for Serve to return (usually immediate after Stop/GracefulStop)
+		err = <-serveErrCh
+		if err != nil {
+			return fmt.Errorf("gRPC server.Serve error: %w", err)
+		}
+		return nil
+	}
 }
