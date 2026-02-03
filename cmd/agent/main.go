@@ -57,6 +57,22 @@ func newControllerManager(config Config) (manager.Manager, error) {
 	return mgr, nil
 }
 
+func setupGRPCExporter(
+	ctrlMgr manager.Manager,
+	logger *slog.Logger,
+	conf *grpcexporter.Config,
+	r *resolver.Resolver,
+) error {
+	exporter, err := grpcexporter.New(logger, conf, r)
+	if err != nil {
+		return fmt.Errorf("failed to create gRPC exporter: %w", err)
+	}
+	if err = ctrlMgr.Add(exporter); err != nil {
+		return fmt.Errorf("failed to add gRPC exporter to controller manager: %w", err)
+	}
+	return nil
+}
+
 func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	var err error
 
@@ -174,18 +190,13 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	//////////////////////
 	// Add GRPC exporter
 	//////////////////////
-	exporter, err := grpcexporter.New(logger, &config.grpcConf, resolver)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to create gRPC exporter", "error", err)
+	if err = setupGRPCExporter(ctrlMgr, logger, &config.grpcConf, resolver); err != nil {
 		return err
-	}
-	if err = ctrlMgr.Add(exporter); err != nil {
-		logger.ErrorContext(ctx, "failed to add gRPC exporter to controller manager", "error", err)
 	}
 
 	logger.InfoContext(ctx, "starting manager")
 	if err = ctrlMgr.Start(ctx); err != nil {
-		logger.ErrorContext(ctx, "failed to start manager", "error", err)
+		return fmt.Errorf("failed to start manager: %w", err)
 	}
 
 	return nil
