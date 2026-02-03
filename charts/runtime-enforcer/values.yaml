@@ -55,7 +55,7 @@ agent:
           - ALL
     image:
       repository: ghcr.io/rancher-sandbox/runtime-enforcer/agent
-      tag: v0.0.2
+      tag: v0.1.0
       pullPolicy: IfNotPresent
     resources:
       limits:
