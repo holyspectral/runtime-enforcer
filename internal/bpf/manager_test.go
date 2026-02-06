@@ -174,3 +174,44 @@ func TestMultiplePolicies(t *testing.T) {
 	err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID2, []string{"/usr/bin/who"}, AddValuesToPolicy)
 	require.NoError(t, err, "Failed to add policy 2 values")
 }
+
+func TestManagerShutdown(t *testing.T) {
+	manager, cleanup, err := waitRunningManager(t)
+	require.NoError(t, err, "Failed to start manager")
+	cleanup()
+
+	err = manager.GetPolicyUpdateBinariesFunc()(
+		uint64(100),
+		[]string{"/usr/bin/true", "/usr/bin/who"},
+		AddValuesToPolicy,
+	)
+	require.NoError(t, err, "bpf manager should return nil after shutdown")
+
+	err = manager.GetPolicyUpdateBinariesFunc()(
+		uint64(100),
+		[]string{"/usr/bin/true", "/usr/bin/who"},
+		ReplaceValuesInPolicy,
+	)
+	require.NoError(t, err, "bpf manager should return nil after shutdown")
+
+	err = manager.GetCgroupTrackerUpdateFunc()(
+		uint64(200),
+		"",
+	)
+	require.NoError(t, err, "bpf manager should return nil after shutdown")
+
+	err = manager.GetCgroupPolicyUpdateFunc()(
+		uint64(100),
+		[]uint64{200},
+		AddPolicyToCgroups,
+	)
+	require.NoError(t, err, "bpf manager should return nil after shutdown")
+
+	err = manager.GetCgroupPolicyUpdateFunc()(
+		uint64(100),
+		[]uint64{200},
+		RemovePolicy,
+	)
+
+	require.NoError(t, err, "bpf manager should return nil after shutdown")
+}

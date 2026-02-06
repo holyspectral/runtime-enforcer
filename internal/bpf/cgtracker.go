@@ -15,7 +15,7 @@ import (
 
 func (m *Manager) GetCgroupTrackerUpdateFunc() func(cgID uint64, cgroupPath string) error {
 	return func(cgID uint64, cgroupPath string) error {
-		return m.updateCgTrackerMap(cgID, cgroupPath)
+		return m.handleErrOnShutdown(m.updateCgTrackerMap(cgID, cgroupPath))
 	}
 }
 
