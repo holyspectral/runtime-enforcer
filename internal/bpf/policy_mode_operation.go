@@ -43,6 +43,13 @@ func (m *Manager) deletePolicy(policyID uint64) error {
 
 func (m *Manager) GetPolicyModeUpdateFunc() func(policyID uint64, mode policymode.Mode, op PolicyModeOperation) error {
 	return func(policyID uint64, mode policymode.Mode, op PolicyModeOperation) error {
+		m.mutex.Lock()
+		defer m.mutex.Unlock()
+
+		if m.IsShuttingDown() {
+			return nil
+		}
+
 		switch op {
 		case UpdateMode:
 			return m.updatePolicyMode(policyID, mode)

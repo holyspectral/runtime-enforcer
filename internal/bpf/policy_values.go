@@ -307,6 +307,13 @@ func (m *Manager) replaceInnerBPFMap(policyID uint64,
 // GetPolicyUpdateBinariesFunc exposes a function used to interact with BPF maps storing the list of allowed binaries.
 func (m *Manager) GetPolicyUpdateBinariesFunc() func(policyID uint64, values []string, op PolicyValuesOperation) error {
 	return func(policyID uint64, values []string, op PolicyValuesOperation) error {
+		m.mutex.Lock()
+		defer m.mutex.Unlock()
+
+		if m.IsShuttingDown() {
+			return nil
+		}
+
 		switch op {
 		case AddValuesToPolicy:
 			return m.generateBPFMaps(policyID, values)

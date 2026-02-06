@@ -51,6 +51,8 @@ type Manager struct {
 	logger           *slog.Logger
 	objs             *bpfObjects
 	policyStringMaps []*ebpf.Map
+	mutex            sync.Mutex
+	isShuttingDown   bool
 
 	// Learning
 	enableLearning    bool
@@ -197,7 +199,12 @@ func (m *Manager) isKernelPre5_9() bool {
 
 func (m *Manager) Start(ctx context.Context) error {
 	defer func() {
+		m.mutex.Lock()
+		defer m.mutex.Unlock()
+
 		m.logger.InfoContext(ctx, "BPF Manager stopped")
+		m.isShuttingDown = true
+
 		if err := m.objs.Close(); err != nil {
 			m.logger.ErrorContext(ctx, "failed to close BPF objects", "error", err)
 		}
@@ -227,4 +234,8 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("BPF Manager error: %w", err)
 	}
 	return nil
+}
+
+func (m *Manager) IsShuttingDown() bool {
+	return m.isShuttingDown
 }

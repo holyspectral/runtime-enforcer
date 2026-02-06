@@ -15,6 +15,12 @@ import (
 
 func (m *Manager) GetCgroupTrackerUpdateFunc() func(cgID uint64, cgroupPath string) error {
 	return func(cgID uint64, cgroupPath string) error {
+		m.mutex.Lock()
+		defer m.mutex.Unlock()
+
+		if m.IsShuttingDown() {
+			return nil
+		}
 		return m.updateCgTrackerMap(cgID, cgroupPath)
 	}
 }

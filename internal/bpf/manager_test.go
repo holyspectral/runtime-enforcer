@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
@@ -173,4 +175,68 @@ func TestMultiplePolicies(t *testing.T) {
 	mockPolicyID2 := uint64(43)
 	err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID2, []string{"/usr/bin/who"}, AddValuesToPolicy)
 	require.NoError(t, err, "Failed to add policy 2 values")
+}
+
+func TestManagerShutdown(t *testing.T) {
+	manager, cleanup, err := waitRunningManager(t)
+	require.NoError(t, err, "Failed to start manager")
+	defer cleanup()
+
+	mockPolicyID := uint64(100)
+	mockCgroupID := uint64(200)
+
+	binaries := []string{"/usr/bin/true", "/usr/bin/who"}
+
+	// Create a go routine to continuously update the policy map.
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	go func() {
+		// create a cgroup for test.  We just reuse the existing cgroup if it exists.
+		cgroupPath := "/sys/fs/cgroup/system.slice/test-manager-shutdown.scope"
+		_ = os.MkdirAll(cgroupPath, 0755)
+		defer os.RemoveAll(cgroupPath)
+
+		err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID, binaries, AddValuesToPolicy)
+		assert.NoError(t, err, "Failed to add policy map")
+
+		for {
+			mockCgroupID++
+			select {
+			case <-doneCh:
+				return
+			default:
+				err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID, binaries, ReplaceValuesInPolicy)
+				assert.NoError(t, err, "Failed to update policy map")
+
+				err = manager.GetCgroupTrackerUpdateFunc()(
+					mockCgroupID,
+					cgroupPath,
+				)
+				assert.NoError(t, err, "Failed to update cgroup tracker")
+
+				err = manager.GetCgroupPolicyUpdateFunc()(
+					mockPolicyID,
+					[]uint64{mockCgroupID},
+					AddPolicyToCgroups,
+				)
+				assert.NoError(t, err, "Failed to update cgroup policy map")
+
+				err = manager.GetCgroupPolicyUpdateFunc()(
+					mockPolicyID,
+					[]uint64{mockCgroupID},
+					RemovePolicy,
+				)
+
+				assert.NoError(t, err, "Failed to update cgroup policy map")
+			}
+		}
+	}()
+
+	// Give the goroutine some time to prepare itself before we shutdown the manager
+	time.Sleep(time.Second * 2)
+	cleanup()
+
+	// Give an arbitrary delay so we can test if the go routine would receive failures during manager shutdown.
+	time.Sleep(time.Second * 2)
 }

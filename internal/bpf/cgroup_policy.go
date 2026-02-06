@@ -31,6 +31,12 @@ func (op CgroupPolicyOperation) String() string {
 
 func (m *Manager) GetCgroupPolicyUpdateFunc() func(polID uint64, cgroupIDs []uint64, op CgroupPolicyOperation) error {
 	return func(polID uint64, cgroupIDs []uint64, op CgroupPolicyOperation) error {
+		m.mutex.Lock()
+		defer m.mutex.Unlock()
+
+		if m.IsShuttingDown() {
+			return nil
+		}
 		return m.updateCgroupPolicy(polID, cgroupIDs, op)
 	}
 }
