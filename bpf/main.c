@@ -544,6 +544,8 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		match = bpf_map_lookup_elem(string_map, &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	}
 
+
+	
 	if(match != NULL) {
 		// We have this binary in the list so we do nothing
 		return 0;
