@@ -1,0 +1,85 @@
+name: Update .pre-commit-config.yaml
+sources:
+  clangformatTag:
+    kind: gittag
+    spec:
+      key: name
+      url: https://github.com/pre-commit/mirrors-clang-format
+      versionFilter:
+        kind: semver
+        pattern: 18.1.*
+  golangcilintTag:
+    kind: gittag
+    spec:
+      key: name
+      url: https://github.com/golangci/golangci-lint/
+      versionFilter:
+        kind: latest
+  clangformatVersion:
+    kind: gittag
+    spec:
+      key: hash
+      url: https://github.com/pre-commit/mirrors-clang-format
+      versionFilter:
+        kind: semver
+        pattern: 18.1.*
+  golangcilintVersion:
+    kind: gittag
+    spec:
+      key: hash
+      url: https://github.com/golangci/golangci-lint/
+      versionFilter:
+        kind: latest
+
+scms:
+  default:
+    kind: github
+    spec:
+      user: "{{ .github.author }}"
+      email: "{{ .github.email }}"
+      owner: "{{ requiredEnv .github.owner }}"
+      repository: "runtime-enforcer"
+      token: "{{ requiredEnv .github.token }}"
+      username: "{{ requiredEnv .github.user }}"
+      branch: "{{ .github.branch }}"
+      commitusingapi: true
+      commitmessage:
+        type: "chore"
+        title: "update runtime enforcer pre-commit-config.yaml"
+        hidecredit: true
+        footers: "Signed-off-by: RuntimeEnforcer bot <runtime-enforcer-bot@users.noreply.github.com>"
+
+actions:
+  default:
+    title: 'chore: update pre-commit-config.yaml'
+    kind: github/pullrequest
+    scmid: default
+    spec:
+      automerge: false
+      mergemethod: squash
+      description: |
+        Automatic pre-commit-config.yaml update.
+        This PR has been created by the automation used to automatically update the pre-commit-config.yaml.
+        REMEMBER IF YOU WANT TO MERGE IN A SINGLE COMMIT CHANGES AND VERSION BUMP, YOU MUST SQUASH THE COMMIT BEFORE MERGING THIS PR!
+      draft: false
+      labels:
+        - "chore"
+
+
+targets:
+  update_golangci_lint_version:
+    scmid: default
+    name: 'Update golangci-lint version to {{ source "golangcilintTag" }}'
+    kind: yaml
+    sourceid: golangcilintVersion
+    spec:
+      file: .pre-commit-config.yaml
+      key: $.repos[0].rev
+  update_clangformat_version:
+    scmid: default
+    name: 'Update clang-format version to {{ source "clangformatTag" }}'
+    kind: yaml
+    sourceid: clangformatVersion
+    spec:
+      file: .pre-commit-config.yaml
+      key: $.repos[1].rev

@@ -44,32 +44,33 @@ jobs:
         # Pin version to 1.0.2 due to https://github.com/helm-unittest/helm-unittest/issues/790
         run: helm plugin install https://github.com/helm-unittest/helm-unittest --version 1.0.2
       - run: make helm-unittest
-  golangci:
-    name: Golang CI
+  linter:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
-        with:
-          go-version-file: "go.mod"
-
-      - name: Install system dependencies for eBPF build
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt update
+          sudo apt install -y \
+            pip \
             build-essential \
             libelf-dev \
             clang \
             llvm \
             libbpf-dev
-
+          pip install pre-commit
+      - name: Cache precommit linters
+        id: cache-precommit-linters
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            ~/.cache/pre-commit/
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Generate eBPF code
         run: make generate-ebpf
-
-      - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
-        with:
-          version: v2.4.0
+      - name: Run linters
+        run: |
+          pre-commit run --show-diff-on-failure --color=always --all-files
   commitlint:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
