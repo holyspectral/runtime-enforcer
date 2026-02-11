@@ -18,57 +18,115 @@ import (
 
 //nolint:gochecknoglobals // provided by e2e-framework
 var (
-	testEnv         env.Environment
-	kindClusterName string
-	namespace       string
-	otelNamespace   string
+	testEnv env.Environment
 )
 
 const (
-	certManagerHelmRepoName = "jetstack-e2e-test"
-	otelHelmRepoName        = "otel-e2e-test"
+	// at the moment `third_party/helm` doesn't expose a way to check helm errors.
+	helmRepoNotFoundString  = "no repo named"
+	helmRepoReleaseNotFound = "release: not found"
 
-	certManagerVersion          = "v1.18.2"
-	otelVersion                 = "v0.136.0"
-	certManagerCSIDriverVersion = "v0.12.0"
-
-	// at the moment `third_party/helm` doesn't expose a way to check if a repo exists.
-	helmRepoNotFoundString = "no repo named"
+	runtimeEnforcerE2EPrefix = "run-enf-e2e-"
+	otelCollectorNamespace   = runtimeEnforcerE2EPrefix + "otel-collector"
+	runtimeEnforcerNamespace = runtimeEnforcerE2EPrefix + "runtime-enforcer"
+	certManagerNamespace     = runtimeEnforcerE2EPrefix + "cert-manager"
 )
 
 func useExistingCluster() bool {
 	return os.Getenv("USE_EXISTING_CLUSTER") == "true"
 }
 
-func TestMain(m *testing.M) {
-	namespace = envconf.RandomName("enforcer-namespace", 16)
-	otelNamespace = envconf.RandomName("otel", 16)
+type helmChart struct {
+	name          string
+	namespace     string
+	repoLocalName string
+	repoURL       string
+	path          string
+	helmOptions   []helm.Option
+}
 
+func getCharts() []helmChart {
+	return []helmChart{
+		{
+			name:          "cert-manager",
+			namespace:     certManagerNamespace,
+			repoLocalName: runtimeEnforcerE2EPrefix + "cert-manager-repo",
+			repoURL:       "https://charts.jetstack.io",
+			path:          "/cert-manager",
+			helmOptions: []helm.Option{
+				helm.WithArgs("--version", "v1.18.2"),
+				helm.WithArgs("--set", "installCRDs=true"),
+			},
+		},
+		{
+			name:          "cert-manager-csi-driver",
+			namespace:     runtimeEnforcerE2EPrefix + "cert-manager-csi-driver",
+			repoLocalName: runtimeEnforcerE2EPrefix + "cert-manager-csi-driver-repo",
+			repoURL:       "https://charts.jetstack.io",
+			path:          "/cert-manager-csi-driver",
+			helmOptions: []helm.Option{
+				helm.WithArgs("--version", "v0.12.0"),
+			},
+		},
+		{
+			name:          "otel-collector",
+			namespace:     otelCollectorNamespace,
+			repoLocalName: runtimeEnforcerE2EPrefix + "otel-collector-repo",
+			repoURL:       "http://open-telemetry.github.io/opentelemetry-helm-charts",
+			path:          "/opentelemetry-collector",
+			helmOptions: []helm.Option{
+				helm.WithArgs("--version", "v0.136.0"),
+				helm.WithArgs("--set image.repository=otel/opentelemetry-collector-k8s"),
+				helm.WithArgs("--set mode=deployment"),
+				helm.WithArgs("--set config.exporters.file.path=/dev/stdout"),
+				helm.WithArgs("--set config.service.pipelines.traces.exporters[0]=file"),
+				helm.WithArgs("--set config.service.pipelines.metrics=null"),
+				helm.WithArgs("--set config.service.pipelines.logs=null"),
+			},
+		},
+		{
+			name:          "runtime-enforcer",
+			namespace:     runtimeEnforcerNamespace,
+			repoLocalName: runtimeEnforcerE2EPrefix + "runtime-enforcer-repo",
+			// no need of repoURL since this is a local installation
+			path: "../../charts/runtime-enforcer/",
+			helmOptions: []helm.Option{
+				helm.WithArgs("--set", "operator.manager.image.tag=latest"),
+				helm.WithArgs("--set", "agent.agent.image.tag=latest"),
+				helm.WithArgs("--set", "telemetry.mode=custom"),
+				helm.WithArgs("--set", "telemetry.tracing=true"),
+				// we need to reduce the timeout to see the wp status controller working properly in e2e tests
+				helm.WithArgs("--set", "operator.manager.wpStatusUpdateInterval=2s"),
+				helm.WithArgs(
+					"--set",
+					"telemetry.custom.endpoint=http://otel-collector-opentelemetry-collector."+otelCollectorNamespace+".svc.cluster.local:4317",
+				),
+				helm.WithArgs("--set", "telemetry.custom.insecure=true"),
+			},
+		},
+	}
+}
+
+func TestMain(m *testing.M) {
+	charts := getCharts()
 	commonSetupFuncs := []env.Func{
-		envfuncs.CreateNamespace(namespace),
-		removeHelmRepos(),
-		InstallOtelCollector(),
-		InstallCertManager(),
-		InstallRuntimeEnforcer(),
+		// we uninstall here as a defensive check but nothing should be left behind
+		uninstallHelmRepos(charts),
+		installHelmRepos(charts),
 	}
 
 	commonFinishFuncs := []env.Func{
-		UninstallRuntimeEnforcer(),
-		UninstallOtelCollector(),
-		UninstallCertManager(),
-		envfuncs.DeleteNamespace(namespace),
-		removeHelmRepos(),
+		uninstallHelmRepos(charts),
 	}
 
 	if useExistingCluster() {
 		path := conf.ResolveKubeConfigFile()
 		cfg := envconf.NewWithKubeConfig(path)
-		cfg.WithNamespace(namespace)
 		testEnv = env.NewWithConfig(cfg)
 	} else {
 		cfg, _ := envconf.NewFromFlags()
 		testEnv = env.NewWithConfig(cfg)
-		kindClusterName = envconf.RandomName("test-controller-e2e", 32)
+		kindClusterName := envconf.RandomName("test-controller-e2e", 32)
 
 		// For the setup we need to prepend the cluster creation and the image load
 		commonSetupFuncs = append([]env.Func{
@@ -97,15 +155,37 @@ func TestMain(m *testing.M) {
 	os.Exit(testEnv.Run(m))
 }
 
-func removeHelmRepos() env.Func {
+func uninstallHelmRepos(charts []helmChart) env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 		manager := helm.New(config.KubeconfigFile())
 		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-		for _, repo := range []string{certManagerHelmRepoName, otelHelmRepoName} {
-			err := manager.RunRepo(helm.WithArgs("remove", repo))
+
+		for _, chart := range charts {
+			logger.Info("try to uninstall helm chart",
+				"name", chart.name,
+				"namespace", chart.namespace)
+			// First we try to uninstall the chart
+			err := manager.RunUninstall(
+				helm.WithName(chart.name),
+				helm.WithNamespace(chart.namespace),
+				helm.WithTimeout(DefaultHelmTimeout.String()),
+			)
+			if err != nil && !strings.Contains(err.Error(), helmRepoReleaseNotFound) {
+				logger.Warn("failed to uninstall helm chart release",
+					"name", chart.name,
+					"namespace", chart.namespace,
+					"error", err)
+			}
+
+			// Then we try to remove the repo
+			logger.Info("try to remove helm repo",
+				"repoURL", chart.repoURL,
+				"repoLocalName", chart.repoLocalName,
+			)
+			err = manager.RunRepo(helm.WithArgs("remove", chart.repoLocalName))
 			if err != nil && !strings.Contains(err.Error(), helmRepoNotFoundString) {
-				logger.Info("failed to remove helm repo",
-					"repo", repo,
+				logger.Warn("failed to remove helm repo",
+					"repo", chart.repoLocalName,
 					"error", err)
 			}
 		}
@@ -113,169 +193,51 @@ func removeHelmRepos() env.Func {
 	}
 }
 
-func InstallCertManager() env.Func {
+func installHelmRepos(charts []helmChart) env.Func {
 	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 		manager := helm.New(config.KubeconfigFile())
+		logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-		err := manager.RunRepo(helm.WithArgs("add", certManagerHelmRepoName, "https://charts.jetstack.io"))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to add cert manager repo: %w", err)
-		}
-		err = manager.RunRepo(helm.WithArgs("update"))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to update cert manager repo: %w", err)
-		}
+		for _, chart := range charts {
+			var err error
 
-		// Install cert-manager
-		err = manager.RunInstall(
-			helm.WithName("cert-manager"),
-			helm.WithChart(certManagerHelmRepoName+"/cert-manager"),
-			helm.WithNamespace("cert-manager"),
-			helm.WithArgs("--create-namespace"),
-			helm.WithArgs("--version", certManagerVersion),
-			helm.WithArgs("--set", "installCRDs=true"),
-			helm.WithWait(),
-			helm.WithTimeout(DefaultHelmTimeout.String()))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to install cert manager: %w", err)
-		}
+			// chart.path could be in 2 forms:
+			// 1. `/<chart-name>` -> so relative to the repo name. It means we want to install from a remote repo
+			// 2. `../<chart-path>` -> so a local path. It means we want to install from a local chart.
+			//
+			// If it is local we don't need to touch it, if relative we will prepend the local repo name
+			chartPath := chart.path
+			// If the path starts with `/` it means we want to install from a remote repo
+			if strings.HasPrefix(chartPath, "/") {
+				// First we try to add the repo.
+				if err = manager.RunRepo(helm.WithArgs("add", chart.repoLocalName, chart.repoURL)); err != nil {
+					return ctx, fmt.Errorf("failed to add local repo '%s': %w", chart.repoLocalName, err)
+				}
+				// Update the repo.
+				if err = manager.RunRepo(helm.WithArgs("update")); err != nil {
+					return ctx, fmt.Errorf("failed to update local repo '%s': %w", chart.repoLocalName, err)
+				}
+				// The final chart path will be the name of repoLocalName + chartPath
+				chartPath = chart.repoLocalName + chartPath
+			}
 
-		// Install cert-manager CSI driver
-		err = manager.RunInstall(
-			helm.WithName("cert-manager-csi-driver"),
-			helm.WithChart(certManagerHelmRepoName+"/cert-manager-csi-driver"),
-			helm.WithNamespace("cert-manager"),
-			helm.WithArgs("--version", certManagerCSIDriverVersion),
-			helm.WithWait(),
-			helm.WithTimeout(DefaultHelmTimeout.String()))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to install cert manager CSI driver: %w", err)
-		}
-
-		return ctx, nil
-	}
-}
-
-func InstallRuntimeEnforcer() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		manager := helm.New(config.KubeconfigFile())
-		err := manager.RunInstall(
-			helm.WithName("runtime-enforcer"),
-			helm.WithNamespace(namespace),
-			helm.WithChart("../../charts/runtime-enforcer/"),
-			helm.WithArgs("--set", "operator.manager.image.tag=latest"),
-			helm.WithArgs("--set", "agent.agent.image.tag=latest"),
-			helm.WithArgs("--set", "telemetry.mode=custom"),
-			helm.WithArgs("--set", "telemetry.tracing=true"),
-			// we need to reduce the timeout to see the wp status controller working properly in e2e tests
-			helm.WithArgs("--set", "operator.manager.wpStatusUpdateInterval=2s"),
-			helm.WithArgs(
-				"--set",
-				"telemetry.custom.endpoint=http://open-telemetry-collector-opentelemetry-collector."+otelNamespace+".svc.cluster.local:4317",
-			),
-			helm.WithArgs("--set", "telemetry.custom.insecure=true"),
-			helm.WithWait(),
-			helm.WithTimeout(DefaultHelmTimeout.String()),
-		)
-
-		if err != nil {
-			return ctx, fmt.Errorf("failed to install Runtime Enforcer: %w", err)
-		}
-		return ctx, nil
-	}
-}
-
-func InstallOtelCollector() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		manager := helm.New(config.KubeconfigFile())
-
-		err := manager.RunRepo(
-			helm.WithArgs("add", otelHelmRepoName, "http://open-telemetry.github.io/opentelemetry-helm-charts"),
-		)
-		if err != nil {
-			return ctx, fmt.Errorf("failed to add otel collector repo: %w", err)
-		}
-		err = manager.RunRepo(helm.WithArgs("update"))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to update otel collector repo: %w", err)
-		}
-
-		// Install otel collector
-		err = manager.RunInstall(
-			helm.WithName("open-telemetry-collector"),
-			helm.WithChart(otelHelmRepoName+"/opentelemetry-collector"),
-			helm.WithNamespace(otelNamespace),
-			helm.WithArgs("--create-namespace"),
-			helm.WithArgs("--version", otelVersion),
-			helm.WithArgs("--set image.repository=otel/opentelemetry-collector-k8s"),
-			helm.WithArgs("--set mode=deployment"),
-			helm.WithArgs("--set config.exporters.file.path=/dev/stdout"),
-			helm.WithArgs("--set config.service.pipelines.traces.exporters[0]=file"),
-			helm.WithArgs("--set config.service.pipelines.metrics=null"),
-			helm.WithArgs("--set config.service.pipelines.logs=null"),
-			helm.WithWait(),
-			helm.WithTimeout(DefaultHelmTimeout.String()))
-		if err != nil {
-			return ctx, fmt.Errorf("failed to install otel collector: %w", err)
-		}
-
-		return ctx, nil
-	}
-}
-
-func UninstallRuntimeEnforcer() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		manager := helm.New(config.KubeconfigFile())
-		err := manager.RunUninstall(
-			helm.WithName("runtime-enforcer"),
-			helm.WithNamespace(namespace),
-			helm.WithTimeout(DefaultHelmTimeout.String()),
-		)
-		if err != nil {
-			return ctx, fmt.Errorf("failed to uninstall Runtime Enforcer: %w", err)
-		}
-		return ctx, nil
-	}
-}
-
-func UninstallCertManager() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		manager := helm.New(config.KubeconfigFile())
-
-		// Uninstall cert-manager CSI driver
-		err := manager.RunUninstall(
-			helm.WithName("cert-manager-csi-driver"),
-			helm.WithNamespace("cert-manager"),
-			helm.WithTimeout(DefaultHelmTimeout.String()),
-		)
-		if err != nil {
-			return ctx, fmt.Errorf("failed to uninstall cert manager CSI driver: %w", err)
-		}
-
-		// Uninstall cert-manager
-		err = manager.RunUninstall(
-			helm.WithName("cert-manager"),
-			helm.WithNamespace("cert-manager"),
-			helm.WithTimeout(DefaultHelmTimeout.String()),
-		)
-		if err != nil {
-			return ctx, fmt.Errorf("failed to uninstall cert manager: %w", err)
-		}
-
-		return ctx, nil
-	}
-}
-
-func UninstallOtelCollector() env.Func {
-	return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
-		manager := helm.New(config.KubeconfigFile())
-		err := manager.RunUninstall(
-			helm.WithName("open-telemetry-collector"),
-			helm.WithNamespace(otelNamespace),
-			helm.WithTimeout(DefaultHelmTimeout.String()),
-		)
-		if err != nil {
-			return ctx, fmt.Errorf("failed to uninstall otel collector: %w", err)
+			opts := []helm.Option{
+				helm.WithName(chart.name),
+				helm.WithNamespace(chart.namespace),
+				helm.WithArgs("--create-namespace"),
+				helm.WithChart(chartPath),
+				helm.WithWait(),
+				helm.WithTimeout(DefaultHelmTimeout.String()),
+			}
+			opts = append(opts, chart.helmOptions...)
+			logger.Info("installing helm chart",
+				"path", chart.path,
+				"name", chart.name,
+				"namespace", chart.namespace,
+			)
+			if err = manager.RunInstall(opts...); err != nil {
+				return ctx, fmt.Errorf("failed to install chart '%s': %w", chart.name, err)
+			}
 		}
 		return ctx, nil
 	}

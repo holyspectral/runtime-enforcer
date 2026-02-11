@@ -151,7 +151,7 @@ func getRollingUpdateTest() types.Feature {
 			err := r.Get(
 				ctx,
 				"runtime-enforcer-agent",
-				namespace,
+				runtimeEnforcerNamespace,
 				&agentDaemonSet,
 			)
 			require.NoError(t, err)
@@ -163,7 +163,7 @@ func getRollingUpdateTest() types.Feature {
 			err = wait.For(DaemonSetUpToDate(r, &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "runtime-enforcer-agent",
-					Namespace: namespace,
+					Namespace: runtimeEnforcerNamespace,
 				},
 			}),
 				wait.WithTimeout(DefaultOperationTimeout),

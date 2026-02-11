@@ -40,7 +40,7 @@ func IfRequiredResourcesAreCreated(ctx context.Context, t *testing.T, _ *envconf
 	err = wait.For(
 		conditions.New(r).DeploymentAvailable(
 			"runtime-enforcer-controller-manager",
-			namespace,
+			runtimeEnforcerNamespace,
 		),
 		wait.WithTimeout(DefaultOperationTimeout),
 	)
@@ -50,7 +50,7 @@ func IfRequiredResourcesAreCreated(ctx context.Context, t *testing.T, _ *envconf
 		&appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "runtime-enforcer-agent",
-				Namespace: namespace,
+				Namespace: runtimeEnforcerNamespace,
 			},
 		}),
 		wait.WithTimeout(DefaultOperationTimeout),

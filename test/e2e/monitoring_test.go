@@ -192,9 +192,9 @@ func getMonitoringTest() types.Feature {
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("setup open telemetry collector")
 
-			var err error
-			var otelCollectorPodName string
-			otelCollectorPodName, err = findPod(ctx, otelNamespace, "open-telemetry-collector-opentelemetry-collector")
+			otelCollectorPodName, err := findPod(ctx,
+				otelCollectorNamespace,
+				"otel-collector-opentelemetry-collector")
 			require.NoError(t, err)
 			require.NotEmpty(t, otelCollectorPodName)
 
