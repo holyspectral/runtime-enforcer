@@ -309,11 +309,11 @@ func (m *Manager) GetPolicyUpdateBinariesFunc() func(policyID uint64, values []s
 	return func(policyID uint64, values []string, op PolicyValuesOperation) error {
 		switch op {
 		case AddValuesToPolicy:
-			return m.generateBPFMaps(policyID, values)
+			return m.handleErrOnShutdown(m.generateBPFMaps(policyID, values))
 		case RemoveValuesFromPolicy:
-			return m.removeBPFMaps(policyID)
+			return m.handleErrOnShutdown(m.removeBPFMaps(policyID))
 		case ReplaceValuesInPolicy:
-			return m.replaceBPFMaps(policyID, values)
+			return m.handleErrOnShutdown(m.replaceBPFMaps(policyID, values))
 		default:
 			panic("unhandled operation")
 		}

@@ -31,7 +31,7 @@ func (op CgroupPolicyOperation) String() string {
 
 func (m *Manager) GetCgroupPolicyUpdateFunc() func(polID uint64, cgroupIDs []uint64, op CgroupPolicyOperation) error {
 	return func(polID uint64, cgroupIDs []uint64, op CgroupPolicyOperation) error {
-		return m.updateCgroupPolicy(polID, cgroupIDs, op)
+		return m.handleErrOnShutdown(m.updateCgroupPolicy(polID, cgroupIDs, op))
 	}
 }
 

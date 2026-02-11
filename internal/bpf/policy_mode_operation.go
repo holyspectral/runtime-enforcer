@@ -45,9 +45,9 @@ func (m *Manager) GetPolicyModeUpdateFunc() func(policyID uint64, mode policymod
 	return func(policyID uint64, mode policymode.Mode, op PolicyModeOperation) error {
 		switch op {
 		case UpdateMode:
-			return m.updatePolicyMode(policyID, mode)
+			return m.handleErrOnShutdown(m.updatePolicyMode(policyID, mode))
 		case DeleteMode:
-			return m.deletePolicy(policyID)
+			return m.handleErrOnShutdown(m.deletePolicy(policyID))
 		default:
 			panic("unhandled policy mode")
 		}

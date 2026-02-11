@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -51,6 +52,7 @@ type Manager struct {
 	logger           *slog.Logger
 	objs             *bpfObjects
 	policyStringMaps []*ebpf.Map
+	isShuttingDown   atomic.Bool
 
 	// Learning
 	enableLearning    bool
@@ -195,9 +197,21 @@ func (m *Manager) isKernelPre5_9() bool {
 	return m.isPre5_9
 }
 
+func (m *Manager) handleErrOnShutdown(err error) error {
+	// We have multiple go routines to update ebpf maps, e.g., policy informer and NRI plugin.
+	// Because of this, we could receive errors during shutdown flow, e.g., bad file descriptor.
+	// Since we are shutting down, we don't have much to do with these errors, so we just ignore them.
+	if m.isShuttingDown.Load() {
+		return nil
+	}
+	return err
+}
+
 func (m *Manager) Start(ctx context.Context) error {
 	defer func() {
 		m.logger.InfoContext(ctx, "BPF Manager stopped")
+		m.isShuttingDown.Store(true)
+
 		if err := m.objs.Close(); err != nil {
 			m.logger.ErrorContext(ctx, "failed to close BPF objects", "error", err)
 		}
