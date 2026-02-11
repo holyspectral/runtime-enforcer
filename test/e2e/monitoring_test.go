@@ -92,6 +92,8 @@ func waitExpectedEvent(
 		return true, nil
 	})
 
+	require.NoError(t, err, "should find the expected otel event")
+
 	value, ok = foundSpan.Attributes().Get("action")
 	assert.Equal(t, expectedEvent.Action, value.Str())
 
