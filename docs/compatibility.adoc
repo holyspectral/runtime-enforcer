@@ -15,11 +15,11 @@ Runtime Enforcer uses eBPF (Extended Berkeley Packet Filter) to monitor and enfo
 |Component |Version/Requirement |Notes
 
 |*Minimum Kernel*
-|5.8
+|5.8 (x86_64), 6.4 (aarch64)
 |Limitation: max binary path length in policies is 512 characters. Starting from kernel 5.11, this limitation no longer applies, paths can be up to 4096 characters.
 
 |*Architecture*
-|x86_64
+|x86_64, aarch64
 |Fully supported
 
 |*Cgroup*
