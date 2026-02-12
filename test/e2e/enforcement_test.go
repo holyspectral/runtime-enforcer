@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -107,8 +106,8 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 					require.NoError(t, err, "failed to apply test data")
 
 					err = wait.For(
-						conditions.New(r).DeploymentAvailable("cert-manager-webhook", "cert-manager"),
-						wait.WithTimeout(time.Minute*1),
+						conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
+						wait.WithTimeout(DefaultOperationTimeout),
 					)
 
 					require.NoError(t, err, "failed to run the target payload")
@@ -239,7 +238,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 
 					err = wait.For(
 						conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
-						wait.WithTimeout(time.Minute*1),
+						wait.WithTimeout(DefaultOperationTimeout),
 					)
 
 					require.NoError(t, err, "failed to run the target payload")

@@ -2,7 +2,6 @@
 package resolver
 
 import (
-	"errors"
 	"log/slog"
 	"testing"
 
@@ -13,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-var errMock = errors.New("mock failure")
 
 const (
 	c1   = "c1"
@@ -57,27 +54,6 @@ func newTestResolver(t *testing.T) *Resolver {
 		slog.New(slog.NewTextHandler(testWriter{t}, nil)),
 		mockCgTrackerUpdateFunc,
 		mockCgroupToPolicyMapUpdateFunc,
-		mockPolicyUpdateBinariesFunc,
-		mockPolicyModeUpdateFunc,
-	)
-	require.NoError(t, err)
-	return r
-}
-
-// newTestResolverWithFailingCgroupMap returns a resolver whose cgroupToPolicyMapUpdateFunc
-// returns errMock when op is AddPolicyToCgroups, so applyPolicyToPod fails.
-func newTestResolverWithFailingCgroupMap(t *testing.T) *Resolver {
-	t.Helper()
-	cgroupToPolicyMapUpdateFunc := func(_ PolicyID, _ []CgroupID, op bpf.CgroupPolicyOperation) error {
-		if op == bpf.AddPolicyToCgroups {
-			return errMock
-		}
-		return nil
-	}
-	r, err := NewResolver(
-		slog.New(slog.NewTextHandler(testWriter{t}, nil)),
-		mockCgTrackerUpdateFunc,
-		cgroupToPolicyMapUpdateFunc,
 		mockPolicyUpdateBinariesFunc,
 		mockPolicyModeUpdateFunc,
 	)
@@ -162,111 +138,4 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 	require.NotContains(t, r.wpState, key)
 	statuses = r.GetPolicyStatuses()
 	require.NotContains(t, statuses, key)
-}
-
-// TestPolicyEventHandlers_AddFailure_RollbackAndStatus verifies that when handleWPAdd fails,
-// the Add event handler runs rollback, clears wpState for the policy, and sets policy status to ERROR.
-func TestPolicyEventHandlers_AddFailure_RollbackAndStatus(t *testing.T) {
-	r := newTestResolverWithFailingCgroupMap(t) // applyPolicyToPod will fail
-	wp := &v1alpha1.WorkloadPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "test-ns"},
-		Spec: v1alpha1.WorkloadPolicySpec{
-			Mode: "monitor",
-			RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-				c1: {Executables: v1alpha1.WorkloadPolicyExecutables{Allowed: []string{"/bin/sleep"}}},
-			},
-		},
-	}
-	key := wp.NamespacedName()
-
-	r.mu.Lock()
-	r.podCache["test-pod-uid"] = &podState{
-		info: &podInfo{
-			podID:        "test-pod-uid",
-			namespace:    "test-ns",
-			name:         "test-pod",
-			workloadName: "test",
-			workloadType: "Deployment",
-			labels:       map[string]string{v1alpha1.PolicyLabelKey: "example"},
-		},
-		containers: map[ContainerID]*containerInfo{
-			cid1: {cgID: 100, name: c1},
-		},
-	}
-	r.mu.Unlock()
-
-	handlers := r.PolicyEventHandlers()
-	handlers.OnAdd(wp, false)
-
-	statuses := r.GetPolicyStatuses()
-	require.Contains(t, statuses, key, "status must be stored after failed add (for agent to report ERROR)")
-	require.Equal(t, agentv1.PolicyState_POLICY_STATE_ERROR, statuses[key].State)
-	require.Contains(t, statuses[key].Message, "failed to add policy to cgroups", statuses[key].Message)
-	require.Empty(t, r.wpState[key].polByContainer,
-		"rollback clears BPF state; status entry has empty polByContainer")
-}
-
-// TestPolicyEventHandlers_UpdateFailure_RollbackAndStatus verifies that when handleWPUpdate fails
-// while trying to remove a container from the policy, the Update event handler leaves the
-// internal state unchanged for that container and sets status to ERROR.
-func TestPolicyEventHandlers_UpdateFailure_RollbackAndStatus(t *testing.T) {
-	r := newTestResolver(t)
-	wp := &v1alpha1.WorkloadPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "test-ns"},
-		Spec: v1alpha1.WorkloadPolicySpec{
-			Mode: "monitor",
-			RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
-				c1: {Executables: v1alpha1.WorkloadPolicyExecutables{Allowed: []string{"/bin/sleep"}}},
-				c2: {Executables: v1alpha1.WorkloadPolicyExecutables{Allowed: []string{"/bin/cat"}}},
-			},
-		},
-	}
-	key := wp.NamespacedName()
-
-	r.mu.Lock()
-	r.podCache["test-pod-uid"] = &podState{
-		info: &podInfo{
-			podID:        "test-pod-uid",
-			namespace:    "test-ns",
-			name:         "test-pod",
-			workloadName: "test",
-			workloadType: "Deployment",
-			labels:       map[string]string{v1alpha1.PolicyLabelKey: "example"},
-		},
-		containers: map[ContainerID]*containerInfo{
-			cid1: {cgID: 100, name: c1},
-			cid2: {cgID: 101, name: c2},
-		},
-	}
-	r.mu.Unlock()
-
-	require.NoError(t, r.handleWPAdd(wp))
-	require.Contains(t, r.wpState, key)
-
-	// Make cgroup map update fail for RemoveCgroups so removePolicyFromPod fails
-	// while trying to drop c2.
-	r.mu.Lock()
-	r.cgroupToPolicyMapUpdateFunc = func(_ PolicyID, _ []CgroupID, op bpf.CgroupPolicyOperation) error {
-		switch op {
-		case bpf.RemoveCgroups:
-			return errMock
-		case bpf.AddPolicyToCgroups, bpf.RemovePolicy:
-			// no-op for this test
-		}
-		return nil
-	}
-	r.mu.Unlock()
-
-	// Update spec to remove c2 from the policy; the update will fail in
-	// removePolicyFromPod before it can delete c2 from internal state.
-	delete(wp.Spec.RulesByContainer, c2)
-	handlers := r.PolicyEventHandlers()
-	handlers.OnUpdate(nil, wp)
-
-	statuses := r.GetPolicyStatuses()
-	require.Contains(t, statuses, key)
-	require.Equal(t, agentv1.PolicyState_POLICY_STATE_ERROR, statuses[key].State)
-	require.Contains(t, statuses[key].Message, "failed to remove cgroups", statuses[key].Message)
-	require.Contains(t, r.wpState[key].polByContainer, c2,
-		"rollback should leave c2 in internal state when update fails while removing it")
 }

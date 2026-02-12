@@ -1,7 +1,6 @@
 package resolver
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
@@ -23,7 +22,7 @@ type PolicyStatus struct {
 	Message string
 }
 
-type WPInfo struct {
+type wpInfo struct {
 	polByContainer policyByContainer
 	status         PolicyStatus
 }
@@ -160,14 +159,7 @@ func (r *Resolver) syncWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) (policyByCont
 			op = bpf.AddValuesToPolicy
 		}
 		if err := r.upsertPolicyIDInBPF(polID, containerRules.Executables.Allowed, mode, op); err != nil {
-			// Rollback: tear down any new policy IDs we created before returning.
-			if rollbackErr := r.tearDownPolicyIDs(wpKey, newContainers); rollbackErr != nil {
-				r.logger.Error("failed to rollback policy", "error", rollbackErr)
-				err = errors.Join(err, rollbackErr)
-			}
-			return nil, fmt.Errorf(
-				"failed to populate policy for wp %s, container %s: %w",
-				wpKey, containerName, err)
+			return nil, fmt.Errorf("failed to populate policy for wp %s, container %s: %w", wpKey, containerName, err)
 		}
 	}
 
@@ -182,13 +174,13 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 		"namespace", wp.Namespace,
 	)
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	var err error
 	defer func() {
 		if err != nil {
-			r.rollbackFailedPolicy(wp, err, true)
+			r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		}
+		r.mu.Unlock()
 	}()
 
 	wpKey := wp.NamespacedName()
@@ -197,12 +189,9 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	}
 
 	state := make(policyByContainer, len(wp.Spec.RulesByContainer))
-	r.wpState[wpKey] = WPInfo{polByContainer: state}
+	r.wpState[wpKey] = wpInfo{polByContainer: state}
 	var newContainers policyByContainer
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
-		// syncWorkloadPolicy already rolled back its BPF state internally.
-		delete(r.wpState, wpKey)
-		r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		return err
 	}
 	for containerName, policyID := range newContainers {
@@ -233,13 +222,13 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 		"namespace", wp.Namespace,
 	)
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	var err error
 	defer func() {
 		if err != nil {
-			r.rollbackFailedPolicy(wp, err, false)
+			r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		}
+		r.mu.Unlock()
 	}()
 
 	wpKey := wp.NamespacedName()
@@ -250,8 +239,6 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 
 	var newContainers policyByContainer
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
-		// syncWorkloadPolicy already rolled back its BPF state internally.
-		r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		return err
 	}
 	for containerName, policyID := range newContainers {
@@ -380,19 +367,6 @@ func (r *Resolver) GetPolicyStatuses() map[NamespacedPolicyName]PolicyStatus {
 	return statuses
 }
 
-// rollbackFailedPolicy deletes the policy from the resolver cache and sets the status to ERROR.
-// Must be called with the resolver lock held.
-func (r *Resolver) rollbackFailedPolicy(wp *v1alpha1.WorkloadPolicy, err error, removeFromState bool) {
-	if rollbackErr := r.deleteWorkloadPolicy(wp); rollbackErr != nil {
-		r.logger.Error("failed to rollback policy", "error", rollbackErr)
-		err = errors.Join(err, rollbackErr)
-	}
-	if removeFromState {
-		delete(r.wpState, wp.NamespacedName())
-	}
-	r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
-}
-
 // setPolicyStatus updates the status for the given workload policy.
 // If the policy is not in wpState, a WPInfo with empty polByContainer is stored,
 // so that ERROR state can still be reported via GetPolicyStatuses.
@@ -402,7 +376,7 @@ func (r *Resolver) setPolicyStatus(wp *v1alpha1.WorkloadPolicy, state agentv1.Po
 	st := PolicyStatus{State: state, Mode: mode, Message: message}
 	info, ok := r.wpState[wpKey]
 	if !ok {
-		r.wpState[wpKey] = WPInfo{polByContainer: make(policyByContainer), status: st}
+		r.wpState[wpKey] = wpInfo{polByContainer: make(policyByContainer), status: st}
 		return
 	}
 	info.status = st

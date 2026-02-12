@@ -24,7 +24,7 @@ type Resolver struct {
 	cgroupIDToPodID map[CgroupID]PodID
 
 	nextPolicyID                PolicyID
-	wpState                     map[NamespacedPolicyName]WPInfo
+	wpState                     map[NamespacedPolicyName]wpInfo
 	policyUpdateBinariesFunc    func(policyID PolicyID, values []string, op bpf.PolicyValuesOperation) error
 	policyModeUpdateFunc        func(policyID PolicyID, mode policymode.Mode, op bpf.PolicyModeOperation) error
 	cgTrackerUpdateFunc         func(cgID uint64, cgroupPath string) error
@@ -46,7 +46,7 @@ func NewResolver(
 		cgroupToPolicyMapUpdateFunc: cgroupToPolicyMapUpdateFunc,
 		policyUpdateBinariesFunc:    policyUpdateBinariesFunc,
 		policyModeUpdateFunc:        policyModeUpdateFunc,
-		wpState:                     make(map[NamespacedPolicyName]WPInfo),
+		wpState:                     make(map[NamespacedPolicyName]wpInfo),
 		nextPolicyID:                PolicyID(1),
 	}
 

@@ -42,26 +42,23 @@ func addPolicyToCgroups(cgToPol *ebpf.Map, targetPolID uint64, cgroupIDs []uint6
 
 	for _, cgID := range cgroupIDs {
 		// todo!: check if we can use batch operations and when they are supported
-		var existingPolID uint64
-		err := cgToPol.Lookup(&cgID, &existingPolID)
+		err := cgToPol.Update(&cgID, &targetPolID, ebpf.UpdateNoExist)
 		if err == nil {
-			if existingPolID != targetPolID {
-				return fmt.Errorf(
-					"cgroup %d already associated with policy %d, cannot assign policy %d: overlapping policies",
-					cgID,
-					existingPolID,
-					targetPolID,
-				)
-			}
-			// Same policy, skip update
 			continue
 		}
-		if !errors.Is(err, ebpf.ErrKeyNotExist) {
+		if !errors.Is(err, ebpf.ErrKeyExist) {
+			return fmt.Errorf("failed to add cgroup %d to policy %d: %w", cgID, targetPolID, err)
+		}
+		// Key exists, we need to check if the policy is the same
+		var existingPolID uint64
+		if err = cgToPol.Lookup(&cgID, &existingPolID); err != nil {
 			return fmt.Errorf("failed to look up cgroup %d: %w", cgID, err)
 		}
-		if err = cgToPol.Update(&cgID, &targetPolID, ebpf.UpdateAny); err != nil {
-			// we return at the first error
-			return fmt.Errorf("failed to add cgroup %d to policy %d: %w", cgID, targetPolID, err)
+		if existingPolID != targetPolID {
+			return fmt.Errorf(
+				"cgroup %d already associated with policy %d, cannot assign policy %d: overlapping policies",
+				cgID, existingPolID, targetPolID,
+			)
 		}
 	}
 	return nil
