@@ -1,0 +1,9 @@
+# Number of parallel VMs to run
+parallel: 3
+# kernel versions to test
+kernel_versions:
+    - v6.1.159
+    - v6.6.119
+    - v6.12.62
+    - v6.17.12
+    - v6.18.1

@@ -10,11 +10,14 @@ jobs:
     strategy:
       matrix:
         component: [operator, agent]
-        arch: [amd64]
+        arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-latest
             platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
     permissions:
       contents: read # Access private repos
       packages: write
@@ -47,7 +50,7 @@ jobs:
       - name: Merge images
         uses: ./.github/actions/merge-multiarch
         with:
-          arch: amd64
+          arch: amd64,arm64
           image: ${{ matrix.component }}
           repo: ${{ github.repository }}
           tag: ${{ github.ref_name }}
@@ -57,11 +60,14 @@ jobs:
     strategy:
       matrix:
         component: [operator, agent]
-        arch: [amd64]
+        arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-latest
             platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
     needs: [merge]
     permissions:
       contents: read # Access private repos
@@ -129,6 +135,15 @@ jobs:
                 'RuntimeEnforcer-operator-attestation-amd64-provenance.intoto.jsonl.bundle.sigstore',
                 'RuntimeEnforcer-operator-attestation-amd64-sbom.json',
                 'RuntimeEnforcer-operator-attestation-amd64-sbom.json.bundle.sigstore',
+
+                'RuntimeEnforcer-agent-attestation-arm64-provenance.intoto.jsonl',
+                'RuntimeEnforcer-agent-attestation-arm64-provenance.intoto.jsonl.bundle.sigstore',
+                'RuntimeEnforcer-agent-attestation-arm64-sbom.json',
+                'RuntimeEnforcer-agent-attestation-arm64-sbom.json.bundle.sigstore',
+                'RuntimeEnforcer-operator-attestation-arm64-provenance.intoto.jsonl',
+                'RuntimeEnforcer-operator-attestation-arm64-provenance.intoto.jsonl.bundle.sigstore',
+                'RuntimeEnforcer-operator-attestation-arm64-sbom.json',
+                'RuntimeEnforcer-operator-attestation-arm64-sbom.json.bundle.sigstore',
                 ]
             const {RELEASE_ID} = process.env
             for (const file of files) {
