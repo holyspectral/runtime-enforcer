@@ -92,6 +92,7 @@ func (h *Handler) startNRIPlugin(ctx context.Context) error {
 	p, err := newNRIPlugin(
 		h.logger,
 		h.resolver,
+		stub.WithPluginName("runtime-enforcer-agent"),
 		stub.WithPluginIdx(h.pluginIndex),
 		stub.WithSocketPath(h.socketPath),
 	)
@@ -101,6 +102,7 @@ func (h *Handler) startNRIPlugin(ctx context.Context) error {
 
 	err = p.Run(ctx)
 	if err != nil {
+		err = errors.Join(err, p.lastErr) // Join the last error from the plugin.
 		return fmt.Errorf("NRI plugin exited with error: %w", err)
 	}
 	return nil
