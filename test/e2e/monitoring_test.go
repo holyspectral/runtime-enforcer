@@ -92,6 +92,8 @@ func waitExpectedEvent(
 		return true, nil
 	})
 
+	require.NoError(t, err, "should find the expected otel event")
+
 	value, ok = foundSpan.Attributes().Get("action")
 	assert.Equal(t, expectedEvent.Action, value.Str())
 
@@ -190,9 +192,9 @@ func getMonitoringTest() types.Feature {
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("setup open telemetry collector")
 
-			var err error
-			var otelCollectorPodName string
-			otelCollectorPodName, err = findPod(ctx, otelNamespace, "open-telemetry-collector-opentelemetry-collector")
+			otelCollectorPodName, err := findPod(ctx,
+				otelCollectorNamespace,
+				"otel-collector-opentelemetry-collector")
 			require.NoError(t, err)
 			require.NotEmpty(t, otelCollectorPodName)
 
@@ -245,11 +247,11 @@ func getMonitoringTest() types.Feature {
 			clientset, err = kubernetes.NewForConfig(r.GetConfig())
 			require.NoError(t, err)
 
-			stream, err = clientset.CoreV1().Pods(otelNamespace).
-				GetLogs(otelCollectorPodName, &corev1.PodLogOptions{
-					Follow: true,
-				}).Stream(ctx)
-
+			pods := clientset.CoreV1().Pods(otelCollectorNamespace)
+			assert.NotNil(t, pods, "failed to create pod clientset")
+			request := pods.GetLogs(otelCollectorPodName, &corev1.PodLogOptions{Follow: true})
+			assert.NotNil(t, request, "failed to create log request")
+			stream, err = request.Stream(ctx)
 			require.NoError(t, err)
 
 			var otelLogStream *OtelLogStream

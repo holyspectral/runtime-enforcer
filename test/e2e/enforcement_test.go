@@ -235,7 +235,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 					require.NoError(t, err, "failed to apply test data")
 
 					err = wait.For(
-						conditions.New(r).DeploymentAvailable("cert-manager-webhook", "cert-manager"),
+						conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
 						wait.WithTimeout(time.Minute*1),
 					)
 
