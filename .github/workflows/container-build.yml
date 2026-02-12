@@ -14,11 +14,14 @@ jobs:
     strategy:
       matrix:
         component: [operator, agent]
-        arch: [amd64]
+        arch: [amd64, arm64]
         include:
           - arch: amd64
             runner: ubuntu-latest
             platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
     permissions:
       contents: read
       packages: write # Pushing images to ghcr.io
@@ -51,7 +54,7 @@ jobs:
       - name: Merge images
         uses: ./.github/actions/merge-multiarch
         with:
-          arch: amd64
+          arch: amd64,arm64
           image: ${{ matrix.component }}
           repo: ${{ github.repository }}
           tag: latest
