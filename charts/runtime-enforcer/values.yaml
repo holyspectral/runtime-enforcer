@@ -72,7 +72,7 @@ agent:
       type: RuntimeDefault
   serviceAccount:
     annotations: {}
-  nriSocketPath: /var/run/nri/nri.sock
+  nriSocketPath: /var/run/nri/
 kubernetesClusterDomain: cluster.local
 
 ## Optional array of imagePullSecrets containing private registry credentials
