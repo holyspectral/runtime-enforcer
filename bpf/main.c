@@ -72,8 +72,9 @@ static __always_inline __u32 get_cgroup_level(const struct cgroup *cgrp) {
 static __always_inline __u64 __get_cgroup_kn_id(const struct kernfs_node *kn) {
 	__u64 id = 0;
 
-	if(!kn)
+	if(!kn) {
 		return id;
+	}
 
 	/* Kernels prior to 5.5 have the kernfs_node_id, but distros (RHEL)
 	 * seem to have kernfs_node_id defined for UAPI reasons even though
@@ -83,8 +84,9 @@ static __always_inline __u64 __get_cgroup_kn_id(const struct kernfs_node *kn) {
 		struct kernfs_node___old *old_kn;
 
 		old_kn = (void *)kn;
-		if(BPF_CORE_READ_INTO(&id, old_kn, id.id) != 0)
+		if(BPF_CORE_READ_INTO(&id, old_kn, id.id) != 0) {
 			return 0;
+		}
 	} else {
 		bpf_core_read(&id, sizeof(id), &kn->id);
 	}
@@ -227,12 +229,14 @@ static __always_inline __u64 tg_get_current_cgroup_id(void) {
 
 static __always_inline __u64 get_tracker_id_from_curr_task() {
 	__u64 cgroupid = tg_get_current_cgroup_id();
-	if(!cgroupid)
+	if(!cgroupid) {
 		return 0;
+	}
 
 	__u64 trackerid = cgrp_get_tracker_id(cgroupid);
-	if(trackerid)
+	if(trackerid) {
 		cgroupid = trackerid;
+	}
 
 	return cgroupid;
 }
@@ -254,8 +258,9 @@ static __always_inline __u64 cgroup_get_parent_id(struct cgroup *cgrp) {
 	if(bpf_core_field_exists(cgrp_new->ancestors)) {
 		int level = get_cgroup_level(cgrp);
 
-		if(level <= 0)
+		if(level <= 0) {
 			return 0;
+		}
 		return BPF_CORE_READ(cgrp_new, ancestors[level - 1], kn, id);
 	}
 
@@ -307,7 +312,7 @@ int tg_cgtracker_cgroup_release(struct bpf_raw_tracepoint_args *ctx) {
 /////////////////////////
 
 // A single buffer shared between all CPUs
-#define BUF_DIM 16 * 1024 * 1024
+#define BUF_DIM (16 * 1024 * 1024)
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -437,14 +442,22 @@ static __always_inline u16 string_padded_len(u16 len) {
 		return padded_len;
 	}
 
-	if(len <= STRING_MAPS_SIZE_6)
+	if(len <= STRING_MAPS_SIZE_6) {
 		return STRING_MAPS_SIZE_6;
-	if(len <= STRING_MAPS_SIZE_7)
+	}
+
+	if(len <= STRING_MAPS_SIZE_7) {
 		return STRING_MAPS_SIZE_7;
-	if(len <= STRING_MAPS_SIZE_8)
+	}
+
+	if(len <= STRING_MAPS_SIZE_8) {
 		return STRING_MAPS_SIZE_8;
-	if(len <= STRING_MAPS_SIZE_9)
+	}
+
+	if(len <= STRING_MAPS_SIZE_9) {
 		return STRING_MAPS_SIZE_9;
+	}
+
 	return STRING_MAPS_SIZE_10;
 }
 
@@ -462,8 +475,10 @@ static __always_inline int string_map_index(u16 padded_len) {
 		return 8;
 	case STRING_MAPS_SIZE_9:
 		return 9;
+	case STRING_MAPS_SIZE_10:
+	default:
+		return 10;
 	}
-	return 10;
 }
 
 SEC("fmod_ret/security_bprm_creds_for_exec")

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bpf/bpf_helpers.h>
+
 #define MAX_PATH_LEN 4096
 // kernel's max dentry name length that is 255
 // (https://elixir.bootlin.com/linux/v5.10/source/include/uapi/linux/limits.h#L12) + 1 for the `/`
@@ -12,13 +14,11 @@
 
 #define DELETED_STRING " (deleted)"
 
-#define SAFE_PATH_LEN(x) (x) & (MAX_PATH_LEN - 1)
+#define SAFE_PATH_LEN(x) ((x) & (MAX_PATH_LEN - 1))
 // we need `MAX_PATH_LEN * 2 -1` because we need to tell the verifier that
 // our offset will never cross the second `MAX_PATH_LEN` segment.
-#define SAFE_PATH_ACCESS(x) (x) & (MAX_PATH_LEN * 2 - 1)
-#define SAFE_COMPONENT_ACCESS(x) (x) & (MAX_COMPONENT_LEN - 1)
-
-extern int bpf_iter_num_new(struct bpf_iter_num *it, int start, int end) __ksym __weak;
+#define SAFE_PATH_ACCESS(x) ((x) & (MAX_PATH_LEN * 2 - 1))
+#define SAFE_COMPONENT_ACCESS(x) ((x) & (MAX_COMPONENT_LEN - 1))
 
 struct path_read_data {
 	struct dentry *root_dentry;
@@ -61,7 +61,6 @@ static __always_inline void copy_name(char *buf, int *buflen, struct dentry *den
 	bpf_probe_read_kernel(&buf[SAFE_PATH_ACCESS(*buflen + 1)],
 	                      SAFE_COMPONENT_ACCESS(d_name.len * sizeof(char)),
 	                      d_name.name);
-	return;
 }
 
 static __always_inline long path_read(struct path_read_data *data) {
