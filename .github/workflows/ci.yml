@@ -78,8 +78,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y clang-tidy-19
-          sudo ln -sfn ../lib/llvm-19/bin/clang-tidy /usr/bin/clang-tidy
+          sudo apt install -y pip
+          pip install clang-tidy==19.1.0.1
       - name: Run linters
         run: make bpf-lint
   commitlint:
