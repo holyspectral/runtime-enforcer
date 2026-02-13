@@ -256,7 +256,7 @@ static __always_inline __u64 cgroup_get_parent_id(struct cgroup *cgrp) {
 
 	// for newer kernels, we can access use ->ancestors to retrieve the parent
 	if(bpf_core_field_exists(cgrp_new->ancestors)) {
-		int level = get_cgroup_level(cgrp);
+		__u32 level = get_cgroup_level(cgrp);
 
 		if(level <= 0) {
 			return 0;
@@ -368,7 +368,7 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 		return 0;
 	}
 	struct path *path_arg = &file->f_path;
-	int current_offset = bpf_d_path_approx(path_arg, evt->path);
+	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
 	if(current_offset <= 0) {
 		bpf_printk("Failed to resolve path for execve");
 		return 0;
@@ -386,9 +386,9 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 	// - previous: `/usr/bin/nginx-controller\0`
 	// - new one:  `/usr/bin/cat\0x-controller\0`
 	// we need the +1 because we want to copy also the `\0` terminator
-	int err = bpf_probe_read_kernel(evt->path,
-	                                SAFE_PATH_LEN(evt->path_len + 1),
-	                                &evt->path[SAFE_PATH_ACCESS(current_offset)]);
+	long err = bpf_probe_read_kernel(evt->path,
+	                                 SAFE_PATH_LEN(evt->path_len + 1),
+	                                 &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
 		bpf_printk("Failed to copy path for execve %d", err);
 		return 0;
@@ -511,7 +511,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		return 0;
 	}
 	struct path *path_arg = &file->f_path;
-	int current_offset = bpf_d_path_approx(path_arg, evt->path);
+	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
 	if(current_offset <= 0) {
 		bpf_printk("Failed to resolve path for execve");
 		return 0;
@@ -569,9 +569,9 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	///////////////////////////////
 
 	// we move the data at the beginning of the buffer so that we can send them
-	int err = bpf_probe_read_kernel(evt->path,
-	                                SAFE_PATH_LEN(evt->path_len + 1),
-	                                &evt->path[SAFE_PATH_ACCESS(current_offset)]);
+	long err = bpf_probe_read_kernel(evt->path,
+	                                 SAFE_PATH_LEN(evt->path_len + 1),
+	                                 &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
 		bpf_printk("Failed to copy path for execve %d", err);
 		return 0;
