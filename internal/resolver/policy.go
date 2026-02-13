@@ -102,7 +102,9 @@ func (r *Resolver) removePolicyFromPod(
 		if !ok {
 			continue
 		}
-		if err := r.cgroupToPolicyMapUpdateFunc(PolicyIDNone, []CgroupID{container.cgID}, bpf.RemoveCgroups); err != nil {
+		if err := r.cgroupToPolicyMapUpdateFunc(
+			PolicyIDNone, []CgroupID{container.cgID}, bpf.RemoveCgroups,
+		); err != nil {
 			return fmt.Errorf("failed to remove cgroups for pod %s, container %s, policy %s: %w",
 				podState.podName(), container.name, podState.policyLabel(), err)
 		}
@@ -124,8 +126,8 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 	}
 
 	key := fmt.Sprintf("%s/%s", state.podNamespace(), policyName)
-	pol, ok := r.wpState[key]
-	if !ok {
+	info := r.wpState[key]
+	if info == nil {
 		return fmt.Errorf(
 			"pod has policy label but policy does not exist. pod-name: %s, pod-namespace: %s, policy-name: %s",
 			state.podName(),
@@ -134,7 +136,7 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 		)
 	}
 
-	return r.applyPolicyToPod(state, pol.polByContainer)
+	return r.applyPolicyToPod(state, info.polByContainer)
 }
 
 // syncWorkloadPolicy ensures state and BPF maps match wp.Spec.RulesByContainer:
@@ -144,11 +146,12 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podState) error {
 func (r *Resolver) syncWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) (policyByContainer, error) {
 	wpKey := wp.NamespacedName()
 	mode := policymode.ParseMode(wp.Spec.Mode)
-	state := r.wpState[wpKey]
+	// info is not nil. The caller must ensure the policy exists in wpState before calling.
+	info := r.wpState[wpKey]
 	newContainers := make(policyByContainer)
 
 	for containerName, containerRules := range wp.Spec.RulesByContainer {
-		polID, hadPolicyID := state.polByContainer[containerName]
+		polID, hadPolicyID := info.polByContainer[containerName]
 		op := bpf.ReplaceValuesInPolicy
 		if !hadPolicyID {
 			polID = r.allocPolicyID()
@@ -175,21 +178,23 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	)
 	r.mu.Lock()
 
+	wpKey := wp.NamespacedName()
+	info := r.wpState[wpKey]
+	if info != nil {
+		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
+	}
+
 	var err error
 	defer func() {
 		if err != nil {
-			r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
+			info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		}
 		r.mu.Unlock()
 	}()
 
-	wpKey := wp.NamespacedName()
-	if _, exists := r.wpState[wpKey]; exists {
-		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
-	}
-
 	state := make(policyByContainer, len(wp.Spec.RulesByContainer))
-	r.wpState[wpKey] = wpInfo{polByContainer: state}
+	info = &wpInfo{polByContainer: state}
+	r.wpState[wpKey] = info
 	var newContainers policyByContainer
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
 		return err
@@ -209,7 +214,7 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 		}
 	}
 
-	r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
+	info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
 	return nil
 }
 
@@ -223,19 +228,19 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	)
 	r.mu.Lock()
 
+	wpKey := wp.NamespacedName()
+	info := r.wpState[wpKey]
+	if info == nil {
+		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
+	}
+
 	var err error
 	defer func() {
 		if err != nil {
-			r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
+			info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
 		}
 		r.mu.Unlock()
 	}()
-
-	wpKey := wp.NamespacedName()
-	info, exists := r.wpState[wpKey]
-	if !exists {
-		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
-	}
 
 	var newContainers policyByContainer
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
@@ -267,32 +272,8 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 			return err
 		}
 	}
-	r.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
+	info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
 	return nil
-}
-
-// tearDownPolicyIDs tears down all BPF state for the given policy IDs (cgroup map and per-ID values/mode).
-// Must be called with the resolver lock held.
-func (r *Resolver) tearDownPolicyIDs(wpKey NamespacedPolicyName, polByContainer policyByContainer) error {
-	for containerName, polID := range polByContainer {
-		if err := r.cgroupToPolicyMapUpdateFunc(polID, []CgroupID{}, bpf.RemovePolicy); err != nil {
-			return fmt.Errorf("failed to remove policy from cgroup map: %w", err)
-		}
-		if err := r.clearPolicyIDFromBPF(polID); err != nil {
-			return fmt.Errorf("failed to clear policy for wp %s, container %s: %w", wpKey, containerName, err)
-		}
-	}
-	return nil
-}
-
-// Must be called with the resolver lock held.
-func (r *Resolver) deleteWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) error {
-	wpKey := wp.NamespacedName()
-	info, exists := r.wpState[wpKey]
-	if !exists {
-		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
-	}
-	return r.tearDownPolicyIDs(wpKey, info.polByContainer)
 }
 
 // handleWPDelete removes a workload policy from the resolver cache and updates the BPF maps accordingly.
@@ -305,10 +286,24 @@ func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if err := r.deleteWorkloadPolicy(wp); err != nil {
-		return err
+	wpKey := wp.NamespacedName()
+	info := r.wpState[wpKey]
+	if info == nil {
+		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
 	}
-	delete(r.wpState, wp.NamespacedName())
+	delete(r.wpState, wpKey)
+
+	for containerName, policyID := range info.polByContainer {
+		// First we remove the association cgroupID -> PolicyID and then we will remove the policy values and modes
+
+		// iteration + deletion on the ebpf map
+		if err := r.cgroupToPolicyMapUpdateFunc(policyID, []CgroupID{}, bpf.RemovePolicy); err != nil {
+			return fmt.Errorf("failed to remove policy from cgroup map: %w", err)
+		}
+		if err := r.clearPolicyIDFromBPF(policyID); err != nil {
+			return fmt.Errorf("failed to clear policy for wp %s, container %s: %w", wpKey, containerName, err)
+		}
+	}
 	return nil
 }
 
@@ -362,23 +357,17 @@ func (r *Resolver) GetPolicyStatuses() map[NamespacedPolicyName]PolicyStatus {
 
 	statuses := make(map[NamespacedPolicyName]PolicyStatus, len(r.wpState))
 	for k, v := range r.wpState {
-		statuses[k] = v.status
+		if v != nil {
+			statuses[k] = v.status
+		}
 	}
 	return statuses
 }
 
-// setPolicyStatus updates the status for the given workload policy.
-// If the policy is not in wpState, a WPInfo with empty polByContainer is stored,
-// so that ERROR state can still be reported via GetPolicyStatuses.
-func (r *Resolver) setPolicyStatus(wp *v1alpha1.WorkloadPolicy, state agentv1.PolicyState, message string) {
-	wpKey := wp.NamespacedName()
-	mode := policymode.ParsePolicyModeToProto(wp.Spec.Mode)
-	st := PolicyStatus{State: state, Mode: mode, Message: message}
-	info, ok := r.wpState[wpKey]
-	if !ok {
-		r.wpState[wpKey] = wpInfo{polByContainer: make(policyByContainer), status: st}
-		return
+func (i *wpInfo) setPolicyStatus(wp *v1alpha1.WorkloadPolicy, state agentv1.PolicyState, message string) {
+	i.status = PolicyStatus{
+		State:   state,
+		Mode:    policymode.ParsePolicyModeToProto(wp.Spec.Mode),
+		Message: message,
 	}
-	info.status = st
-	r.wpState[wpKey] = info
 }
