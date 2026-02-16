@@ -178,19 +178,21 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	)
 	r.mu.Lock()
 
-	wpKey := wp.NamespacedName()
-	info := r.wpState[wpKey]
-	if info != nil {
-		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
-	}
-
+	var info *wpInfo
 	var err error
+	mode := policymode.ParsePolicyModeToProto(wp.Spec.Mode)
 	defer func() {
-		if err != nil {
-			info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
+		if err != nil && info != nil {
+			info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_ERROR, mode, err.Error())
 		}
 		r.mu.Unlock()
 	}()
+
+	wpKey := wp.NamespacedName()
+	info = r.wpState[wpKey]
+	if info != nil {
+		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
+	}
 
 	state := make(policyByContainer, len(wp.Spec.RulesByContainer))
 	info = &wpInfo{polByContainer: state}
@@ -214,7 +216,7 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 		}
 	}
 
-	info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
+	info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_READY, mode, "")
 	return nil
 }
 
@@ -228,19 +230,21 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	)
 	r.mu.Lock()
 
-	wpKey := wp.NamespacedName()
-	info := r.wpState[wpKey]
-	if info == nil {
-		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
-	}
-
+	var info *wpInfo
 	var err error
+	mode := policymode.ParsePolicyModeToProto(wp.Spec.Mode)
 	defer func() {
-		if err != nil {
-			info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_ERROR, err.Error())
+		if err != nil && info != nil {
+			info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_ERROR, mode, err.Error())
 		}
 		r.mu.Unlock()
 	}()
+
+	wpKey := wp.NamespacedName()
+	info = r.wpState[wpKey]
+	if info == nil {
+		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
+	}
 
 	var newContainers policyByContainer
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
@@ -272,7 +276,7 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 			return err
 		}
 	}
-	info.setPolicyStatus(wp, agentv1.PolicyState_POLICY_STATE_READY, "")
+	info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_READY, mode, "")
 	return nil
 }
 
@@ -364,10 +368,10 @@ func (r *Resolver) GetPolicyStatuses() map[NamespacedPolicyName]PolicyStatus {
 	return statuses
 }
 
-func (i *wpInfo) setPolicyStatus(wp *v1alpha1.WorkloadPolicy, state agentv1.PolicyState, message string) {
+func (i *wpInfo) setPolicyStatus(state agentv1.PolicyState, mode agentv1.PolicyMode, message string) {
 	i.status = PolicyStatus{
 		State:   state,
-		Mode:    policymode.ParsePolicyModeToProto(wp.Spec.Mode),
+		Mode:    mode,
 		Message: message,
 	}
 }

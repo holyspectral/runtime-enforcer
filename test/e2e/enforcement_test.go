@@ -110,7 +110,7 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 						wait.WithTimeout(DefaultOperationTimeout),
 					)
 
-					require.NoError(t, err, "failed to run the target payload")
+					require.NoError(t, err, "failed to wait the target deployment")
 
 					// 2. Create the resource and wait for it to be deployed.
 					err = r.Create(ctx, &policy)
