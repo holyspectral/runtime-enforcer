@@ -1,4 +1,4 @@
-suite: "Agent DaemonSet Tests"
+suite: "Operator Deployment Tests"
 templates:
   - "templates/operator/deployment.yaml"
 
@@ -6,8 +6,8 @@ tests:
   - it: "should allow image, and imagePullPolicy to be overridden"
     set:
       operator:
+        replicas: 5
         manager:
-          replicas: 5
           image:
             repository: somewhere/operator
             tag: v9.9.9
@@ -22,6 +22,9 @@ tests:
       - equal:
           path: "spec.template.spec.containers[0].imagePullPolicy"
           value: "Always"
+      - equal:
+          path: "spec.template.spec.priorityClassName"
+          value: "runtime-enforcer-priorityclass"
 
   - it: "should include grpc Port argument"
     set:

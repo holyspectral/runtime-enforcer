@@ -18,6 +18,9 @@ tests:
       - equal:
           path: "spec.template.spec.containers[0].imagePullPolicy"
           value: "Always"
+      - equal:
+          path: "spec.template.spec.priorityClassName"
+          value: "runtime-enforcer-priorityclass"
 
   - it: "should include --enable-learning flag when learning is enabled"
     set:

@@ -14,19 +14,28 @@ operator:
       repository: ghcr.io/rancher-sandbox/runtime-enforcer/operator
       tag: v0.1.0
       pullPolicy: IfNotPresent
+    # To make the Pods "Guaranteed" (evicted last under node pressure), kubelet requires
+    # requests and limits are specified for all the containers and they are equal.
+    # Please refer to https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#pod-selection-for-kubelet-eviction
     resources:
       limits:
         cpu: 500m
         memory: 128Mi
       requests:
-        cpu: 10m
-        memory: 64Mi
+        cpu: 500m
+        memory: 128Mi
     wpStatusUpdateInterval: 30s
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
   replicas: 1
+  # # PodDisruptionBudget for the operator Deployment. Disable by default.
+  # # When enabled, limits voluntary disruption (e.g. kubectl drain).
+  # pdb:
+  #   enabled: false
+  #   # minAvailable: at least 1 pod must stay available during a disruption.
+  #   minAvailable: 1
   serviceAccount:
     annotations: {}
   tolerations: []
@@ -62,13 +71,16 @@ agent:
     grpcExporterPort: "50051"
     # agent logger level. Can be one of: debug, info, warn, error.
     logLevel: info
+    # To make the Pods "Guaranteed" (evicted last under node pressure), kubelet requires
+    # requests and limits are specified for all the containers and they are equal.
+    # Please refer to https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#pod-selection-for-kubelet-eviction
     resources:
       limits:
         cpu: 500m
         memory: 128Mi
       requests:
-        cpu: 10m
-        memory: 64Mi
+        cpu: 500m
+        memory: 128Mi
   hostPID: true
   podSecurityContext:
     seccompProfile:
@@ -133,3 +145,11 @@ telemetry:
 # Requires Kubernetes 1.25+ for ValidatingAdmissionPolicy support
 vap:
   enabled: true
+
+# PriorityClass shared by both operator and agent pods.
+priorityClass:
+  enabled: true
+  name: runtime-enforcer-priorityclass
+  value: 1000000
+  globalDefault: false
+  description: PriorityClass for runtime-enforcer operator and agent pods.
