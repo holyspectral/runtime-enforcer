@@ -141,7 +141,7 @@ func getMainTest() types.Feature {
 				err := r.Create(ctx, &policy)
 				require.NoError(t, err, "create policy")
 
-				// todo!: we should check the status of the WP is updated
+				waitForWorkloadPolicyStatusToBeUpdated(ctx, t, policy.DeepCopy())
 
 				return context.WithValue(ctx, key("policy"), &policy)
 			}).
@@ -365,7 +365,7 @@ func getMainTest() types.Feature {
 				[]resources.DeleteOption{},
 				decoder.MutateNamespace(workloadNamespace),
 			)
-			assert.NoError(t, err, "failed to delete test data")
+			require.NoError(t, err, "failed to delete test data")
 
 			return ctx
 		}).Feature()

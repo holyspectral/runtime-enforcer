@@ -8,6 +8,7 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
+	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -99,15 +100,23 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 	require.NoError(t, r.handleWPAdd(wp))
 	require.Contains(t, r.wpState, key)
 	state := r.wpState[key]
-	require.Len(t, state, 2)
-	require.Contains(t, state, c1)
-	require.Contains(t, state, c2)
+	require.Len(t, state.polByContainer, 2)
+	require.Contains(t, state.polByContainer, c1)
+	require.Contains(t, state.polByContainer, c2)
 	ids := make(map[PolicyID]struct{})
-	for _, id := range state {
+	for _, id := range state.polByContainer {
 		ids[id] = struct{}{}
 	}
 	require.Equal(t, map[PolicyID]struct{}{PolicyID(1): {}, PolicyID(2): {}}, ids)
 	initialState := r.wpState[key]
+
+	statuses := r.GetPolicyStatuses()
+	require.Contains(t, statuses, key)
+	require.Equal(t, PolicyStatus{
+		State:   agentv1.PolicyState_POLICY_STATE_READY,
+		Mode:    agentv1.PolicyMode_POLICY_MODE_MONITOR,
+		Message: "",
+	}, statuses[key])
 
 	// Update: remove c1, update c2 allowed list, add c3
 	delete(wp.Spec.RulesByContainer, c1)
@@ -119,12 +128,14 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 	}
 	require.NoError(t, r.handleWPUpdate(wp))
 	state = r.wpState[key]
-	require.Len(t, state, 2)
-	require.NotContains(t, state, c1)
-	require.Equal(t, initialState[c2], state[c2], "c2 keeps its policy ID")
-	require.Equal(t, PolicyID(3), state[c3])
+	require.Len(t, state.polByContainer, 2)
+	require.NotContains(t, state.polByContainer, c1)
+	require.Equal(t, initialState.polByContainer[c2], state.polByContainer[c2], "c2 keeps its policy ID")
+	require.Equal(t, PolicyID(3), state.polByContainer[c3])
 
 	// Delete
 	require.NoError(t, r.handleWPDelete(wp))
 	require.NotContains(t, r.wpState, key)
+	statuses = r.GetPolicyStatuses()
+	require.NotContains(t, statuses, key)
 }

@@ -33,12 +33,12 @@ func (s *agentObserver) ListPoliciesStatus(
 		Policies: make(map[string]*pb.PolicyStatus),
 	}
 
-	policies := s.resolver.ListPolicies()
-	for _, policyName := range policies {
+	statuses := s.resolver.GetPolicyStatuses()
+	for policyName, ps := range statuses {
 		out.Policies[policyName] = &pb.PolicyStatus{
-			// todo!: we need to populate the real state here.
-			State: pb.PolicyState_POLICY_STATE_READY,
-			Mode:  pb.PolicyMode_POLICY_MODE_PROTECT,
+			State:   ps.State,
+			Mode:    ps.Mode,
+			Message: ps.Message,
 		}
 	}
 

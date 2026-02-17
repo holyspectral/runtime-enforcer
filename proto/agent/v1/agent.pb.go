@@ -163,6 +163,7 @@ type PolicyStatus struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	State         PolicyState            `protobuf:"varint,1,opt,name=state,proto3,enum=runtimeenforcer.agent.v1.PolicyState" json:"state,omitempty"`
 	Mode          PolicyMode             `protobuf:"varint,2,opt,name=mode,proto3,enum=runtimeenforcer.agent.v1.PolicyMode" json:"mode,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -209,6 +210,13 @@ func (x *PolicyStatus) GetMode() PolicyMode {
 		return x.Mode
 	}
 	return PolicyMode_POLICY_MODE_UNSPECIFIED
+}
+
+func (x *PolicyStatus) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
 }
 
 type ListPoliciesStatusResponse struct {
@@ -260,10 +268,11 @@ var File_proto_agent_v1_agent_proto protoreflect.FileDescriptor
 const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"\x1aproto/agent/v1/agent.proto\x12\x18runtimeenforcer.agent.v1\"\x1b\n" +
-	"\x19ListPoliciesStatusRequest\"\x85\x01\n" +
+	"\x19ListPoliciesStatusRequest\"\x9f\x01\n" +
 	"\fPolicyStatus\x12;\n" +
 	"\x05state\x18\x01 \x01(\x0e2%.runtimeenforcer.agent.v1.PolicyStateR\x05state\x128\n" +
-	"\x04mode\x18\x02 \x01(\x0e2$.runtimeenforcer.agent.v1.PolicyModeR\x04mode\"\xe1\x01\n" +
+	"\x04mode\x18\x02 \x01(\x0e2$.runtimeenforcer.agent.v1.PolicyModeR\x04mode\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xe1\x01\n" +
 	"\x1aListPoliciesStatusResponse\x12^\n" +
 	"\bpolicies\x18\x01 \x03(\v2B.runtimeenforcer.agent.v1.ListPoliciesStatusResponse.PoliciesEntryR\bpolicies\x1ac\n" +
 	"\rPoliciesEntry\x12\x10\n" +
