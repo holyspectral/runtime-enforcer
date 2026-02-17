@@ -207,7 +207,7 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 
 	// Now we search for pods that match the policy
 	for _, podState := range r.podCache {
-		if !podState.matchPolicy(wp.Name) {
+		if !podState.matchPolicy(wp.Name, wp.Namespace) {
 			continue
 		}
 
@@ -266,7 +266,7 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	}
 
 	for _, podState := range r.podCache {
-		if !podState.matchPolicy(wp.Name) {
+		if !podState.matchPolicy(wp.Name, wp.Namespace) {
 			continue
 		}
 		if err = r.removePolicyFromPod(wpKey, podState, info.polByContainer, removedMap); err != nil {
