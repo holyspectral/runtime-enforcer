@@ -126,7 +126,8 @@ static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf)
 	}
 
 	if(d_unlinked(dentry)) {
-		// we don't need the terminator since the next `MAX_PATH_LEN` segment
+		// we don't need the terminator since we use the first empty byte of the third
+		// `MAX_PATH_LEN` segment.
 		off -= (sizeof(DELETED_STRING) - 1);
 		memcpy(&buf[SAFE_PATH_ACCESS(off)], DELETED_STRING, sizeof(DELETED_STRING) - 1);
 	}
