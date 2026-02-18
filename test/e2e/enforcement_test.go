@@ -5,7 +5,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -72,23 +71,6 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 
 			return ctx
 		}).
-		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("installing test Ubuntu deployment")
-
-			r := ctx.Value(key("client")).(*resources.Resources)
-
-			err := decoder.ApplyWithManifestDir(
-				ctx,
-				r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.CreateOption{},
-				decoder.MutateNamespace(workloadNamespace),
-			)
-			assert.NoError(t, err, "failed to apply test data")
-
-			return ctx
-		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
 		Assess("a namespace-scoped policy can be enforced correctly",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
@@ -112,13 +94,31 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 						},
 					}
 
-					// 1. Create the resource and wait for it to be deployed.
-					err := r.Create(ctx, &policy)
+					// 1. Deploy test pods
+					err := decoder.ApplyWithManifestDir(
+						ctx,
+						r,
+						"./testdata",
+						"ubuntu-deployment.yaml",
+						[]resources.CreateOption{},
+						decoder.MutateNamespace(workloadNamespace),
+					)
+					require.NoError(t, err, "failed to apply test data")
+
+					err = wait.For(
+						conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
+						wait.WithTimeout(DefaultOperationTimeout),
+					)
+
+					require.NoError(t, err, "failed to wait the target deployment")
+
+					// 2. Create the resource and wait for it to be deployed.
+					err = r.Create(ctx, &policy)
 					require.NoError(t, err, "create policy")
 
 					waitForWorkloadPolicyStatusToBeUpdated(ctx, t, policy.DeepCopy())
 
-					// 2. Run command in the pod and verify the result.
+					// 3. Run command in the pod and verify the result.
 					var podName string
 					var pods corev1.PodList
 					err = r.WithNamespace(workloadNamespace).List(ctx, &pods)
@@ -154,28 +154,30 @@ func getEnforcementOnExistingPodsTest() types.Feature {
 						}
 					}
 
-					// 3. Delete WorkloadPolicy
+					// 4. Delete test Deployment
+					err = decoder.DeleteWithManifestDir(
+						ctx,
+						r,
+						"./testdata",
+						"ubuntu-deployment.yaml",
+						[]resources.DeleteOption{},
+						decoder.MutateNamespace(workloadNamespace),
+					)
+					require.NoError(t, err, "failed to delete test data")
+
+					// 5. Delete WorkloadPolicy and wait for it to be gone so the agent
+					// cleans up cgroup→policy map entries before we might create the same name again.
 					err = r.Delete(ctx, &policy)
 					require.NoError(t, err)
+					err = wait.For(
+						conditions.New(r).ResourceDeleted(&policy),
+						wait.WithTimeout(DefaultOperationTimeout),
+					)
+					require.NoError(t, err, "workloadpolicy should be deleted")
 				}
 
 				return ctx
-			}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("uninstalling test resources")
-			r := ctx.Value(key("client")).(*resources.Resources)
-			err := decoder.DeleteWithManifestDir(
-				ctx,
-				r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.DeleteOption{},
-				decoder.MutateNamespace(workloadNamespace),
-			)
-			assert.NoError(t, err, "failed to delete test data")
-
-			return ctx
-		}).Feature()
+			}).Feature()
 }
 
 func getEnforcementOnNewPodsTest() types.Feature {
@@ -236,7 +238,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 
 					err = wait.For(
 						conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
-						wait.WithTimeout(time.Minute*1),
+						wait.WithTimeout(DefaultOperationTimeout),
 					)
 
 					require.NoError(t, err, "failed to run the target payload")
@@ -277,6 +279,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 						}
 					}
 
+					// 4. Delete test Deployment
 					err = decoder.DeleteWithManifestDir(
 						ctx,
 						r,
@@ -287,9 +290,14 @@ func getEnforcementOnNewPodsTest() types.Feature {
 					)
 					require.NoError(t, err, "failed to delete test data")
 
-					// 3. Delete WorkloadPolicy
+					// 5. Delete WorkloadPolicy and wait for it to be gone.
 					err = r.Delete(ctx, &policy)
 					require.NoError(t, err)
+					err = wait.For(
+						conditions.New(r).ResourceDeleted(&policy),
+						wait.WithTimeout(DefaultOperationTimeout),
+					)
+					require.NoError(t, err, "workloadpolicy should be deleted")
 				}
 
 				return ctx

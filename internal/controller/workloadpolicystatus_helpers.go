@@ -110,10 +110,13 @@ func computeWpStatus(
 			}
 			status.AddTransitioningNode(nodeName)
 		case pb.PolicyState_POLICY_STATE_ERROR:
+			msg := policyStatus.GetMessage()
+			if msg == "" {
+				msg = "policy is in error state"
+			}
 			status.AddNodeIssue(nodeName, v1alpha1.NodeIssue{
-				Code: v1alpha1.NodeIssuePolicyFailed,
-				// todo!: we should receive the error message from the agent.
-				Message: "policy is in error state",
+				Code:    v1alpha1.NodeIssuePolicyFailed,
+				Message: msg,
 			})
 		case pb.PolicyState_POLICY_STATE_UNSPECIFIED:
 		default:
@@ -155,6 +158,6 @@ func (r *WorkloadPolicyStatusSync) processWorkloadPolicy(
 	newPolicy.Status.ObservedGeneration = wp.Generation
 	r.logger.V(1).Info("updating",
 		"policy", newPolicy.NamespacedName(),
-		"status:", newPolicy.Status)
+		"status", newPolicy.Status)
 	return r.Status().Update(ctx, newPolicy)
 }

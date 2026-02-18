@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/cilium/ebpf"
+	"github.com/go-logr/logr"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
@@ -17,7 +18,6 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
@@ -37,6 +37,7 @@ type Config struct {
 	nriPluginIdx      string
 	probeAddr         string
 	grpcConf          grpcexporter.Config
+	logLevel          string
 }
 
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
@@ -73,6 +74,59 @@ func setupGRPCExporter(
 	return nil
 }
 
+func setupLearningReconciler(
+	ctx context.Context,
+	logger *slog.Logger,
+	config Config,
+	ctrlMgr manager.Manager,
+) (func(eventscraper.KubeProcessInfo), error) {
+	if !config.enableLearning {
+		logger.InfoContext(ctx, "learning mode is disabled")
+		return func(_ eventscraper.KubeProcessInfo) {
+			panic("enqueue function should be never called when learning is disabled")
+		}, nil
+	}
+
+	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient())
+	if err := learningReconciler.SetupWithManager(ctrlMgr); err != nil {
+		return nil, fmt.Errorf("unable to create learning reconciler: %w", err)
+	}
+	logger.InfoContext(ctx, "learning mode is enabled")
+	return learningReconciler.EnqueueEvent, nil
+}
+
+func setupPolicyInformer(
+	ctx context.Context,
+	logger *slog.Logger,
+	ctrlMgr manager.Manager,
+	resolver *resolver.Resolver,
+) error {
+	workloadPolicyInformer, err := ctrlMgr.GetCache().GetInformer(ctx, &securityv1alpha1.WorkloadPolicy{})
+	if err != nil {
+		return fmt.Errorf("cannot get workload policy informer: %w", err)
+	}
+	handlerRegistration, err := workloadPolicyInformer.AddEventHandler(resolver.PolicyEventHandlers())
+	if err != nil {
+		return fmt.Errorf("failed to add event handler for workload policy: %w", err)
+	}
+
+	// controller-runtime doesn't support a separate startup probe, so we use the readiness probe instead.
+	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2644 for more details.
+	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(_ *http.Request) error {
+		// Instead of informer.HasSynced(), which checks if the internal storage is synced,
+		// we use ResourceEventHandlerRegistration.HasSynced() to ensure that
+		// the event handlers have been synced.
+		if !handlerRegistration.HasSynced() {
+			logger.Warn("workload policy informer has not yet synced")
+			return errors.New("workload policy informer has not yet synced")
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to add policy readiness probe: %w", err)
+	}
+	return nil
+}
+
 func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	var err error
 
@@ -87,7 +141,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	//////////////////////
 	// Create BPF manager
 	//////////////////////
-	bpfManager, err := bpf.NewManager(logger, config.enableLearning, ebpf.LogLevelBranch)
+	bpfManager, err := bpf.NewManager(logger, config.enableLearning)
 	if err != nil {
 		return fmt.Errorf("cannot create BPF manager: %w", err)
 	}
@@ -98,20 +152,9 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	//////////////////////
 	// Create Learning Reconciler if learning is enabled
 	//////////////////////
-	// Initialize with a panic function, replaced when learning is enabled
-	enqueueFunc := func(_ eventscraper.KubeProcessInfo) {
-		panic("enqueue function should be never called when learning is disabled")
-	}
-
-	if config.enableLearning {
-		learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient())
-		if err = learningReconciler.SetupWithManager(ctrlMgr); err != nil {
-			return fmt.Errorf("unable to create learning reconciler: %w", err)
-		}
-		enqueueFunc = learningReconciler.EnqueueEvent
-		logger.InfoContext(ctx, "learning mode is enabled")
-	} else {
-		logger.InfoContext(ctx, "learning mode is disabled")
+	enqueueFunc, err := setupLearningReconciler(ctx, logger, config, ctrlMgr)
+	if err != nil {
+		return err
 	}
 
 	//////////////////////
@@ -165,26 +208,8 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	//////////////////////
 	// Setup Policy Generator with the workload informer
 	//////////////////////
-	workloadPolicyInformer, err := ctrlMgr.GetCache().GetInformer(ctx, &securityv1alpha1.WorkloadPolicy{})
-	if err != nil {
-		return fmt.Errorf("cannot get workload policy informer: %w", err)
-	}
-	handlerRegistration, err := workloadPolicyInformer.AddEventHandler(resolver.PolicyEventHandlers())
-	if err != nil {
-		return fmt.Errorf("failed to add event handler for workload policy: %w", err)
-	}
-
-	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(_ *http.Request) error {
-		// Instead of informer.HasSynced(), which checks if the internal storage is synced,
-		// we use ResourceEventHandlerRegistration.HasSynced() to ensure that
-		// the event handlers have been synced.
-		if !handlerRegistration.HasSynced() {
-			logger.Warn("workload policy informer has not yet synced")
-			return errors.New("workload policy informer has not yet synced")
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to add NRI handler's readiness probe: %w", err)
+	if err = setupPolicyInformer(ctx, logger, ctrlMgr, resolver); err != nil {
+		return err
 	}
 
 	//////////////////////
@@ -202,6 +227,21 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	return nil
 }
 
+func parseLogLevel(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		panic(fmt.Sprintf("invalid log level: %s", level))
+	}
+}
+
 func main() {
 	var err error
 	var config Config
@@ -209,11 +249,6 @@ func main() {
 	var traceShutdown func(context.Context) error
 
 	ctx := ctrl.SetupSignalHandler()
-
-	opts := zap.Options{
-		Development: false,
-	}
-	opts.BindFlags(flag.CommandLine)
 
 	flag.BoolVar(&config.enableTracing, "enable-tracing", false, "Enable tracing collection")
 	flag.BoolVar(&config.enableOtelSidecar, "enable-otel-sidecar", false, "Enable OpenTelemetry sidecar")
@@ -226,33 +261,37 @@ func main() {
 		"Enable mutual TLS between the agent server and clients")
 	flag.StringVar(&config.grpcConf.CertDirPath, "grpc-mtls-cert-dir", "",
 		"Path to the directory containing the server and ca TLS certificate")
+	flag.StringVar(
+		&config.logLevel,
+		"log-level",
+		"info",
+		"agent logger level (debug, info, warn, error)",
+	)
 	flag.Parse()
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})).With("component", "agent")
-	slog.SetDefault(logger)
+	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(config.logLevel)})
+	slogger := slog.New(slogHandler).With("component", "agent")
+	slog.SetDefault(slogger)
+	ctrl.SetLogger(logr.FromSlogHandler(slogger.Handler()))
 
 	if config.enableTracing {
 		// Start otel traces
 		traceShutdown, err = traces.Init()
 		if err != nil {
-			logger.ErrorContext(ctx, "failed to initiate open telemetry trace", "error", err)
+			slogger.ErrorContext(ctx, "failed to initiate open telemetry trace", "error", err)
 			os.Exit(1)
 		}
 	}
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
 	// This function blocks if everything is alright.
-	if err = startAgent(ctx, logger, config); err != nil {
-		logger.ErrorContext(ctx, "failed to start agent", "error", err)
+	if err = startAgent(ctx, slogger, config); err != nil {
+		slogger.ErrorContext(ctx, "failed to start agent", "error", err)
 		os.Exit(1)
 	}
 
 	if traceShutdown != nil {
 		if err = traceShutdown(ctx); err != nil {
-			logger.ErrorContext(ctx, "failed to shutdown telemetry trace", "error", err)
+			slogger.ErrorContext(ctx, "failed to shutdown telemetry trace", "error", err)
 		}
 	}
 }

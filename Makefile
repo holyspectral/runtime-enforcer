@@ -113,6 +113,10 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
 
+.PHONY: bpf-lint
+bpf-lint:
+	clang-tidy --header-filter=.* --exclude-header-filter=bpf/vmlinux_generated.* bpf/*.c
+
 ##@ Build
 
 .PHONY: operator

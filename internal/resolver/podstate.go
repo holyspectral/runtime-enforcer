@@ -7,11 +7,17 @@ type podState struct {
 	containers map[ContainerID]*containerInfo
 }
 
-func (pod *podState) matchPolicy(policyName string) bool {
+func (pod *podState) matchPolicy(policyName, policyNamespace string) bool {
 	v, ok := pod.info.labels[v1alpha1.PolicyLabelKey]
 	if !ok || v != policyName {
 		return false
 	}
+
+	// now we need to check if the pod is in the same namespace of the policy since our policies are namespaced.
+	if pod.info.namespace != policyNamespace {
+		return false
+	}
+
 	return true
 }
 

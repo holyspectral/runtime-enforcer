@@ -29,8 +29,6 @@ func waitForWorkloadPolicyStatusToBeUpdated(
 		if ps.Status.ObservedGeneration != ps.Generation {
 			return false
 		}
-		// todo!: at the moment the agent only sends a mock state `protect`
-		// so this method can be only used for checking protection
 		if ps.Status.Phase != v1alpha1.Active {
 			return false
 		}

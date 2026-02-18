@@ -34,6 +34,7 @@ spec:
         {{- end }}
         - --grpc-port={{ .Values.agent.agent.grpcExporterPort }}
         - --grpc-mtls-cert-dir={{ include "runtime-enforcer.grpc.certDir" . }}
+        - --log-level={{ .Values.agent.agent.logLevel }}
         {{- toYaml .Values.agent.agent.args | nindent 8 }}
         command:
         - /agent
@@ -68,13 +69,15 @@ spec:
           httpGet:
             path: /readyz
             port: 8081
+          # we give 45s (5s delay + 8 attempts every 5s) for the startup probe to succeed
           initialDelaySeconds: 5
-          periodSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 8
         resources: {{- toYaml .Values.agent.agent.resources | nindent 10 }}
         securityContext: {{- toYaml .Values.agent.agent.containerSecurityContext | nindent 10 }}
         volumeMounts:
         - name: nri-socket
-          mountPath: /var/run/nri/nri.sock
+          mountPath: /var/run/nri/
           mountPropagation: HostToContainer
           readOnly: true
         - name: grpc-certs
@@ -84,6 +87,10 @@ spec:
       securityContext: {{- toYaml .Values.agent.podSecurityContext | nindent 8 }}
       serviceAccountName: {{ include "runtime-enforcer.fullname" . }}-agent
       terminationGracePeriodSeconds: 10
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
       - name: nri-socket
         hostPath:

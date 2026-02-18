@@ -46,3 +46,30 @@ tests:
       - contains:
           path: "spec.template.spec.containers[0].args"
           content: "--grpc-port=12"
+
+  - it: "check tolerations"
+    set:
+      agent:
+        tolerations:
+          - key: "dedicated"
+            operator: "Equal"
+            value: "experimental"
+            effect: "NoSchedule"
+    asserts:
+      - contains:
+          path: spec.template.spec.tolerations
+          content:
+            key: "dedicated"
+            operator: "Equal"
+            value: "experimental"
+            effect: "NoSchedule"
+
+  - it: "should include log level argument"
+    set:
+      agent:
+        agent:
+          logLevel: debug
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: "--log-level=debug"

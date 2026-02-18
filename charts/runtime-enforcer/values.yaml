@@ -29,6 +29,7 @@ operator:
   replicas: 1
   serviceAccount:
     annotations: {}
+  tolerations: []
 agent:
   agent:
     args:
@@ -59,6 +60,8 @@ agent:
       tag: v0.1.0
       pullPolicy: IfNotPresent
     grpcExporterPort: "50051"
+    # agent logger level. Can be one of: debug, info, warn, error.
+    logLevel: info
     resources:
       limits:
         cpu: 500m
@@ -72,7 +75,8 @@ agent:
       type: RuntimeDefault
   serviceAccount:
     annotations: {}
-  nriSocketPath: /var/run/nri/nri.sock
+  tolerations: []
+  nriSocketPath: /var/run/nri/
 kubernetesClusterDomain: cluster.local
 
 ## Optional array of imagePullSecrets containing private registry credentials
