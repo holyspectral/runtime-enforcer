@@ -371,13 +371,21 @@ static __always_inline u32 populate_evt_with_path(struct process_evt *evt,
 	return current_offset;
 }
 
-SEC("tp_btf/sched_process_exec")
-int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
+static __always_inline struct process_evt *get_process_evt() {
 	int zero = 0;
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
 	if(!evt) {
 		emit_log_event(LOG_MISSING_PROCESS_EVT_MAP);
+		return NULL;
+	}
+	return evt;
+}
+
+SEC("tp_btf/sched_process_exec")
+int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
+	struct process_evt *evt = get_process_evt();
+	if(!evt) {
 		return 0;
 	}
 
@@ -509,11 +517,8 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		return 0;
 	}
 
-	int zero = 0;
-	struct process_evt *evt =
-	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
+	struct process_evt *evt = get_process_evt();
 	if(!evt) {
-		emit_log_event(LOG_MISSING_PROCESS_EVT_MAP);
 		return 0;
 	}
 
