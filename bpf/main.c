@@ -346,7 +346,7 @@ struct {
 } process_evt_storage_map SEC(".maps");
 
 // Force emitting struct event into the ELF.
-const struct process_evt *unused __attribute__((unused));
+const struct process_evt *unused_process_evt __attribute__((unused));
 
 SEC("tp_btf/sched_process_exec")
 int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
