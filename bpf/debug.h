@@ -13,3 +13,43 @@
 			}                                                                   \
 		}                                                                       \
 	})
+
+// A single buffer shared between all CPUs
+#define BUF_DIM (16 * 1024 * 1024)
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, BUF_DIM);
+} ringbuf_logs SEC(".maps");
+
+enum log_event_code {
+	LOG_MISSING_PROCESS_EVT_MAP = 1,
+	LOG_MISSING_FILE_STRUCT = 2,
+	LOG_FAIL_TO_RESOLVE_PATH = 3,
+	LOG_EMPTY_PATH = 4,
+	LOG_FAIL_TO_COPY_EXEC_PATH = 5,
+	LOG_DROP_EXEC_EVENT = 6,
+	LOG_PATH_LEN_TOO_LONG = 7,
+	LOG_POLICY_MODE_MISSING = 8,
+	LOG_DROP_VIOLATION = 9,
+	LOG_FAIL_TO_RESOLVE_CGROUP_ID = 10,
+	LOG_FAIL_TO_RESOLVE_PARENT_CGROUP_ID = 11
+} typedef log_code;
+
+struct log_evt {
+	log_code code;
+};
+
+// Force emitting struct event into the ELF.
+const struct log_evt *unused_log_evt __attribute__((unused));
+const log_code *unused_log_event_code __attribute__((unused));
+
+static __always_inline void emit_log_event(log_code code) {
+	struct log_evt *evt = bpf_ringbuf_reserve(&ringbuf_logs, sizeof(struct log_evt), 0);
+	if(!evt) {
+		bpf_printk("Failed to reserve space for log events in ring buffer\n");
+		return;
+	}
+	evt->code = code;
+	bpf_ringbuf_submit(evt, 0);
+}

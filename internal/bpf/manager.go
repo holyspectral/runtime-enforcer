@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-O2 -g" -target native -tags linux -type process_evt bpf ../../bpf/main.c -- -I/usr/include/
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-O2 -g" -target native -tags linux -type process_evt -type log_event_code -type log_evt bpf ../../bpf/main.c -- -I/usr/include/
 
 const (
 	loadTimeConfigBPFVar = "load_time_config"
@@ -55,6 +55,10 @@ type Manager struct {
 	objs             *bpfObjects
 	policyStringMaps []*ebpf.Map
 	isShuttingDown   atomic.Bool
+
+	// logHandler is the function called for each BPF log event.
+	// Defaults to defaultLogEventMsg.
+	logHandler logEventHandler
 
 	// Learning
 	enableLearning    bool
@@ -194,6 +198,7 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 	return &Manager{
 		logger:              newLogger,
 		objs:                objs,
+		logHandler:          defaultLogEventMsg,
 		enableLearning:      enableLearning,
 		learningEventChan:   make(chan ProcessEvent, learningEventChanSize),
 		monitoringEventChan: make(chan ProcessEvent, monitorEventChanSize),
@@ -242,6 +247,11 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.logger.InfoContext(ctx, "Starting BPF Manager...")
 	g, ctx := errgroup.WithContext(ctx)
+
+	// Logging
+	g.Go(func() error {
+		return m.loggerStart(ctx)
+	})
 
 	// Cgroup Tracker
 	g.Go(func() error {
