@@ -537,10 +537,6 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	}
 
 	int padded_len = string_padded_len(evt->path_len);
-	if(padded_len == 0) {
-		bpf_printk("Padded length is zero for path length %d", evt->path_len);
-		return 0;
-	}
 	int index = string_map_index(padded_len);
 	void *string_map = get_policy_string_map(index, policy_id);
 	// if `string_map` is NULL it means that the userspace never populated a map for this path
