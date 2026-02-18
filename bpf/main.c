@@ -349,6 +349,28 @@ struct {
 // Force emitting struct event into the ELF.
 const struct process_evt *unused_process_evt __attribute__((unused));
 
+static __always_inline u32 populate_evt_with_path(struct process_evt *evt,
+                                                  struct linux_binprm *bprm) {
+	struct file *file = bprm->file;
+	if(file == NULL) {
+		emit_log_event(LOG_MISSING_FILE_STRUCT);
+		return -1;
+	}
+	struct path *path_arg = &file->f_path;
+	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
+	if(current_offset <= 0) {
+		emit_log_event(LOG_FAIL_TO_RESOLVE_PATH);
+		return -1;
+	}
+	if(current_offset == MAX_PATH_LEN * 2) {
+		emit_log_event(LOG_EMPTY_PATH);
+		return -1;
+	}
+	// path_len doesn't contain the string terminator `\0`, the userspace doesn't need it.
+	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
+	return current_offset;
+}
+
 SEC("tp_btf/sched_process_exec")
 int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
 	int zero = 0;
@@ -363,23 +385,10 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
 	evt->mode = 0;  // default it to 0 for now
 
-	struct file *file = bprm->file;
-	if(file == NULL) {
-		emit_log_event(LOG_MISSING_FILE_STRUCT);
+	u32 current_offset = populate_evt_with_path(evt, bprm);
+	if(current_offset < 0) {
 		return 0;
 	}
-	struct path *path_arg = &file->f_path;
-	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
-	if(current_offset <= 0) {
-		emit_log_event(LOG_FAIL_TO_RESOLVE_PATH);
-		return 0;
-	}
-	if(current_offset == MAX_PATH_LEN * 2) {
-		emit_log_event(LOG_EMPTY_PATH);
-		return 0;
-	}
-	// path_len doesn't contain the string terminator `\0`, the userspace doesn't need it.
-	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
 	// here we are copying the resolved path into the first segment of the buffer.
 	// please note: in the first segment of the path we will already have the path written by
 	// the previous program execution, what we are doing here is to overwrite the path with the new
@@ -500,7 +509,6 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		return 0;
 	}
 
-	// todo!: we need to create a common helper for this part
 	int zero = 0;
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
@@ -512,22 +520,10 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	evt->cgid = tg_get_current_cgroup_id();
 	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
 
-	struct file *file = bprm->file;
-	if(file == NULL) {
-		emit_log_event(LOG_MISSING_FILE_STRUCT);
+	u32 current_offset = populate_evt_with_path(evt, bprm);
+	if(current_offset < 0) {
 		return 0;
 	}
-	struct path *path_arg = &file->f_path;
-	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
-	if(current_offset <= 0) {
-		emit_log_event(LOG_FAIL_TO_RESOLVE_PATH);
-		return 0;
-	}
-	if(current_offset == MAX_PATH_LEN * 2) {
-		emit_log_event(LOG_EMPTY_PATH);
-		return 0;
-	}
-	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
 
 	///////////////////////////////
 	// We now do the comparison
