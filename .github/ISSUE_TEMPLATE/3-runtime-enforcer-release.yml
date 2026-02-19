@@ -17,7 +17,7 @@ body:
         This issue tracks the release of a new version of Runtime Enforcer. Please follow the checklist below to ensure a smooth release process.
         - [ ] Make sure CI is green
         - [ ] Create a *draft* release with the version tag and generate release notes.
-        - [ ] Tag runtime-enforcer
+        - [ ] Tag runtime-enforcer (manually, through `git tag` and `git push --tags`)
         - [ ] Verify the "Create a new release for RuntimeEnforcer (release.yml)" workflow completes without problem
           - [ ] Verify the draft release is now published
           - [ ] Verify that the container images are published on ghcr.io
@@ -26,3 +26,10 @@ body:
           - [ ] Check if app version and chart version are correctly bumped.
           - [ ] Check if CI for the Helm chart PR is green. If so, merge it.
         - [ ] Verify that helm release is correctly created and new version in helm repo is accessible.
+
+        ## FAQ
+        ### What if we want to bump the helm chart to more than just a patch release?
+        Make a code suggestion in the updatecli PR. Another team member will accept it and you can just merge the PR.
+
+        ### My updatecli CI jobs won't start!
+        Try closing and reopening the associated PR.
