@@ -38,18 +38,17 @@ enum log_event_code {
 
 struct log_evt {
 	log_code code;
+	// args shared by all the logs
+	char comm[16];
+	u64 cgid;
+	u64 cg_tracker_id;
+	u32 pid;
+	u32 tgid;
+	// additional args for specific log events
+	u64 arg1;
+	u64 arg2;
 };
 
 // Force emitting struct event into the ELF.
 const struct log_evt *unused_log_evt __attribute__((unused));
 const log_code *unused_log_event_code __attribute__((unused));
-
-static __always_inline void emit_log_event(log_code code) {
-	struct log_evt *evt = bpf_ringbuf_reserve(&ringbuf_logs, sizeof(struct log_evt), 0);
-	if(!evt) {
-		bpf_printk("Failed to reserve space for log events in ring buffer\n");
-		return;
-	}
-	evt->code = code;
-	bpf_ringbuf_submit(evt, 0);
-}

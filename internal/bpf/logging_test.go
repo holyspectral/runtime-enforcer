@@ -15,7 +15,7 @@ func TestLogMissingPolicyMode(t *testing.T) {
 	var m sync.RWMutex
 	var foundEvent bpfLogEvt
 	logTestFunc := func(_ context.Context, logger *slog.Logger, e *bpfLogEvt) {
-		logger.Info("log event received", "evt", e)
+		logger.Info("log event received", "evt", e, "comm", getComm(e))
 		m.Lock()
 		foundEvent = *e
 		m.Unlock()
@@ -53,4 +53,18 @@ func TestLogMissingPolicyMode(t *testing.T) {
 		defer m.RUnlock()
 		return foundEvent.Code == bpfLogEventCodeLOG_POLICY_MODE_MISSING
 	}, 3*time.Second, 100*time.Millisecond, "log event is not generated")
+
+	m.RLock()
+	defer m.RUnlock()
+	// we want our policy as argument
+	require.Equal(t, mockPolicyID, foundEvent.Arg1)
+	require.Equal(t, uint64(0), foundEvent.Arg2)
+	require.Equal(t, runner.cgInfo.id, foundEvent.Cgid)
+	// we don't set it in this test
+	require.Equal(t, uint64(0), foundEvent.CgTrackerId)
+
+	require.NotEmpty(t, getComm(&foundEvent))
+	require.NotEqual(t, 0, foundEvent.Pid)
+	require.NotEqual(t, 0, foundEvent.Tgid)
+
 }

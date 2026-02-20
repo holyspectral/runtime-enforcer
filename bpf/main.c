@@ -242,6 +242,43 @@ static __always_inline __u64 get_tracker_id_from_curr_task() {
 }
 
 /////////////////////////
+// Log helpers
+/////////////////////////
+
+static __always_inline void emit_log_event_args(log_code code, u64 arg1, u64 arg2) {
+	struct log_evt *evt = bpf_ringbuf_reserve(&ringbuf_logs, sizeof(struct log_evt), 0);
+	if(!evt) {
+		bpf_printk("Failed to reserve space for log event in ring buffer\n");
+		return;
+	}
+	evt->code = code;
+	if(bpf_get_current_comm(evt->comm, TASK_COMM_LEN)) {
+		// we don't fail we just print the error
+		bpf_printk("Failed to get comm for log event\n");
+	}
+	evt->cgid = tg_get_current_cgroup_id();
+	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
+	u64 pid_tgid = bpf_get_current_pid_tgid();
+	evt->pid = pid_tgid & 0xFFFFFFFF;
+	evt->tgid = pid_tgid >> 32;
+	evt->arg1 = arg1;
+	evt->arg2 = arg2;
+	bpf_ringbuf_submit(evt, 0);
+}
+
+static __always_inline void emit_log_event(log_code code) {
+	emit_log_event_args(code, 0, 0);
+}
+
+static __always_inline void emit_log_event_1(log_code code, u64 arg1) {
+	emit_log_event_args(code, arg1, 0);
+}
+
+static __always_inline void emit_log_event_2(log_code code, u64 arg1, u64 arg2) {
+	emit_log_event_args(code, arg1, arg2);
+}
+
+/////////////////////////
 // Nested cgroup tracker
 /////////////////////////
 
@@ -376,7 +413,7 @@ static __always_inline struct process_evt *get_process_evt() {
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
 	if(!evt) {
-		emit_log_event(LOG_MISSING_PROCESS_EVT_MAP);
+		emit_log_event_1(LOG_MISSING_PROCESS_EVT_MAP, (u32)(bpf_get_smp_processor_id()));
 		return NULL;
 	}
 	return evt;
@@ -585,7 +622,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	__u8 *mode = bpf_map_lookup_elem(&policy_mode_map, policy_id);
 	if(!mode) {
 		// With our current code this is an error.
-		emit_log_event(LOG_POLICY_MODE_MISSING);
+		emit_log_event_1(LOG_POLICY_MODE_MISSING, *policy_id);
 		return 0;
 	}
 	bpf_printk("Mode %d for policy id %d", *mode, *policy_id);
@@ -593,7 +630,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	err = bpf_ringbuf_output(&ringbuf_monitoring, evt, 19 + SAFE_PATH_LEN(evt->path_len), 0);
 	if(err != 0) {
-		emit_log_event(LOG_DROP_VIOLATION);
+		emit_log_event_2(LOG_DROP_VIOLATION, *policy_id, evt->mode);
 	}
 
 	bpf_printk("sent enforce event, path: %s, cgid: %d, cg_tracker_id: %d",
