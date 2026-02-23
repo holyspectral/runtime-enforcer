@@ -4,12 +4,74 @@ package bpf
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
+
+type memoryWriter struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (w *memoryWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.logs = append(w.logs, string(p))
+	return len(p), nil
+}
+
+func (w *memoryWriter) Contains(s string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, log := range w.logs {
+		if strings.Contains(log, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *memoryWriter) Dump() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.logs...)
+}
+
+func TestLogRateLimiter(t *testing.T) {
+	// 1 token per second, burst of 1
+	rateLimiter := &logRateLimiter{limiter: rate.NewLimiter(rate.Every(1*time.Second), 1)}
+	exampleMsg := "example_msg"
+
+	memoryWriter := &memoryWriter{}
+	logger := slog.New(slog.NewJSONHandler(memoryWriter, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})).With("component", "logging_test")
+
+	// Create a burst of data
+	for range 100 {
+		rateLimiter.logEvent(t.Context(), logger, &bpfLogEvt{}, exampleMsg, slog.LevelInfo)
+	}
+
+	// We wait until there is a new token available
+	require.Eventually(t, func() bool {
+		return rateLimiter.limiter.Tokens() == 1
+	}, 4*time.Second, 1*time.Second, "wait for a new token to be available")
+
+	// When we are sure we have a new token, we log another event and we check for the suppression log
+	rateLimiter.logEvent(t.Context(), logger, &bpfLogEvt{}, exampleMsg, slog.LevelInfo)
+
+	t.Log("Dump logs for debugging:\n")
+	for _, log := range memoryWriter.Dump() {
+		t.Logf("log: %v", log)
+	}
+	require.True(t, memoryWriter.Contains(exampleMsg))
+	require.True(t, memoryWriter.Contains(suppressionMsg))
+}
 
 func TestLogMissingPolicyMode(t *testing.T) {
 	var m sync.RWMutex

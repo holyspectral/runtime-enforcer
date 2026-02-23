@@ -7,10 +7,53 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 	"unsafe"
 
 	"github.com/cilium/ebpf/ringbuf"
+	"golang.org/x/time/rate"
 )
+
+type logRateLimiter struct {
+	limiter    *rate.Limiter
+	suppressed int64
+}
+
+const (
+	suppressionMsg = "logs suppressed by rate limiting"
+)
+
+var (
+	//nolint:gochecknoglobals // Rate limiter for exec events 1 token per second, burst of 1
+	dropExecLimiter = &logRateLimiter{
+		limiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
+	}
+	//nolint:gochecknoglobals // Rate limiter for exec events 1 token per second, burst of 1
+	dropViolationLimiter = &logRateLimiter{
+		limiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
+	}
+)
+
+func (l *logRateLimiter) logEvent(ctx context.Context,
+	logger *slog.Logger,
+	evt *bpfLogEvt,
+	msg string,
+	level slog.Level,
+	additionalArgs ...any) {
+	if !l.limiter.Allow() {
+		l.suppressed++
+		return
+	}
+
+	if l.suppressed > 0 {
+		logger.Log(ctx, level, suppressionMsg,
+			"count", l.suppressed,
+			"msg", msg,
+		)
+		l.suppressed = 0
+	}
+	logEvent(ctx, logger, evt, msg, level, additionalArgs...)
+}
 
 // logEventHandler is a callback invoked for each BPF log event.
 // It can be replaced in tests to capture log events without relying on slog output.
@@ -63,7 +106,7 @@ func defaultLogEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt
 	case bpfLogEventCodeLOG_FAIL_TO_COPY_EXEC_PATH:
 		logEvent(ctx, logger, evt, "failed to copy exec path", slog.LevelError)
 	case bpfLogEventCodeLOG_DROP_EXEC_EVENT:
-		logEvent(ctx, logger, evt, "dropped exec event", slog.LevelWarn)
+		dropExecLimiter.logEvent(ctx, logger, evt, "dropped exec event", slog.LevelWarn)
 	case bpfLogEventCodeLOG_PATH_LEN_TOO_LONG:
 		logEvent(ctx, logger, evt, "path length too long", slog.LevelWarn)
 	case bpfLogEventCodeLOG_POLICY_MODE_MISSING:
@@ -73,7 +116,7 @@ func defaultLogEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt
 	case bpfLogEventCodeLOG_DROP_VIOLATION:
 		// arg1 is the policy ID
 		// arg2 is the mode
-		logEvent(ctx, logger, evt, "dropped violation event", slog.LevelWarn,
+		dropViolationLimiter.logEvent(ctx, logger, evt, "dropped violation event", slog.LevelWarn,
 			"policy_id", evt.Arg1,
 			"mode", evt.Arg2)
 	case bpfLogEventCodeLOG_FAIL_TO_RESOLVE_CGROUP_ID:
