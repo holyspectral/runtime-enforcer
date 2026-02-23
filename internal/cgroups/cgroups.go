@@ -144,6 +144,74 @@ func parseCgroupv1SubSysIDs(logger *slog.Logger, filePath string) (uint32, error
 	return 0, fmt.Errorf("looped until index %v, no active controllers among: %v", idx, allcontrollersNames)
 }
 
+// findInterestingControllerV1 returns the name and the index of the most "interesting" controller
+// we find under /proc/cgroups. If we don't find any of them we return an error.
+// In cgroupv1, k8s containers could share the same cgroup under some controllers (e.g cpuset),
+// but usually there are controllers under which each container has its own cgroup (e.g memory, pids, cpu, ...),
+// these controllers are the ones we define as "interesting".
+func findInterestingControllerV1(path string) (string, uint32, error) {
+	//nolint:gosec // path is always set internally by us not by the user.
+	file, err := os.Open(path)
+	if err != nil {
+		return "", 0, fmt.Errorf("failed to open %s: %w", path, err)
+	}
+	defer file.Close()
+
+	// Expected format cgroupv1:
+	//
+	// #subsys_name	hierarchy	num_cgroups	enabled
+	// cpuset	       12	       192	       1
+	// cpu	           7	       610	       1
+	// cpuacct	       7	       610	       1
+	// blkio	       10	       610	       1
+	// memory	       13	       623	       1
+	// devices	       2	       610	       1
+	// freezer	       9	       193	       1
+	// net_cls	       6	       192	       1
+	// perf_event	   3	       192	       1
+	// net_prio	       6	       192	       1
+	// hugetlb	       5	       192	       1
+	// pids	       	   4	       613	       1
+	// rdma	           8	       192	       1
+	// misc	          11	       192	       1
+	//
+	// We can see it from the above numbers, the `num_cgroups` for controllers like `memory` and `pids` are really high.
+	// `memory` has an higher number becuse probably on the host there are other memory cgroups not related to k8s containers.
+
+	// ignore first entry with fields name.
+	fscanner := bufio.NewScanner(file)
+	fscanner.Scan()
+	var idx uint32
+	// we save the controller names in order
+	var allcontrollersNames []string
+	for fscanner.Scan() {
+		line := fscanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			return "", 0, fmt.Errorf("failed to parse cgroupv1 controllers: line has less than two fields: %s", line)
+		}
+		allcontrollersNames = append(allcontrollersNames, fields[0])
+		idx++
+		// in ebpf we don't go beyond CgroupSubsysCount so it is useless to parse more
+		if idx >= CgroupSubsysCount {
+			break
+		}
+	}
+
+	// as we said memory, pids and cpu are usually the controllers under which containers have their own cgroup.
+	// We want to find their indices in this order.
+	for _, reliableController := range []string{"memory", "pids", "cpu"} {
+		for i, name := range allcontrollersNames {
+			if name == reliableController {
+				// found the index for the most interesting controller
+				return reliableController, uint32(i), nil
+			}
+		}
+	}
+
+	return "", 0, fmt.Errorf("no interesting controllers among: %v", allcontrollersNames)
+}
+
 // Check and log Cgroupv2 active controllers.
 func checkCgroupv2Controllers(cgroupPath string) (string, error) {
 	file := filepath.Join(cgroupPath, "cgroup.controllers")
