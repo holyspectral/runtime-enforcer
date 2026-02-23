@@ -100,6 +100,18 @@ learning:
   # learning.enabled controls whether learning mode is enabled for the entire cluster.
   # When disabled, no process learning occurs. Process enforcer remains unaffected.
   enabled: true
+  # Label selector for namespaces to include in learning (empty = all).
+  # You can set either a string or a YAML/JSON object.
+  #
+  # String format:
+  #   namespaceSelector: ""         # learn from all namespaces
+  #   namespaceSelector: "env=prod" # namespaces with label env=prod
+  #
+  # YAML/JSON object format:
+  #   namespaceSelector:
+  #     matchLabels:
+  #       env: prod
+  namespaceSelector: ""
 
 telemetry:
   # runtime-enforcer telemetry configuration allow one OpenTelemetry

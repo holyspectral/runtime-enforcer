@@ -10,8 +10,12 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -62,18 +66,28 @@ func GetWorkloadPolicyProposalName(kind string, resourceName string) (string, er
 type LearningReconciler struct {
 	client.Client
 
-	Scheme    *runtime.Scheme
-	eventChan chan event.TypedGenericEvent[eventscraper.KubeProcessInfo]
-	tracer    trace.Tracer
+	Scheme            *runtime.Scheme
+	eventChan         chan event.TypedGenericEvent[eventscraper.KubeProcessInfo]
+	tracer            trace.Tracer
+	namespaceSelector labels.Selector
 	// OwnerRefEnricher can be overridden during testing
 	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
 }
 
-func NewLearningReconciler(client client.Client) *LearningReconciler {
+func NewLearningReconciler(
+	client client.Client,
+	selector labels.Selector,
+) *LearningReconciler {
 	return &LearningReconciler{
-		Client:    client,
-		eventChan: make(chan event.TypedGenericEvent[eventscraper.KubeProcessInfo], DefaultEventChannelBufferSize),
-		tracer:    otel.Tracer("runtime-enforcer-learner"),
+		Client: client,
+		eventChan: make(
+			chan event.TypedGenericEvent[eventscraper.KubeProcessInfo],
+			DefaultEventChannelBufferSize,
+		),
+		tracer: otel.Tracer(
+			"runtime-enforcer-learner",
+		),
+		namespaceSelector: selector,
 		OwnerRefEnricher: func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string) {
 			wp.OwnerReferences = []metav1.OwnerReference{
 				{
@@ -85,7 +99,8 @@ func NewLearningReconciler(client client.Client) *LearningReconciler {
 	}
 }
 
-// kubebuilder annotations for accessing policy proposals.
+// kubebuilder annotations for accessing policy proposals and namespaces.
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals,verbs=create;get;list;watch;update;patch
 
 // Reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
@@ -111,6 +126,25 @@ func (r *LearningReconciler) Reconcile(
 		)
 
 		return ctrl.Result{}, nil
+	}
+
+	if r.namespaceSelector != nil {
+		var ns corev1.Namespace
+		if err = r.Client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &ns); err != nil {
+			if apierrors.IsNotFound(err) {
+				log.V(3).Info( //nolint:mnd // 3 is the verbosity level for detailed debug info
+					"Namespace not found while evaluating learning namespace selector",
+					"namespace", req.Namespace,
+				)
+				return ctrl.Result{}, nil
+			}
+			return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", req.Namespace, err)
+		}
+		if !r.namespaceSelector.Matches(labels.Set(ns.GetLabels())) {
+			log.V(1).
+				Info("Namespace does not match learning namespace selector; skipping event", "namespace", req.Namespace)
+			return ctrl.Result{}, nil
+		}
 	}
 
 	proposalName, err = GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)

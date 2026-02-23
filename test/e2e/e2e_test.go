@@ -76,6 +76,7 @@ func TestLearning(t *testing.T) {
 	t.Log("test learning")
 
 	testEnv.Test(t, getLearningModeTest())
+	testEnv.Test(t, getLearningModeNamespaceSelectorTest())
 }
 
 func TestMonitoring(t *testing.T) {
