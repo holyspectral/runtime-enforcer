@@ -23,7 +23,7 @@ struct {
 } ringbuf_logs SEC(".maps");
 
 enum log_event_code {
-	LOG_MISSING_PROCESS_EVT_MAP = 1,
+	LOG_FAIL_TO_LOOKUP_EVT_MAP = 1,
 	LOG_MISSING_FILE_STRUCT = 2,
 	LOG_FAIL_TO_RESOLVE_PATH = 3,
 	LOG_EMPTY_PATH = 4,

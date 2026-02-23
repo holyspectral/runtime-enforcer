@@ -50,9 +50,9 @@ func logEvent(
 // defaultLogEventMsg is the default function used in production.
 func defaultLogEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt) {
 	switch evt.Code {
-	case bpfLogEventCodeLOG_MISSING_PROCESS_EVT_MAP:
+	case bpfLogEventCodeLOG_FAIL_TO_LOOKUP_EVT_MAP:
 		// arg1 is CPU
-		logEvent(ctx, logger, evt, "missing process evt per-cpu map", slog.LevelError,
+		logEvent(ctx, logger, evt, "failed to lookup process event in per-cpu map", slog.LevelError,
 			"cpu", evt.Arg1)
 	case bpfLogEventCodeLOG_MISSING_FILE_STRUCT:
 		logEvent(ctx, logger, evt, "executable with missing file struct", slog.LevelError)

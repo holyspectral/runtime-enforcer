@@ -413,7 +413,7 @@ static __always_inline struct process_evt *get_process_evt() {
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
 	if(!evt) {
-		emit_log_event_1(LOG_MISSING_PROCESS_EVT_MAP, (u32)(bpf_get_smp_processor_id()));
+		emit_log_event_1(LOG_FAIL_TO_LOOKUP_EVT_MAP, (u32)(bpf_get_smp_processor_id()));
 		return NULL;
 	}
 	return evt;
