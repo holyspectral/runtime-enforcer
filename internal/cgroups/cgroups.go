@@ -30,7 +30,7 @@ const (
 
 	// CgroupSubsysCount is the max cgroup subsystems count we find in x86 vmlinux kernels.
 	// See `enum cgroup_subsys_id` and value `CGROUP_SUBSYS_COUNT`.
-	CgroupSubsysCount = 15
+	CgroupSubsysCount = 14
 
 	// defaultProcFSPath is the default path to the proc filesystem.
 	defaultProcFSPath = "/proc"
