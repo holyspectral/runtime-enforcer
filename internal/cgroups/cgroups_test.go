@@ -1,9 +1,9 @@
-package cgroups_test
+//nolint:testpackage // we are testing unexported functions
+package cgroups
 
 import (
 	"testing"
 
-	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +22,7 @@ func TestParseCgroupsPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := cgroups.ParseCgroupsPath(tt.in)
+			out, err := ParseCgroupsPath(tt.in)
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, out)
 		})
@@ -45,7 +45,7 @@ func TestSystemdExpandSlice(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			out, err := cgroups.SystemdExpandSlice(tt.in)
+			out, err := SystemdExpandSlice(tt.in)
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, out)
 		})
