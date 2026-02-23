@@ -122,7 +122,7 @@ static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf)
 	int off = MAX_PATH_LEN * 2;
 	struct dentry *dentry = NULL;
 	if(bpf_core_read(&dentry, sizeof(dentry), &path->dentry) != 0) {
-		return -1;
+		return 0;
 	}
 
 	if(d_unlinked(dentry)) {
@@ -193,6 +193,6 @@ static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf)
 		return data.curr_off;
 	}
 
-	// Otherwise we return -1
-	return -1;
+	// Otherwise we return 0
+	return 0;
 }
