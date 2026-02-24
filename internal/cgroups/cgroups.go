@@ -293,8 +293,6 @@ func SystemdExpandSlice(slice string) (string, error) {
 //
 // Example output:
 // /kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/kubelet-kubepods-besteffort-pod83b090de_9676_407c_99aa_d33dc6aa0c0d.slice/cri-containerd-18b2adc8507104e412c946bec11679590801f547eee513fa298054f14fbf4240.scope
-//
-// todo!: the resolver should start with the resolution of itself, to check if the cgroup path is valid.
 func ParseCgroupsPath(cgroupPath string) (string, error) {
 	if strings.Contains(cgroupPath, "/") {
 		return cgroupPath, nil
