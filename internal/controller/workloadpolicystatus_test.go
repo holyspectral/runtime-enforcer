@@ -122,7 +122,7 @@ func TestComputeWpStatus(t *testing.T) {
 			},
 			expected: v1alpha1.WorkloadPolicyStatus{
 				NodesWithIssues: map[string]v1alpha1.NodeIssue{
-					node1: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueMissingPolicy},
+					node1: {Code: v1alpha1.NodeIssueMissingPolicy},
 				},
 				TotalNodes:         3,
 				SuccessfulNodes:    1,
