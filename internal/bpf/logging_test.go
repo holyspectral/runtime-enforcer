@@ -133,6 +133,6 @@ func TestLogMissingPolicyMode(t *testing.T) {
 		msgLogKey:             policyModeMissingMessage,
 		cgroupIDLogKey:        strconv.FormatUint(runner.cgInfo.id, 10),
 		policyIDLogKey:        strconv.FormatUint(mockPolicyID, 10),
-		cgroupTrackerIDLogKey: strconv.Itoa(0),
+		cgroupTrackerIDLogKey: strconv.Itoa(int(runner.cgInfo.id)),
 	})
 }
