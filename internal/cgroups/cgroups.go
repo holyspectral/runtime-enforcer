@@ -13,28 +13,41 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
 
-	"go.uber.org/multierr"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	// CgroupUnsetValue is a generic unset value that means unset group magic.
-	// Returned in case of errors. Values could be:
-	//   - CgroupUnsetValue: unset
-	//   - unix.CGROUP_SUPER_MAGIC: cgroupv1
-	//   - unix.CGROUP2_SUPER_MAGIC: cgroupv2
-	CgroupUnsetValue = 0
-
 	// CgroupSubsysCount is the max cgroup subsystems count we find in x86 vmlinux kernels.
 	// See `enum cgroup_subsys_id` and value `CGROUP_SUBSYS_COUNT`.
 	CgroupSubsysCount = 14
 
 	// defaultProcFSPath is the default path to the proc filesystem.
 	defaultProcFSPath = "/proc"
+
+	// defaultCgroupMountPoint is the default path to the cgroupv2 root.
+	defaultCgroupMountPoint = defaultProcFSPath + "/1/root/sys/fs/cgroup"
+
+	// procCgroupPath is the path to the cgroup file under the proc filesystem.
+	procCgroupPath = defaultProcFSPath + "/cgroups"
 )
+
+var (
+	cgroupResolutionPrefix string //nolint:gochecknoglobals // we want it global for a global function.
+)
+
+// GetCgroupResolutionPrefix returns the prefix used for cgroupID resolution.
+// For cgroupv2 it is the cgroup mount point path. (e.g. /sys/fs/cgroup)
+// For cgroupv1 it is the cgroup mount point path + the controller chosen at runtime. (e.g. /sys/fs/cgroup/memory).
+// This is set once during cgroup detection (see setCgroupResolutionPrefix).
+func GetCgroupResolutionPrefix() string {
+	return cgroupResolutionPrefix
+}
+
+// setCgroupResolutionPrefix sets the prefix used for cgroupID resolution.
+func setCgroupResolutionPrefix(path string) {
+	cgroupResolutionPrefix = path
+}
 
 type FileHandle struct {
 	ID uint64
@@ -58,7 +71,6 @@ func GetCgroupIDFromPath(cgroupPath string) (uint64, error) {
 }
 
 type CgroupInfo struct {
-	cgroupRoot  string
 	fsMagic     uint64
 	subsysV1Idx uint32
 }
@@ -80,68 +92,6 @@ func CgroupFsMagicString(fsMagic uint64) string {
 	default:
 		panic("unknown cgroup fs magic")
 	}
-}
-
-// checkInterestingController returns true if the controller name matches one of the target controllers.
-func checkInterestingController(name string) bool {
-	// They are usually the ones that are set up by systemd or other init
-	// programs. We will use one of them in ebpf to get cgroup information.
-	for _, controllerName := range []string{
-		"memory",
-		"pids",
-		"cpuset",
-	} {
-		if name == controllerName {
-			return true
-		}
-	}
-	return false
-}
-
-// parseCgroupv1SubSysIDs() parse cgroupv1 controllers and save their css indexes.
-// If the 'memory', 'pids' or 'cpuset' are not detected we fail, as we use them
-// from BPF side to gather cgroup information and we need them to be
-// exported by the kernel since their corresponding index allows us to
-// fetch the cgroup from the corresponding cgroup subsystem state.
-func parseCgroupv1SubSysIDs(logger *slog.Logger, filePath string) (uint32, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	fscanner := bufio.NewScanner(file)
-	// Expected format:
-	// #subsys_name    hierarchy   num_cgroups   enabled
-	// memory          6           42            1
-	// cpuset          2           5             1
-	// pids            9           17            0
-
-	fscanner.Scan() // ignore first entry
-	var idx uint32
-	// we save the controller names in case of controller not found
-	var allcontrollersNames []string
-
-	for fscanner.Scan() {
-		line := fscanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) != 0 {
-			allcontrollersNames = append(allcontrollersNames, fields[0])
-			if checkInterestingController(fields[0]) {
-				// this is the active controller we are looking for
-				return idx, nil
-			}
-		} else {
-			// We expect at least two fields for each controller line
-			logger.Warn("Cgroupv1 controller line has less than two fields", "line", line)
-		}
-		idx++
-		// in ebpf we don't go beyond CgroupSubsysCount so it is useless to parse more
-		if idx >= CgroupSubsysCount {
-			break
-		}
-	}
-	return 0, fmt.Errorf("looped until index %v, no active controllers among: %v", idx, allcontrollersNames)
 }
 
 // findInterestingControllerV1 returns the name and the index of the most "interesting" controller
@@ -200,11 +150,11 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 
 	// as we said memory, pids and cpu are usually the controllers under which containers have their own cgroup.
 	// We want to find their indices in this order.
-	for _, reliableController := range []string{"memory", "pids", "cpu"} {
+	for _, interestingController := range []string{"memory", "pids", "cpu"} {
 		for i, name := range allcontrollersNames {
-			if name == reliableController {
+			if name == interestingController {
 				// found the index for the most interesting controller
-				return reliableController, uint32(i), nil
+				return interestingController, uint32(i), nil
 			}
 		}
 	}
@@ -212,159 +162,79 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 	return "", 0, fmt.Errorf("no interesting controllers among: %v", allcontrollersNames)
 }
 
-// Check and log Cgroupv2 active controllers.
-func checkCgroupv2Controllers(cgroupPath string) (string, error) {
-	file := filepath.Join(cgroupPath, "cgroup.controllers")
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return "", fmt.Errorf("failed to read %s: %w", file, err)
-	}
-
-	activeControllers := strings.TrimRight(string(data), "\n")
-	if len(activeControllers) == 0 {
-		return "", fmt.Errorf("no active controllers from '%s'", file)
-	}
-	return activeControllers, nil
-}
-
-func tryHostCgroup(path string) error {
+// getMountPointType returns error if the provided path is not a mount point. If it is a mount point, it returns the filesystem type.
+func getMountPointType(path string) (int64, error) {
 	var st, pst unix.Stat_t
 	if err := unix.Lstat(path, &st); err != nil {
-		return fmt.Errorf("cannot determine cgroup root: error acessing path '%s': %w", path, err)
+		return 0, fmt.Errorf("error acessing path '%s': %w", path, err)
 	}
 
 	parent := filepath.Dir(path)
 	if err := unix.Lstat(parent, &pst); err != nil {
-		return fmt.Errorf("cannot determine cgroup root: error acessing parent path '%s': %w", parent, err)
+		return 0, fmt.Errorf("error acessing parent path '%s': %w", parent, err)
 	}
 
+	// path should be a mount point if it is a cgroup root so the dev ID must differ from the parent.
 	if st.Dev == pst.Dev {
-		return fmt.Errorf("cannot determine cgroup root: '%s' does not appear to be a mount point", path)
+		return 0, fmt.Errorf("'%s' does not appear to be a mount point", path)
 	}
 
 	fst := unix.Statfs_t{}
 	if err := unix.Statfs(path, &fst); err != nil {
-		return fmt.Errorf("cannot determine cgroup root: failed to get info for '%s'", path)
+		return 0, fmt.Errorf("failed to get fs info for '%s'", path)
 	}
-
-	switch fst.Type {
-	case unix.CGROUP2_SUPER_MAGIC, unix.CGROUP_SUPER_MAGIC, unix.TMPFS_MAGIC:
-		return nil
-	default:
-		return fmt.Errorf("cannot determine cgroup root: path '%s' is not a cgroup fs", path)
-	}
-}
-
-func detectCgroupFSMagic(cgroupRoot string) (uint64, error) {
-	var st syscall.Statfs_t
-
-	if err := syscall.Statfs(cgroupRoot, &st); err != nil {
-		return CgroupUnsetValue, err
-	}
-
-	switch st.Type {
-	case unix.CGROUP2_SUPER_MAGIC:
-		return unix.CGROUP2_SUPER_MAGIC, nil
-	case unix.TMPFS_MAGIC:
-		err := syscall.Statfs(filepath.Join(cgroupRoot, "unified"), &st)
-		if err == nil && st.Type == unix.CGROUP2_SUPER_MAGIC {
-			// Hybrid mode
-			return unix.CGROUP_SUPER_MAGIC, nil
-		}
-		// Legacy mode
-		return unix.CGROUP_SUPER_MAGIC, nil
-	default:
-		return CgroupUnsetValue, fmt.Errorf("wrong type '%d' for cgroupfs '%s'", st.Type, cgroupRoot)
-	}
-}
-
-var (
-	cgroupRootCheckOnce sync.Once //nolint:gochecknoglobals // we want it global for a global function.
-	cgroupRootPath      string    //nolint:gochecknoglobals // we want it global for a global function.
-	errCgroupRootPath   error
-)
-
-// GetHostCgroupRoot tries to retrieve the host cgroup root
-//
-// for now we are checking /sys/fs/cgroup under host /proc's init.
-// For systems where the cgroup is mounted in a non-standard location, we could
-// also check host's /proc/mounts.
-func GetHostCgroupRoot() (string, error) {
-	cgroupRootCheckOnce.Do(func() {
-		cgroupRootPath, errCgroupRootPath = getHostCgroupRoot()
-	})
-	return cgroupRootPath, errCgroupRootPath
-}
-
-func getHostCgroupRoot() (string, error) {
-	var multiErr error
-
-	// We first try /proc/1/root/sys/fs/cgroup/
-	path1 := filepath.Join(defaultProcFSPath, "1/root/sys/fs/cgroup")
-	err := tryHostCgroup(path1)
-	if err == nil {
-		return path1, nil
-	}
-	multiErr = multierr.Append(multiErr, fmt.Errorf("failed to set path %s as cgroup root: %w", path1, err))
-
-	// We now try some known controller name /proc/1/root/sys/fs/cgroup/<controller>
-	for _, ctrl := range []string{
-		"memory",
-		"pids",
-		"cpuset",
-	} {
-		path := filepath.Join(path1, ctrl)
-		err = tryHostCgroup(path)
-		if err == nil {
-			return path, nil
-		}
-		multiErr = multierr.Append(multiErr, fmt.Errorf("failed to set path %s as cgroup root: %w", path, err))
-	}
-
-	return "", multiErr
+	return fst.Type, nil
 }
 
 // GetCgroupInfo retrieves cgroup information such as cgroup root, fs magic and subsys index.
 func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
-	// We first need to find the host cgroup root. We still don't know if it is v1 or v2.
-	cgroupRoot, err := GetHostCgroupRoot()
+	// Today we don't let the user to specify a custom mount point, we just use the default one.
+	// Both in cgroupv1 and cgroupv2 we should have a mount point in `defaultCgroupMountPoint`.
+	// What changes is the type of the filesystem.
+	fsType, err := getMountPointType(defaultCgroupMountPoint)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get host cgroup root: %w", err)
+		return nil, fmt.Errorf("cannot get mount point type for '%s': %w", defaultCgroupMountPoint, err)
 	}
 
-	// Understand cgroupfs magic
-	cgroupFsMagic, err := detectCgroupFSMagic(cgroupRoot)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get cgroupfs magic: %w", err)
-	}
-
-	var subsysV1Idx uint32
-	switch cgroupFsMagic {
-	case unix.CGROUP_SUPER_MAGIC:
-		// If we use Cgroupv1, we need the subsys idx for ebpf.
-		subsysV1Idx, err = parseCgroupv1SubSysIDs(logger, filepath.Join(defaultProcFSPath, "cgroups"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse cgroupv1 subsys ids: %w", err)
+	defer func() {
+		// on return we log the resolution prefix
+		if err == nil {
+			logger.Info("cgroup resolution prefix detected", "path", GetCgroupResolutionPrefix())
 		}
+	}()
+
+	switch fsType {
+	// for cgroupv2 the fs type is CGROUP2_SUPER_MAGIC
 	case unix.CGROUP2_SUPER_MAGIC:
-		// If we use Cgroupv2, we just want to log the active controllers.
-		path := filepath.Clean(fmt.Sprintf("%s/1/root/%s", defaultProcFSPath, cgroupRoot))
-		var controllers string
-		controllers, err = checkCgroupv2Controllers(path)
+		setCgroupResolutionPrefix(defaultCgroupMountPoint)
+		return &CgroupInfo{
+			fsMagic:     unix.CGROUP2_SUPER_MAGIC,
+			subsysV1Idx: 0, // we are in v2 we don't need the index ebpf side.
+		}, nil
+	// for cgroupv1 or hybrid setup the fs type is TMPFS_MAGIC
+	case unix.TMPFS_MAGIC:
+		// If we use Cgroupv1, we need the subsys idx for ebpf.
+		var controllerName string
+		var idx uint32
+		controllerName, idx, err = findInterestingControllerV1(procCgroupPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check cgroupv2 controllers: %w", err)
+			return nil, fmt.Errorf("cannot find interesting controller: %w", err)
 		}
-		logger.Info("Cgroupv2 supported controllers detected successfully",
-			"cgroup.controllers", strings.Fields(controllers))
+		controllerPath := filepath.Join(defaultCgroupMountPoint, controllerName)
+		// we should have a mount point under this controller
+		_, err = getMountPointType(controllerPath)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get mount point type for '%s': %w", controllerPath, err)
+		}
+		setCgroupResolutionPrefix(controllerPath)
+		return &CgroupInfo{
+			fsMagic:     unix.CGROUP_SUPER_MAGIC,
+			subsysV1Idx: idx,
+		}, nil
 	default:
-		panic("unknown cgroup filesystem magic")
+		// we don't support other fs types
+		return nil, fmt.Errorf("unsupported cgroup filesystem type: %d", fsType)
 	}
-
-	return &CgroupInfo{
-		cgroupRoot:  cgroupRoot,
-		fsMagic:     cgroupFsMagic,
-		subsysV1Idx: subsysV1Idx,
-	}, nil
 }
 
 // SystemdExpandSlice expands a systemd slice name into its full path.
