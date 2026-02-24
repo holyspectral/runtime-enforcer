@@ -2,9 +2,10 @@
 package bpf
 
 import (
-	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
-	"strings"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -14,32 +15,54 @@ import (
 )
 
 type memoryWriter struct {
-	mu   sync.Mutex
-	logs []string
+	mu       sync.Mutex
+	jsonLogs []map[string]any
 }
 
 func (w *memoryWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.logs = append(w.logs, string(p))
+	var data map[string]any
+	if err := json.Unmarshal(p, &data); err != nil {
+		return 0, err
+	}
+	w.jsonLogs = append(w.jsonLogs, data)
 	return len(p), nil
 }
 
-func (w *memoryWriter) Contains(s string) bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, log := range w.logs {
-		if strings.Contains(log, s) {
+// hasLogWithFields returns true if at least one of the log lines contains all the provided key-value pairs (fields is not empty).
+func (w *memoryWriter) hasLogWithFields(fields map[string]string) bool {
+	for _, logLine := range w.jsonLogs {
+		foundAll := true
+		for k, v := range fields {
+			val, ok := logLine[k]
+			if !ok || fmt.Sprintf("%v", val) != v {
+				foundAll = false
+				break
+			}
+		}
+		if foundAll {
 			return true
 		}
 	}
 	return false
 }
 
-func (w *memoryWriter) Dump() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return append([]string(nil), w.logs...)
+// assertHasLogWithFields fails the test if no log line contains all the provided key-value pairs.
+func (w *memoryWriter) assertHasLogWithFields(t *testing.T, fields map[string]string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if !w.hasLogWithFields(fields) {
+			t.Logf("No log found with the required fields: %v\nAll logs:\n", fields)
+			for i, logLine := range w.jsonLogs {
+				t.Logf("Log #%d: %v", i, logLine)
+			}
+			return false
+		}
+		return true
+	}, 2*time.Second, 500*time.Millisecond, "wait for log with fields to appear")
 }
 
 func TestLogRateLimiter(t *testing.T) {
@@ -65,30 +88,25 @@ func TestLogRateLimiter(t *testing.T) {
 	// When we are sure we have a new token, we log another event and we check for the suppression log
 	rateLimiter.logEvent(t.Context(), logger, &bpfLogEvt{}, exampleMsg, slog.LevelInfo)
 
-	t.Log("Dump logs for debugging:\n")
-	for _, log := range memoryWriter.Dump() {
-		t.Logf("log: %v", log)
-	}
-	require.True(t, memoryWriter.Contains(exampleMsg))
-	require.True(t, memoryWriter.Contains(suppressionMsg))
+	// we expect to see both the original and suppression messages
+	memoryWriter.assertHasLogWithFields(t, map[string]string{
+		msgLogKey: exampleMsg,
+	})
+	memoryWriter.assertHasLogWithFields(t, map[string]string{
+		msgLogKey:            suppressionMsg,
+		suppressedLogTypeKey: exampleMsg,
+	})
 }
 
 func TestLogMissingPolicyMode(t *testing.T) {
-	var m sync.RWMutex
-	var foundEvent bpfLogEvt
-	logTestFunc := func(_ context.Context, logger *slog.Logger, e *bpfLogEvt) {
-		logger.Info("log event received", "evt", e, "comm", getComm(e))
-		m.Lock()
-		foundEvent = *e
-		m.Unlock()
-	}
+	memoryWriter := &memoryWriter{}
+	logger := slog.New(slog.NewJSONHandler(memoryWriter, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	})).With("component", "logging_test")
 
-	runner, err := newCgroupRunner(t)
+	runner, err := newCgroupRunnerWithLogger(t, logger)
 	require.NoError(t, err, "Failed to create cgroup runner")
 	defer runner.close()
-
-	// replace the manager log handler with the test function
-	runner.manager.logHandler = logTestFunc
 
 	mockPolicyID := uint64(42)
 
@@ -110,23 +128,11 @@ func TestLogMissingPolicyMode(t *testing.T) {
 		shouldFindEvent: false,
 	}))
 
-	require.Eventually(t, func() bool {
-		m.RLock()
-		defer m.RUnlock()
-		return foundEvent.Code == bpfLogEventCodeLOG_POLICY_MODE_MISSING
-	}, 3*time.Second, 100*time.Millisecond, "log event is not generated")
-
-	m.RLock()
-	defer m.RUnlock()
-	// we want our policy as argument
-	require.Equal(t, mockPolicyID, foundEvent.Arg1)
-	require.Equal(t, uint64(0), foundEvent.Arg2)
-	require.Equal(t, runner.cgInfo.id, foundEvent.Cgid)
-	// we don't set it in this test
-	require.Equal(t, uint64(0), foundEvent.CgTrackerId)
-
-	require.NotEmpty(t, getComm(&foundEvent))
-	require.NotEqual(t, 0, foundEvent.Pid)
-	require.NotEqual(t, 0, foundEvent.Tgid)
-
+	// we expect our policy missing log
+	memoryWriter.assertHasLogWithFields(t, map[string]string{
+		msgLogKey:             policyModeMissingMessage,
+		cgroupIDLogKey:        strconv.FormatUint(runner.cgInfo.id, 10),
+		policyIDLogKey:        strconv.FormatUint(mockPolicyID, 10),
+		cgroupTrackerIDLogKey: strconv.Itoa(0),
+	})
 }

@@ -197,9 +197,9 @@ func (r *cgroupRunner) close() {
 	r.managerCleanup()
 }
 
-func newCgroupRunner(t *testing.T) (*cgroupRunner, error) {
+func newCgroupRunnerWithLogger(t *testing.T, logger *slog.Logger) (*cgroupRunner, error) {
 	// Start the manager and wait for it to be ready
-	manager, cleanup, err := startManager(t.Context(), newTestLogger(t))
+	manager, cleanup, err := startManager(t.Context(), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -221,4 +221,8 @@ func newCgroupRunner(t *testing.T) (*cgroupRunner, error) {
 		managerCleanup: cleanup,
 		cgInfo:         cgInfo,
 	}, nil
+}
+
+func newCgroupRunner(t *testing.T) (*cgroupRunner, error) {
+	return newCgroupRunnerWithLogger(t, newTestLogger(t))
 }

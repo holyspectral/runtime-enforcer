@@ -56,10 +56,6 @@ type Manager struct {
 	policyStringMaps []*ebpf.Map
 	isShuttingDown   atomic.Bool
 
-	// logHandler is the function called for each BPF log event.
-	// Defaults to defaultLogEventMsg.
-	logHandler logEventHandler
-
 	// Learning
 	enableLearning    bool
 	learningEventChan chan ProcessEvent
@@ -198,7 +194,6 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 	return &Manager{
 		logger:              newLogger,
 		objs:                objs,
-		logHandler:          defaultLogEventMsg,
 		enableLearning:      enableLearning,
 		learningEventChan:   make(chan ProcessEvent, learningEventChanSize),
 		monitoringEventChan: make(chan ProcessEvent, monitorEventChanSize),

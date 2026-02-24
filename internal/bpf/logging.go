@@ -14,14 +14,29 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const (
+	// used in unit tests.
+	suppressionMsg           = "logs suppressed by rate limiting"
+	policyModeMissingMessage = "policy mode missing"
+
+	// Log keys.
+	msgLogKey             = "msg"
+	cpuLogKey             = "cpu"
+	tidLogKey             = "tid"
+	pidLogKey             = "pid"
+	cgroupIDLogKey        = "cgroup_id"
+	cgroupTrackerIDLogKey = "cgroup_tracker_id"
+	commLogKey            = "comm"
+	policyIDLogKey        = "policy_id"
+	modeLogKey            = "mode"
+	suppressedCountLogKey = "count"
+	suppressedLogTypeKey  = "log_type"
+)
+
 type logRateLimiter struct {
 	limiter    *rate.Limiter
 	suppressed int64
 }
-
-const (
-	suppressionMsg = "logs suppressed by rate limiting"
-)
 
 var (
 	//nolint:gochecknoglobals // Rate limiter for exec events 1 token per second, burst of 1
@@ -47,17 +62,13 @@ func (l *logRateLimiter) logEvent(ctx context.Context,
 
 	if l.suppressed > 0 {
 		logger.Log(ctx, level, suppressionMsg,
-			"count", l.suppressed,
-			"msg", msg,
+			suppressedCountLogKey, l.suppressed,
+			suppressedLogTypeKey, msg,
 		)
 		l.suppressed = 0
 	}
 	logEvent(ctx, logger, evt, msg, level, additionalArgs...)
 }
-
-// logEventHandler is a callback invoked for each BPF log event.
-// It can be replaced in tests to capture log events without relying on slog output.
-type logEventHandler func(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt)
 
 func getComm(evt *bpfLogEvt) string {
 	// Reinterpret the []int8 (C char array) as []byte without copying,
@@ -80,23 +91,22 @@ func logEvent(
 	additionalArgs ...any,
 ) {
 	attrs := []any{
-		"tid", evt.Pid,
-		"pid", evt.Tgid,
-		"comm", getComm(evt),
-		"cgroup", evt.Cgid,
-		"cgroup_tracker_id", evt.CgTrackerId,
+		tidLogKey, evt.Pid,
+		pidLogKey, evt.Tgid,
+		commLogKey, getComm(evt),
+		cgroupIDLogKey, evt.Cgid,
+		cgroupTrackerIDLogKey, evt.CgTrackerId,
 	}
 	attrs = append(attrs, additionalArgs...)
 	logger.Log(ctx, level, msg, attrs...)
 }
 
-// defaultLogEventMsg is the default function used in production.
-func defaultLogEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt) {
+func logEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt) {
 	switch evt.Code {
 	case bpfLogEventCodeLOG_FAIL_TO_LOOKUP_EVT_MAP:
 		// arg1 is CPU
 		logEvent(ctx, logger, evt, "failed to lookup process event in per-cpu map", slog.LevelError,
-			"cpu", evt.Arg1)
+			cpuLogKey, evt.Arg1)
 	case bpfLogEventCodeLOG_MISSING_FILE_STRUCT:
 		logEvent(ctx, logger, evt, "executable with missing file struct", slog.LevelError)
 	case bpfLogEventCodeLOG_FAIL_TO_RESOLVE_PATH:
@@ -112,13 +122,13 @@ func defaultLogEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt
 	case bpfLogEventCodeLOG_POLICY_MODE_MISSING:
 		// arg1 is the policy ID
 		logEvent(ctx, logger, evt, "policy mode missing", slog.LevelWarn,
-			"policy_id", evt.Arg1)
+			policyIDLogKey, evt.Arg1)
 	case bpfLogEventCodeLOG_DROP_VIOLATION:
 		// arg1 is the policy ID
 		// arg2 is the mode
 		dropViolationLimiter.logEvent(ctx, logger, evt, "dropped violation event", slog.LevelWarn,
-			"policy_id", evt.Arg1,
-			"mode", evt.Arg2)
+			policyIDLogKey, evt.Arg1,
+			modeLogKey, evt.Arg2)
 	case bpfLogEventCodeLOG_FAIL_TO_RESOLVE_CGROUP_ID:
 		logEvent(ctx, logger, evt, "failed to resolve cgroup id", slog.LevelWarn)
 	case bpfLogEventCodeLOG_FAIL_TO_RESOLVE_PARENT_CGROUP_ID:
@@ -159,6 +169,6 @@ func (m *Manager) loggerStart(ctx context.Context) error {
 			m.logger.ErrorContext(ctx, "parsing ringbuf event", "error", err)
 			continue
 		}
-		m.logHandler(ctx, m.logger, &evt)
+		logEventMsg(ctx, m.logger, &evt)
 	}
 }
