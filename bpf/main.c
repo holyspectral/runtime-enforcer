@@ -391,7 +391,7 @@ static __always_inline u32 populate_evt_with_path(struct process_evt *evt,
 	struct file *file = bprm->file;
 	if(file == NULL) {
 		emit_log_event(LOG_MISSING_FILE_STRUCT);
-		return -1;
+		return 0;
 	}
 	struct path *path_arg = &file->f_path;
 	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
