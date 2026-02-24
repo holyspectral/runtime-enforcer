@@ -135,6 +135,8 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 		return nil, fmt.Errorf("failed to remove memlock: %w", err)
 	}
 
+	logger.Info("Detected kernel version", "version", kernels.GetCurrKernelVersionStr())
+
 	logger.Info("Probing eBPF features...")
 	if err := probeEbpfFeatures(); err != nil {
 		return nil, fmt.Errorf("failure during eBPF feature probing: %w", err)

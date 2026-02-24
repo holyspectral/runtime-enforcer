@@ -14,27 +14,25 @@ import (
 var (
 	//nolint:gochecknoglobals // it makes sense to have a global variable for current kernel version
 	currKernelVersion int
+	//nolint:gochecknoglobals // it makes sense to have a global variable for current kernel version string
+	currKernelVersionStr string
 )
 
 //nolint:gochecknoinits // we need to initialize currKernelVersion at init time
 func init() {
 	// at init time, determine the current kernel version
-	var err error
-	currKernelVersion, err = getKernelVersionFromSystem()
-	if err != nil {
-		panic("unable to determine kernel version from system: " + err.Error())
-	}
-}
-
-func getKernelVersionFromSystem() (int, error) {
 	var uname unix.Utsname
 	if err := unix.Uname(&uname); err != nil {
-		return 0, err
+		panic("unable to determine kernel version from uname: " + err.Error())
 	}
-	release := strings.TrimSuffix(
-		strings.Split(unix.ByteSliceToString(uname.Release[:]), "-")[0],
-		"+")
-	return int(KernelStringToNumeric(release)), nil
+	currKernelVersionStr = unix.ByteSliceToString(uname.Release[:])
+	// we need to strip the trailing "+" from the kernel version string
+	// 6.14.0-37-generic -> 6.14.0
+	currKernelVersion = int(KernelStringToNumeric(strings.TrimSuffix(strings.Split(currKernelVersionStr, "-")[0], "+")))
+}
+
+func GetCurrKernelVersionStr() string {
+	return currKernelVersionStr
 }
 
 func GetCurrKernelVersion() int {
