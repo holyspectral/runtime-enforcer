@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-O2 -g" -target native -tags linux -type process_evt bpf ../../bpf/main.c -- -I/usr/include/
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cflags "-O2 -g" -target native -tags linux -type process_evt -type log_event_code -type log_evt bpf ../../bpf/main.c -- -I/usr/include/
 
 const (
 	loadTimeConfigBPFVar = "load_time_config"
@@ -135,6 +135,8 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 		return nil, fmt.Errorf("failed to remove memlock: %w", err)
 	}
 
+	logger.Info("Detected kernel version", "version", kernels.GetCurrKernelVersionStr())
+
 	logger.Info("Probing eBPF features...")
 	if err := probeEbpfFeatures(); err != nil {
 		return nil, fmt.Errorf("failure during eBPF feature probing: %w", err)
@@ -242,6 +244,11 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.logger.InfoContext(ctx, "Starting BPF Manager...")
 	g, ctx := errgroup.WithContext(ctx)
+
+	// Logging
+	g.Go(func() error {
+		return m.loggerStart(ctx)
+	})
 
 	// Cgroup Tracker
 	g.Go(func() error {

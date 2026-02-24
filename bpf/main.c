@@ -242,6 +242,43 @@ static __always_inline __u64 get_tracker_id_from_curr_task() {
 }
 
 /////////////////////////
+// Log helpers
+/////////////////////////
+
+static __always_inline void emit_log_event_args(log_code code, u64 arg1, u64 arg2) {
+	struct log_evt *evt = bpf_ringbuf_reserve(&ringbuf_logs, sizeof(struct log_evt), 0);
+	if(!evt) {
+		bpf_printk("Failed to reserve space for log event in ring buffer\n");
+		return;
+	}
+	evt->code = code;
+	if(bpf_get_current_comm(evt->comm, TASK_COMM_LEN)) {
+		// we don't fail we just print the error
+		bpf_printk("Failed to get comm for log event\n");
+	}
+	evt->cgid = tg_get_current_cgroup_id();
+	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
+	u64 pid_tgid = bpf_get_current_pid_tgid();
+	evt->pid = pid_tgid & 0xFFFFFFFF;
+	evt->tgid = pid_tgid >> 32;
+	evt->arg1 = arg1;
+	evt->arg2 = arg2;
+	bpf_ringbuf_submit(evt, 0);
+}
+
+static __always_inline void emit_log_event(log_code code) {
+	emit_log_event_args(code, 0, 0);
+}
+
+static __always_inline void emit_log_event_1(log_code code, u64 arg1) {
+	emit_log_event_args(code, arg1, 0);
+}
+
+static __always_inline void emit_log_event_2(log_code code, u64 arg1, u64 arg2) {
+	emit_log_event_args(code, arg1, arg2);
+}
+
+/////////////////////////
 // Nested cgroup tracker
 /////////////////////////
 
@@ -281,10 +318,12 @@ int tg_cgtracker_cgroup_mkdir(struct bpf_raw_tracepoint_args *ctx) {
 	struct cgroup *cgrp = (struct cgroup *)ctx->args[0];
 	__u64 cgid = get_cgroup_id(cgrp);
 	if(cgid == 0) {
+		emit_log_event(LOG_FAIL_TO_RESOLVE_CGROUP_ID);
 		return 0;
 	}
 	__u64 cgid_parent = cgroup_get_parent_id(cgrp);
 	if(cgid_parent == 0) {
+		emit_log_event(LOG_FAIL_TO_RESOLVE_PARENT_CGROUP_ID);
 		return 0;
 	}
 
@@ -301,18 +340,17 @@ SEC("tp_btf/cgroup_release")
 int tg_cgtracker_cgroup_release(struct bpf_raw_tracepoint_args *ctx) {
 	struct cgroup *cgrp = (struct cgroup *)ctx->args[0];
 	__u64 cgid = get_cgroup_id(cgrp);
-	if(cgid) {
-		bpf_map_delete_elem(&cgtracker_map, &cgid);
+	if(cgid == 0) {
+		emit_log_event(LOG_FAIL_TO_RESOLVE_CGROUP_ID);
+		return 0;
 	}
+	bpf_map_delete_elem(&cgtracker_map, &cgid);
 	return 0;
 }
 
 /////////////////////////
 // Execve events
 /////////////////////////
-
-// A single buffer shared between all CPUs
-#define BUF_DIM (16 * 1024 * 1024)
 
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -346,16 +384,45 @@ struct {
 } process_evt_storage_map SEC(".maps");
 
 // Force emitting struct event into the ELF.
-const struct process_evt *unused __attribute__((unused));
+const struct process_evt *unused_process_evt __attribute__((unused));
 
-SEC("tp_btf/sched_process_exec")
-int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
+static __always_inline u32 populate_evt_with_path(struct process_evt *evt,
+                                                  struct linux_binprm *bprm) {
+	struct file *file = bprm->file;
+	if(file == NULL) {
+		emit_log_event(LOG_MISSING_FILE_STRUCT);
+		return 0;
+	}
+	struct path *path_arg = &file->f_path;
+	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
+	if(current_offset == 0) {
+		emit_log_event(LOG_FAIL_TO_RESOLVE_PATH);
+		return 0;
+	}
+	if(current_offset == MAX_PATH_LEN * 2) {
+		emit_log_event(LOG_EMPTY_PATH);
+		return 0;
+	}
+	// path_len doesn't contain the string terminator `\0`, the userspace doesn't need it.
+	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
+	return current_offset;
+}
+
+static __always_inline struct process_evt *get_process_evt() {
 	int zero = 0;
 	struct process_evt *evt =
 	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
 	if(!evt) {
-		bpf_printk("cannot get process_evt from storage map");
-		// todo!: implement error handling with a dedicated buffer
+		emit_log_event_1(LOG_FAIL_TO_LOOKUP_EVT_MAP, (u32)(bpf_get_smp_processor_id()));
+		return NULL;
+	}
+	return evt;
+}
+
+SEC("tp_btf/sched_process_exec")
+int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_binprm *bprm) {
+	struct process_evt *evt = get_process_evt();
+	if(!evt) {
 		return 0;
 	}
 
@@ -363,22 +430,10 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
 	evt->mode = 0;  // default it to 0 for now
 
-	struct file *file = bprm->file;
-	if(file == NULL) {
+	u32 current_offset = populate_evt_with_path(evt, bprm);
+	if(current_offset == 0) {
 		return 0;
 	}
-	struct path *path_arg = &file->f_path;
-	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
-	if(current_offset <= 0) {
-		bpf_printk("Failed to resolve path for execve");
-		return 0;
-	}
-	if(current_offset == MAX_PATH_LEN * 2) {
-		bpf_printk("Found empty path");
-		return 0;
-	}
-	// path_len doesn't contain the string terminator `\0`, the userspace doesn't need it.
-	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
 	// here we are copying the resolved path into the first segment of the buffer.
 	// please note: in the first segment of the path we will already have the path written by
 	// the previous program execution, what we are doing here is to overwrite the path with the new
@@ -390,10 +445,11 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 	                                 SAFE_PATH_LEN(evt->path_len + 1),
 	                                 &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
-		bpf_printk("Failed to copy path for execve %d", err);
+		emit_log_event(LOG_FAIL_TO_COPY_EXEC_PATH);
 		return 0;
 	}
 
+	// this is used for debug during development is never used in production
 	bpf_printk("sent execve event, path: %s, cgid: %d, cg_tracker_id: %d",
 	           evt->path,
 	           evt->cgid,
@@ -401,7 +457,7 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 
 	err = bpf_ringbuf_output(&ringbuf_execve, evt, 19 + SAFE_PATH_LEN(evt->path_len), 0);
 	if(err != 0) {
-		bpf_printk("Failed to output execve event to ringbuf %d", err);
+		emit_log_event(LOG_DROP_EXEC_EVENT);
 	}
 	return 0;
 }
@@ -485,42 +541,31 @@ SEC("fmod_ret/security_bprm_creds_for_exec")
 int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	__u64 cg_tracker_id = get_tracker_id_from_curr_task();
 	if(cg_tracker_id == 0) {
-		// we return if we cannot get cgroup id, since our logic is based on cgroup ids
+		// we return if we cannot get cgroup id, since our logic is based on cgroup ids.
+		// This is not an error, the userspace will populate the cgtracker_map only for the cgroups
+		// associated with containers, so all non-container cgroups will be ignored.
 		return 0;
 	}
 
 	__u64 *policy_id = bpf_map_lookup_elem(&cg_to_policy_map, &cg_tracker_id);
 	if(!policy_id) {
-		// no policy associated with this cgroup
+		// no policy associated with this cgroup.
+		// This is not an error, it means that the cgroup is not being monitored or enforced.
 		return 0;
 	}
 
-	int zero = 0;
-	struct process_evt *evt =
-	        (struct process_evt *)bpf_map_lookup_elem(&process_evt_storage_map, &zero);
+	struct process_evt *evt = get_process_evt();
 	if(!evt) {
-		bpf_printk("cannot get process_evt from storage map");
 		return 0;
 	}
 
 	evt->cgid = tg_get_current_cgroup_id();
 	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
 
-	struct file *file = bprm->file;
-	if(file == NULL) {
+	u32 current_offset = populate_evt_with_path(evt, bprm);
+	if(current_offset == 0) {
 		return 0;
 	}
-	struct path *path_arg = &file->f_path;
-	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
-	if(current_offset <= 0) {
-		bpf_printk("Failed to resolve path for execve");
-		return 0;
-	}
-	if(current_offset == MAX_PATH_LEN * 2) {
-		bpf_printk("Found empty path");
-		return 0;
-	}
-	evt->path_len = MAX_PATH_LEN * 2 - current_offset;
 
 	///////////////////////////////
 	// We now do the comparison
@@ -531,16 +576,12 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	// From now on, we are sure that evt->path_len is <= STRING_MAPS_SIZE_7 if on <5.11
 	if(LINUX_KERNEL_VERSION < KERNEL_VERSION(5, 11, 0)) {
 		if(evt->path_len > STRING_MAPS_SIZE_7) {
-			bpf_printk("Path length %d exceeds max supported length", evt->path_len);
+			emit_log_event(LOG_PATH_LEN_TOO_LONG);
 			return 0;
 		}
 	}
 
 	int padded_len = string_padded_len(evt->path_len);
-	if(padded_len == 0) {
-		bpf_printk("Padded length is zero for path length %d", evt->path_len);
-		return 0;
-	}
 	int index = string_map_index(padded_len);
 	void *string_map = get_policy_string_map(index, policy_id);
 	// if `string_map` is NULL it means that the userspace never populated a map for this path
@@ -573,14 +614,15 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	                                 SAFE_PATH_LEN(evt->path_len + 1),
 	                                 &evt->path[SAFE_PATH_ACCESS(current_offset)]);
 	if(err != 0) {
-		bpf_printk("Failed to copy path for execve %d", err);
+		emit_log_event(LOG_FAIL_TO_COPY_EXEC_PATH);
 		return 0;
 	}
 
 	// We check if we are in monitoring or enforcing mode for this policy
 	__u8 *mode = bpf_map_lookup_elem(&policy_mode_map, policy_id);
 	if(!mode) {
-		// This is not an error, it can happen during policy removal
+		// With our current code this is an error.
+		emit_log_event_1(LOG_POLICY_MODE_MISSING, *policy_id);
 		return 0;
 	}
 	bpf_printk("Mode %d for policy id %d", *mode, *policy_id);
@@ -588,13 +630,14 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	err = bpf_ringbuf_output(&ringbuf_monitoring, evt, 19 + SAFE_PATH_LEN(evt->path_len), 0);
 	if(err != 0) {
-		bpf_printk("Failed to output enforce event to ringbuf %d", err);
+		emit_log_event_2(LOG_DROP_VIOLATION, *policy_id, evt->mode);
 	}
 
 	bpf_printk("sent enforce event, path: %s, cgid: %d, cg_tracker_id: %d",
 	           evt->path,
 	           evt->cgid,
 	           evt->cg_tracker_id);
+	bpf_printk("mode: %d", evt->mode);
 
 	if(*mode == POLICY_MODE_MONITOR) {
 		return 0;
