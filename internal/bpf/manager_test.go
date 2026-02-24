@@ -160,54 +160,55 @@ func TestMonitorProtectMode(t *testing.T) {
 }
 
 func TestMultiplePolicies(t *testing.T) {
-	manager, cleanup, err := waitRunningManager(t)
-	require.NoError(t, err, "Failed to start manager")
-	defer cleanup()
+	runner, err := newCgroupRunner(t)
+	require.NoError(t, err, "Failed to create cgroup runner")
+	defer runner.close()
 
 	mockPolicyID1 := uint64(42)
-	err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID1, []string{"/usr/bin/true"}, AddValuesToPolicy)
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(mockPolicyID1, []string{"/usr/bin/true"}, AddValuesToPolicy)
 	require.NoError(t, err, "Failed to add policy 1 values")
 
 	// We try to create 2 policies to check if `max_entries`
 	// for string maps is really greater than 1.
 	mockPolicyID2 := uint64(43)
-	err = manager.GetPolicyUpdateBinariesFunc()(mockPolicyID2, []string{"/usr/bin/who"}, AddValuesToPolicy)
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(mockPolicyID2, []string{"/usr/bin/who"}, AddValuesToPolicy)
 	require.NoError(t, err, "Failed to add policy 2 values")
 }
 
 func TestManagerShutdown(t *testing.T) {
-	manager, cleanup, err := waitRunningManager(t)
-	require.NoError(t, err, "Failed to start manager")
-	cleanup()
+	runner, err := newCgroupRunner(t)
+	require.NoError(t, err, "Failed to create cgroup runner")
+	defer runner.close()
 
-	err = manager.GetPolicyUpdateBinariesFunc()(
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(
+
 		uint64(100),
 		[]string{"/usr/bin/true", "/usr/bin/who"},
 		AddValuesToPolicy,
 	)
 	require.NoError(t, err, "bpf manager should return nil after shutdown")
 
-	err = manager.GetPolicyUpdateBinariesFunc()(
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(
 		uint64(100),
 		[]string{"/usr/bin/true", "/usr/bin/who"},
 		ReplaceValuesInPolicy,
 	)
 	require.NoError(t, err, "bpf manager should return nil after shutdown")
 
-	err = manager.GetCgroupTrackerUpdateFunc()(
+	err = runner.manager.GetCgroupTrackerUpdateFunc()(
 		uint64(200),
 		"",
 	)
 	require.NoError(t, err, "bpf manager should return nil after shutdown")
 
-	err = manager.GetCgroupPolicyUpdateFunc()(
+	err = runner.manager.GetCgroupPolicyUpdateFunc()(
 		uint64(100),
 		[]uint64{200},
 		AddPolicyToCgroups,
 	)
 	require.NoError(t, err, "bpf manager should return nil after shutdown")
 
-	err = manager.GetCgroupPolicyUpdateFunc()(
+	err = runner.manager.GetCgroupPolicyUpdateFunc()(
 		uint64(100),
 		[]uint64{200},
 		RemovePolicy,
