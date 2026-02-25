@@ -25,7 +25,7 @@ const (
 	// defaultProcFSPath is the default path to the proc filesystem.
 	defaultProcFSPath = "/proc"
 
-	// defaultCgroupMountPoint is the default path to the cgroupv2 root.
+	// defaultCgroupMountPoint is the default mount point for cgroups.
 	defaultCgroupMountPoint = defaultProcFSPath + "/1/root/sys/fs/cgroup"
 
 	// procCgroupPath is the path to the cgroup file under the proc filesystem.
@@ -126,21 +126,21 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 	// misc	          11	       192	       1
 	//
 	// We can see it from the above numbers, the `num_cgroups` for controllers like `memory` and `pids` are really high.
-	// `memory` has an higher number becuse probably on the host there are other memory cgroups not related to k8s containers.
+	// `memory` has a higher number because probably on the host there are other memory cgroups not related to k8s containers.
 
 	// ignore first entry with fields name.
-	fscanner := bufio.NewScanner(file)
-	fscanner.Scan()
+	scanner := bufio.NewScanner(file)
+	scanner.Scan()
 	var idx uint32
 	// we save the controller names in order
-	var allcontrollersNames []string
-	for fscanner.Scan() {
-		line := fscanner.Text()
+	var allControllersNames []string
+	for scanner.Scan() {
+		line := scanner.Text()
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
-			return "", 0, fmt.Errorf("failed to parse cgroupv1 controllers: line has less than two fields: %s", line)
+			return "", 0, fmt.Errorf("failed to parse cgroupv1 controllers: line has no fields: %s", line)
 		}
-		allcontrollersNames = append(allcontrollersNames, fields[0])
+		allControllersNames = append(allControllersNames, fields[0])
 		idx++
 		// in ebpf we don't go beyond CgroupSubsysCount so it is useless to parse more
 		if idx >= CgroupSubsysCount {
@@ -151,7 +151,7 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 	// as we said memory, pids and cpu are usually the controllers under which containers have their own cgroup.
 	// We want to find their indices in this order.
 	for _, interestingController := range []string{"memory", "pids", "cpu"} {
-		for i, name := range allcontrollersNames {
+		for i, name := range allControllersNames {
 			if name == interestingController {
 				// found the index for the most interesting controller
 				return interestingController, uint32(i), nil
@@ -159,19 +159,19 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 		}
 	}
 
-	return "", 0, fmt.Errorf("no interesting controllers among: %v", allcontrollersNames)
+	return "", 0, fmt.Errorf("no interesting controllers among: %v", allControllersNames)
 }
 
 // getMountPointType returns error if the provided path is not a mount point. If it is a mount point, it returns the filesystem type.
 func getMountPointType(path string) (int64, error) {
 	var st, pst unix.Stat_t
 	if err := unix.Lstat(path, &st); err != nil {
-		return 0, fmt.Errorf("error acessing path '%s': %w", path, err)
+		return 0, fmt.Errorf("error accessing path '%s': %w", path, err)
 	}
 
 	parent := filepath.Dir(path)
 	if err := unix.Lstat(parent, &pst); err != nil {
-		return 0, fmt.Errorf("error acessing parent path '%s': %w", parent, err)
+		return 0, fmt.Errorf("error accessing parent path '%s': %w", parent, err)
 	}
 
 	// path should be a mount point if it is a cgroup root so the dev ID must differ from the parent.
@@ -240,7 +240,7 @@ func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
 // SystemdExpandSlice expands a systemd slice name into its full path.
 //
 // taken from github.com/opencontainers/runc/libcontainer/cgroups/systemd
-// which does not work due to a ebpf incomaptibility:
+// which does not work due to a ebpf incompatibility:
 // # github.com/opencontainers/runc/libcontainer/cgroups/ebpf
 // vendor/github.com/opencontainers/runc/libcontainer/cgroups/ebpf/ebpf_linux.go:190:3: unknown field Replace in struct literal of type link.RawAttachProgramOptions
 //
