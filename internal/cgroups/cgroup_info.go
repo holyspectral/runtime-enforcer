@@ -3,10 +3,10 @@ package cgroups
 import (
 	"bufio"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"golang.org/x/sys/unix"
 )
@@ -29,38 +29,42 @@ const (
 	memoryControllerName = "memory"
 )
 
+type CgroupInfo struct {
+	cgroupResolutionPrefix string
+	fsMagic                uint64
+	subsysV1Idx            uint32
+}
+
 var (
-	cgroupResolutionPrefix string //nolint:gochecknoglobals // we want it global for a global function.
+	cgroupInfoDetectionOnce sync.Once   //nolint:gochecknoglobals // we want it global for a global function.
+	cgroupInfo              *CgroupInfo //nolint:gochecknoglobals // we want it global for a global function.
+	errCgroupInfo           error
 )
+
+func GetCgroupInfo() (*CgroupInfo, error) {
+	cgroupInfoDetectionOnce.Do(func() {
+		cgroupInfo, errCgroupInfo = getCgroupInfo()
+	})
+	return cgroupInfo, errCgroupInfo
+}
 
 // GetCgroupResolutionPrefix returns the prefix used for cgroupID resolution.
 // For cgroupv2 it is the cgroup mount point path. (e.g. /sys/fs/cgroup)
-// For cgroupv1 it is the cgroup mount point path + the controller chosen at runtime. (e.g. /sys/fs/cgroup/memory).
-// This is set once during cgroup detection (see setCgroupResolutionPrefix).
+// For cgroupv1 it is the cgroup mount point path + the memory controller name. (e.g. /sys/fs/cgroup/memory).
 func GetCgroupResolutionPrefix() string {
-	return cgroupResolutionPrefix
-}
-
-// setCgroupResolutionPrefix sets the prefix used for cgroupID resolution.
-func setCgroupResolutionPrefix(path string) {
-	cgroupResolutionPrefix = path
-}
-
-type CgroupInfo struct {
-	fsMagic     uint64
-	subsysV1Idx uint32
+	cgInfo, err := GetCgroupInfo()
+	if err != nil || cgInfo == nil {
+		panic("cgroup info should be initialized by the bpf manager")
+	}
+	return cgInfo.CgroupResolutionPrefix()
 }
 
 func (c *CgroupInfo) CgroupFsMagic() uint64 {
 	return c.fsMagic
 }
 
-func (c *CgroupInfo) CgroupV1SubsysIdx() uint32 {
-	return c.subsysV1Idx
-}
-
-func CgroupFsMagicString(fsMagic uint64) string {
-	switch fsMagic {
+func (c *CgroupInfo) CgroupFsMagicString() string {
+	switch c.fsMagic {
 	case unix.CGROUP_SUPER_MAGIC:
 		return "cgroupv1"
 	case unix.CGROUP2_SUPER_MAGIC:
@@ -68,6 +72,14 @@ func CgroupFsMagicString(fsMagic uint64) string {
 	default:
 		panic("unknown cgroup fs magic")
 	}
+}
+
+func (c *CgroupInfo) CgroupV1SubsysIdx() uint32 {
+	return c.subsysV1Idx
+}
+
+func (c *CgroupInfo) CgroupResolutionPrefix() string {
+	return c.cgroupResolutionPrefix
 }
 
 // findMemoryController returns the index of the memory controller under /proc/cgroups.
@@ -158,7 +170,7 @@ func getMountPointType(path string) (int64, error) {
 }
 
 // GetCgroupInfo retrieves cgroup information such as cgroup root, fs magic and subsys index.
-func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
+func getCgroupInfo() (*CgroupInfo, error) {
 	// Today we don't let the user to specify a custom mount point, we just use the default one.
 	// Both in cgroupv1 and cgroupv2 we should have a mount point in `defaultCgroupMountPoint`.
 	// What changes is the type of the filesystem.
@@ -167,20 +179,13 @@ func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
 		return nil, fmt.Errorf("cannot get mount point type for '%s': %w", defaultCgroupMountPoint, err)
 	}
 
-	defer func() {
-		// on return we log the resolution prefix
-		if err == nil {
-			logger.Info("cgroup resolution prefix detected", "path", GetCgroupResolutionPrefix())
-		}
-	}()
-
 	switch fsType {
 	// for cgroupv2 the fs type is CGROUP2_SUPER_MAGIC
 	case unix.CGROUP2_SUPER_MAGIC:
-		setCgroupResolutionPrefix(defaultCgroupMountPoint)
 		return &CgroupInfo{
-			fsMagic:     unix.CGROUP2_SUPER_MAGIC,
-			subsysV1Idx: 0, // we are in v2 we don't need the index ebpf side.
+			cgroupResolutionPrefix: defaultCgroupMountPoint,
+			fsMagic:                unix.CGROUP2_SUPER_MAGIC,
+			subsysV1Idx:            0, // we are in v2 we don't need the index ebpf side.
 		}, nil
 	// for cgroupv1 or hybrid setup the fs type is TMPFS_MAGIC
 	case unix.TMPFS_MAGIC:
@@ -196,10 +201,10 @@ func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cannot get mount point type for '%s': %w", controllerPath, err)
 		}
-		setCgroupResolutionPrefix(controllerPath)
 		return &CgroupInfo{
-			fsMagic:     unix.CGROUP_SUPER_MAGIC,
-			subsysV1Idx: idx,
+			cgroupResolutionPrefix: controllerPath,
+			fsMagic:                unix.CGROUP_SUPER_MAGIC,
+			subsysV1Idx:            idx,
 		}, nil
 	default:
 		// we don't support other fs types

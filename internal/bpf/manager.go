@@ -14,7 +14,6 @@ import (
 	"github.com/cilium/ebpf/features"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/kernels"
 
 	"golang.org/x/sync/errgroup"
@@ -135,9 +134,10 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 		return nil, fmt.Errorf("failed to remove memlock: %w", err)
 	}
 
-	logger.Info("Detected kernel version", "version", kernels.GetCurrKernelVersionStr())
+	newLogger := logger.With("component", "ebpf-manager")
+	newLogger.Info("Detected kernel version", "version", kernels.GetCurrKernelVersionStr())
 
-	logger.Info("Probing eBPF features...")
+	newLogger.Info("Probing eBPF features")
 	if err := probeEbpfFeatures(); err != nil {
 		return nil, fmt.Errorf("failure during eBPF feature probing: %w", err)
 	}
@@ -155,12 +155,6 @@ func NewManager(logger *slog.Logger, enableLearning bool) (*Manager, error) {
 	if err = spec.Variables[loadTimeConfigBPFVar].Set(conf); err != nil {
 		return nil, fmt.Errorf("error rewriting load_time_config: %w", err)
 	}
-
-	newLogger := logger.With("component", "ebpf-manager")
-	newLogger.Info("Load time configuration detected",
-		"cgrp_fs_magic", cgroups.CgroupFsMagicString(conf.CgrpFsMagic),
-		"cgrp_v1_subsys_idx", conf.Cgrpv1SubsysIdx,
-		"debug_mode", conf.DebugMode)
 
 	// Only kernels >= 5.11 support hash key lengths > 512 bytes
 	// https://github.com/cilium/tetragon/commit/834b5fe7d4063928cf7b89f61252637d833ca018
