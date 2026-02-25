@@ -36,8 +36,7 @@ func (c cgroupInfo) RunInCgroup(command string, args []string) error {
 	return cmd.Run()
 }
 
-func createTestCgroup() (cgroupInfo, error) {
-	const cgroupRoot = "/sys/fs/cgroup"
+func createTestCgroup(cgroupRoot string) (cgroupInfo, error) {
 	const cgroupName = "my-random-xyz-test-cgroup"
 	cgroupPath := filepath.Join(cgroupRoot, cgroupName)
 

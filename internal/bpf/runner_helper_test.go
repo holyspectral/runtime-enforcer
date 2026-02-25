@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -210,7 +211,8 @@ func newCgroupRunnerWithLogger(t *testing.T, logger *slog.Logger) (*cgroupRunner
 	}
 
 	// Create the cgroup where we will run our commands
-	cgInfo, err := createTestCgroup()
+	// the manager is already started so we can use `GetCgroupResolutionPrefix`
+	cgInfo, err := createTestCgroup(cgroups.GetCgroupResolutionPrefix())
 	if err != nil {
 		cleanup()
 		return nil, err
