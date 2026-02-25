@@ -30,6 +30,9 @@ const (
 
 	// procCgroupPath is the path to the cgroup file under the proc filesystem.
 	procCgroupPath = defaultProcFSPath + "/cgroups"
+
+	// memoryControllerName is the memory controller name.
+	memoryControllerName = "memory"
 )
 
 var (
@@ -94,16 +97,15 @@ func CgroupFsMagicString(fsMagic uint64) string {
 	}
 }
 
-// findInterestingControllerV1 returns the name and the index of the most "interesting" controller
-// we find under /proc/cgroups. If we don't find any of them we return an error.
+// findMemoryController returns the index of the memory controller under /proc/cgroups.
+// If we don't find it we return an error.
 // In cgroupv1, k8s containers could share the same cgroup under some controllers (e.g cpuset),
-// but usually there are controllers under which each container has its own cgroup (e.g memory, pids, cpu, ...),
-// these controllers are the ones we define as "interesting".
-func findInterestingControllerV1(path string) (string, uint32, error) {
+// but usually under the memory controller each container has its own cgroup.
+func findMemoryController(path string) (uint32, error) {
 	//nolint:gosec // path is always set internally by us not by the user.
 	file, err := os.Open(path)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to open %s: %w", path, err)
+		return 0, fmt.Errorf("failed to open %s: %w", path, err)
 	}
 	defer file.Close()
 
@@ -138,7 +140,7 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 		line := scanner.Text()
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
-			return "", 0, fmt.Errorf("failed to parse cgroupv1 controllers: line has no fields: %s", line)
+			return 0, fmt.Errorf("failed to parse cgroupv1 controllers: line has no fields: %s", line)
 		}
 		allControllersNames = append(allControllersNames, fields[0])
 		idx++
@@ -148,18 +150,14 @@ func findInterestingControllerV1(path string) (string, uint32, error) {
 		}
 	}
 
-	// as we said memory, pids and cpu are usually the controllers under which containers have their own cgroup.
-	// We want to find their indices in this order.
-	for _, interestingController := range []string{"memory", "pids", "cpu"} {
-		for i, name := range allControllersNames {
-			if name == interestingController {
-				// found the index for the most interesting controller
-				return interestingController, uint32(i), nil
-			}
+	// we want to find the index for the memory controller
+	for i, name := range allControllersNames {
+		if name == memoryControllerName {
+			return uint32(i), nil
 		}
 	}
 
-	return "", 0, fmt.Errorf("no interesting controllers among: %v", allControllersNames)
+	return 0, fmt.Errorf("no '%s' controller among: %v", memoryControllerName, allControllersNames)
 }
 
 // getMountPointType returns error if the provided path is not a mount point. If it is a mount point, it returns the filesystem type.
@@ -214,13 +212,12 @@ func GetCgroupInfo(logger *slog.Logger) (*CgroupInfo, error) {
 	// for cgroupv1 or hybrid setup the fs type is TMPFS_MAGIC
 	case unix.TMPFS_MAGIC:
 		// If we use Cgroupv1, we need the subsys idx for ebpf.
-		var controllerName string
 		var idx uint32
-		controllerName, idx, err = findInterestingControllerV1(procCgroupPath)
+		idx, err = findMemoryController(procCgroupPath)
 		if err != nil {
-			return nil, fmt.Errorf("cannot find interesting controller: %w", err)
+			return nil, err
 		}
-		controllerPath := filepath.Join(defaultCgroupMountPoint, controllerName)
+		controllerPath := filepath.Join(defaultCgroupMountPoint, memoryControllerName)
 		// we should have a mount point under this controller
 		_, err = getMountPointType(controllerPath)
 		if err != nil {

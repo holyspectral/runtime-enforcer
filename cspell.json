@@ -76,6 +76,7 @@
 		"kubelet",
 		"kubepods",
 		"besteffort",
+		"gosec",
     ],
     "ignoreWords": [
         "clientgoscheme",
