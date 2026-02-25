@@ -22,8 +22,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTestLearningReconciler(client client.Client) *eventhandler.LearningReconciler {
-	reconciler := eventhandler.NewLearningReconciler(client)
+func newTestLearningReconciler(
+	client client.Client,
+	eventCache *eventhandler.LearningEventCache,
+) *eventhandler.LearningReconciler {
+	reconciler := eventhandler.NewLearningReconciler(client, eventCache)
 	// we don't want owner references to be added in tests because the webhook won't complete it and the api server will reject the resource creation with a partial ownerReference.
 	reconciler.OwnerRefEnricher = func(_ *securityv1alpha1.WorkloadPolicyProposal, _ string, _ string) {}
 	return reconciler
@@ -140,18 +143,27 @@ var _ = Describe("Learning", func() {
 						return fmt.Errorf("failed to create client: %w", err)
 					}
 
-					reconciler := newTestLearningReconciler(perWorkerClient)
+					eventCache := eventhandler.NewLearningEventCache()
+					reconciler := newTestLearningReconciler(perWorkerClient, eventCache)
+
 					for _, learningEvent := range eventsToProcess {
-						for {
-							_, err = reconciler.Reconcile(groupCtx, learningEvent)
-							if err == nil {
-								break
-							}
-							if !errors.IsConflict(err) {
-								return err
-							}
+						eventCache.MergeEvent(learningEvent)
+					}
+
+					for _, learningEvent := range eventsToProcess {
+						_, err = reconciler.Reconcile(groupCtx, eventscraper.KubeWorkload{
+							Namespace:    learningEvent.Namespace,
+							Workload:     learningEvent.Workload,
+							WorkloadKind: learningEvent.WorkloadKind,
+						})
+						if err == nil {
+							break
+						}
+						if !errors.IsConflict(err) {
+							return err
 						}
 					}
+
 					logf.Log.Info("worker finished", "name", name)
 					return nil
 				})
@@ -251,7 +263,8 @@ var _ = Describe("Learning", func() {
 				},
 			}
 
-			reconciler := newTestLearningReconciler(k8sClient)
+			eventCache := eventhandler.NewLearningEventCache()
+			reconciler := newTestLearningReconciler(k8sClient, eventCache)
 
 			for _, tc := range tcs {
 				// Create an empty policy proposal
@@ -261,11 +274,17 @@ var _ = Describe("Learning", func() {
 				Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
 
 				for _, learningEvent := range tc.processEvents {
-					var result ctrl.Result
-					result, err = reconciler.Reconcile(ctx, learningEvent)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(result).To(Equal(ctrl.Result{}))
+					eventCache.MergeEvent(learningEvent)
 				}
+
+				var result ctrl.Result
+				result, err = reconciler.Reconcile(ctx, eventscraper.KubeWorkload{
+					Namespace:    testNamespace,
+					Workload:     testResourceName,
+					WorkloadKind: "Deployment",
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(ctrl.Result{}))
 
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: testNamespace,
@@ -314,7 +333,8 @@ var _ = Describe("Learning", func() {
 				},
 			}
 
-			reconciler := eventhandler.NewLearningReconciler(k8sClient)
+			eventCache := eventhandler.NewLearningEventCache()
+			reconciler := eventhandler.NewLearningReconciler(k8sClient, eventCache)
 
 			testProposal := proposal.DeepCopy()
 			testProposal.Namespace = testNamespace
@@ -326,11 +346,17 @@ var _ = Describe("Learning", func() {
 			Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
 
 			for _, learningEvent := range processEvents {
-				var result ctrl.Result
-				result, err = reconciler.Reconcile(ctx, learningEvent)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(ctrl.Result{}))
+				eventCache.MergeEvent(learningEvent)
 			}
+
+			var result ctrl.Result
+			result, err = reconciler.Reconcile(ctx, eventscraper.KubeWorkload{
+				Namespace:    testNamespace,
+				Workload:     testResourceName,
+				WorkloadKind: "Deployment",
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(ctrl.Result{}))
 
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Namespace: testNamespace,

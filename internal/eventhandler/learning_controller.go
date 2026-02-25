@@ -3,6 +3,7 @@ package eventhandler
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
@@ -59,6 +60,41 @@ func GetWorkloadPolicyProposalName(kind string, resourceName string) (string, er
 	return shortname + "-" + resourceName, nil
 }
 
+type LearningEventCache struct {
+	mu            sync.Mutex
+	processEvents map[eventscraper.KubeWorkload][]eventscraper.KubeProcessInfo
+}
+
+func NewLearningEventCache() *LearningEventCache {
+	return &LearningEventCache{
+		processEvents: make(map[eventscraper.KubeWorkload][]eventscraper.KubeProcessInfo),
+	}
+}
+
+func (c *LearningEventCache) MergeEvent(event eventscraper.KubeProcessInfo) {
+	req := eventscraper.KubeWorkload{
+		Namespace:    event.Namespace,
+		Workload:     event.Workload,
+		WorkloadKind: event.WorkloadKind,
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.processEvents[req] = append(c.processEvents[req], event)
+}
+
+func (c *LearningEventCache) GetEvents(req eventscraper.KubeWorkload) []eventscraper.KubeProcessInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	events := c.processEvents[req]
+	return events
+}
+
+func (c *LearningEventCache) Purge(req eventscraper.KubeWorkload) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.processEvents, req)
+}
+
 type LearningReconciler struct {
 	client.Client
 
@@ -67,9 +103,13 @@ type LearningReconciler struct {
 	tracer    trace.Tracer
 	// OwnerRefEnricher can be overridden during testing
 	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
+	eventCache       *LearningEventCache
 }
 
-func NewLearningReconciler(client client.Client) *LearningReconciler {
+func NewLearningReconciler(client client.Client, eventCache *LearningEventCache) *LearningReconciler {
+	if eventCache == nil {
+		eventCache = NewLearningEventCache()
+	}
 	return &LearningReconciler{
 		Client:    client,
 		eventChan: make(chan event.TypedGenericEvent[eventscraper.KubeProcessInfo], DefaultEventChannelBufferSize),
@@ -82,6 +122,7 @@ func NewLearningReconciler(client client.Client) *LearningReconciler {
 				},
 			}
 		},
+		eventCache: eventCache,
 	}
 }
 
@@ -91,7 +132,7 @@ func NewLearningReconciler(client client.Client) *LearningReconciler {
 // Reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
 func (r *LearningReconciler) Reconcile(
 	ctx context.Context,
-	req eventscraper.KubeProcessInfo,
+	req eventscraper.KubeWorkload,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -107,11 +148,12 @@ func (r *LearningReconciler) Reconcile(
 			"Ignoring learning event",
 			"workload", req.Workload,
 			"workload_kind", req.WorkloadKind,
-			"exe", req.ExecutablePath,
 		)
 
 		return ctrl.Result{}, nil
 	}
+
+	processEvts := r.eventCache.GetEvents(req)
 
 	proposalName, err = GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)
 	if err != nil {
@@ -135,8 +177,10 @@ func (r *LearningReconciler) Reconcile(
 			return nil
 		}
 
-		if err = policyProposal.AddProcess(req.ContainerName, req.ExecutablePath); err != nil {
-			return fmt.Errorf("failed to add process to policy proposal: %w", err)
+		for _, evt := range processEvts {
+			if err = policyProposal.AddProcess(evt.ContainerName, evt.ExecutablePath); err != nil {
+				return fmt.Errorf("failed to add process to policy proposal: %w", err)
+			}
 		}
 
 		// If the owner reference is already there we do nothing.
@@ -152,8 +196,11 @@ func (r *LearningReconciler) Reconcile(
 		return ctrl.Result{}, fmt.Errorf("failed to run CreateOrUpdate: %w", err)
 	}
 
-	// Emit trace when a new process is learned.
 	if result != controllerutil.OperationResultNone {
+		// clean up the event queue since they're all merged.
+		r.eventCache.Purge(req)
+
+		// Emit trace when a new process is learned.
 		var span trace.Span
 		now := time.Now()
 		_, span = r.tracer.Start(ctx, "process learned")
@@ -163,8 +210,9 @@ func (r *LearningReconciler) Reconcile(
 			attribute.String("k8s.ns.name", req.Namespace),
 			attribute.String("k8s.workload.kind", req.WorkloadKind),
 			attribute.String("k8s.workload.name", req.Workload),
-			attribute.String("container.name", req.ContainerName),
-			attribute.String("proc.exepath", req.ExecutablePath),
+			// TODO
+			// attribute.String("container.name", req.ContainerName),
+			// attribute.String("proc.exepath", req.ExecutablePath),
 		)
 		span.End()
 	}
@@ -178,12 +226,13 @@ func (r *LearningReconciler) EnqueueEvent(evt eventscraper.KubeProcessInfo) {
 
 // ProcessEventHandler implements handler.TypedEventHandler[eventscraper.KubeProcessInfo, eventscraper.KubeProcessInfo].
 type ProcessEventHandler struct {
+	eventCache *LearningEventCache
 }
 
 func (e ProcessEventHandler) Create(
 	_ context.Context,
 	_ event.TypedCreateEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeProcessInfo],
+	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
 ) {
 
 }
@@ -191,7 +240,7 @@ func (e ProcessEventHandler) Create(
 func (e ProcessEventHandler) Update(
 	_ context.Context,
 	_ event.TypedUpdateEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeProcessInfo],
+	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
 ) {
 
 }
@@ -199,7 +248,7 @@ func (e ProcessEventHandler) Update(
 func (e ProcessEventHandler) Delete(
 	_ context.Context,
 	_ event.TypedDeleteEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeProcessInfo],
+	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
 ) {
 
 }
@@ -207,19 +256,24 @@ func (e ProcessEventHandler) Delete(
 func (e ProcessEventHandler) Generic(
 	_ context.Context,
 	evt event.TypedGenericEvent[eventscraper.KubeProcessInfo],
-	q workqueue.TypedRateLimitingInterface[eventscraper.KubeProcessInfo],
+	q workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
 ) {
-	q.AddRateLimited(evt.Object)
+	e.eventCache.MergeEvent(evt.Object)
+	q.AddRateLimited(eventscraper.KubeWorkload{
+		Namespace:    evt.Object.Namespace,
+		Workload:     evt.Object.Workload,
+		WorkloadKind: evt.Object.WorkloadKind,
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *LearningReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return builder.TypedControllerManagedBy[eventscraper.KubeProcessInfo](mgr).
+	return builder.TypedControllerManagedBy[eventscraper.KubeWorkload](mgr).
 		Named("learningEvent").
 		WatchesRawSource(
 			source.TypedChannel(
 				r.eventChan,
-				&ProcessEventHandler{},
+				&ProcessEventHandler{eventCache: r.eventCache},
 			),
 		).
 		Complete(r)

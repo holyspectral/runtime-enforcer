@@ -87,7 +87,7 @@ func setupLearningReconciler(
 		}, nil
 	}
 
-	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient())
+	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient(), nil)
 	if err := learningReconciler.SetupWithManager(ctrlMgr); err != nil {
 		return nil, fmt.Errorf("unable to create learning reconciler: %w", err)
 	}
