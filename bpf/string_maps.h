@@ -1,6 +1,8 @@
 #pragma once
 
-// we will decrese the number of entries in userspace if the map is not used (<5.11)
+// cspell:ignore jhash
+
+// we will decrease the number of entries in userspace if the map is not used (<5.11)
 #define POLICY_STR_OUTER_MAX_ENTRIES 65536
 #define POLICY_STR_INNER_MAX_ENTRIES 1
 
@@ -20,7 +22,7 @@
  * jhash hashes in 12 byte blocks (3 x u32). For all lengths >12, a number of 12 byte
  * blocks are hashed, and the remainder is hashed using a combination of single byte
  * loads/shifts, followed by a final mix. It appears that the most efficient use of
- * jhash is with lengths equal to 12k + 1, minimising the number of single byte loads/
+ * jhash is with lengths equal to 12k + 1, minimizing the number of single byte loads/
  * shifts.
  *
  * In order to reduce the amount of hashing of padded 0s, we opt to store string matches
@@ -31,7 +33,7 @@
  * looked up in the related map.
  *
  * The chosen key sizes are 25, 49, 73, 97, 121, 145, 258, 514, 1026, 2050, 4098 (11 maps).
- * The first 6 are sized for common uses and to minimise the hashing of empty bytes. The
+ * The first 6 are sized for common uses and to minimize the hashing of empty bytes. The
  * following 5 maps notionally double in size, with lengths equal to 2^k + 2. On kernels
  * <5.11, the last four maps are replaced with a single map with key size 512. This is due
  * to key size limitations on kernels <5.11.

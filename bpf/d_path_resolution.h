@@ -1,5 +1,7 @@
 #pragma once
 
+// cspell:ignore vfsmnt hlist unhashed kfunc ksym qstr
+
 #define MAX_PATH_LEN 4096
 // kernel's max dentry name length that is 255
 // (https://elixir.bootlin.com/linux/v5.10/source/include/uapi/linux/limits.h#L12) + 1 for the `/`

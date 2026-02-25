@@ -10,6 +10,8 @@
 #include "string_maps.h"
 #include "d_path_resolution.h"
 
+// cspell:ignore kconfig
+
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 // https://nakryiko.com/posts/bpf-core-reference-guide/#linux-kernel-version
@@ -125,7 +127,7 @@ static __always_inline __u64 get_cgroup_id(const struct cgroup *cgrp) {
  * get_task_cgroup() Returns the accurate or desired cgroup of the css of
  *    current task that we want to operate on.
  * @task: must be current task.
- * @cgrpfs_ver: cgroup file system magic.
+ * @cgrp_fs_ver: cgroup file system magic.
  * @subsys_idx: index of the desired cgroup_subsys_state part of css_set.
  *    Passing a zero as a subsys_idx is fine assuming you want that.
  *
@@ -146,7 +148,7 @@ static __always_inline __u64 get_cgroup_id(const struct cgroup *cgrp) {
  * from zero without counting first comment line.
  */
 static __always_inline struct cgroup *get_task_cgroup(struct task_struct *task,
-                                                      __u64 cgrpfs_ver,
+                                                      __u64 cgrp_fs_ver,
                                                       __u32 subsys_idx) {
 	struct cgroup_subsys_state *subsys;
 	struct css_set *cgroups;
@@ -161,7 +163,7 @@ static __always_inline struct cgroup *get_task_cgroup(struct task_struct *task,
 // todo!: check our RHEL7 compatibility
 #ifndef __RHEL7__
 	/* If we are in Cgroupv2 return the default css_set cgroup */
-	if(cgrpfs_ver == CGROUP2_SUPER_MAGIC) {
+	if(cgrp_fs_ver == CGROUP2_SUPER_MAGIC) {
 		bpf_core_read(&cgrp, sizeof(cgrp), &cgroups->dfl_cgrp);
 		// cgrp could be NULL in case of failures
 		return cgrp;
@@ -180,7 +182,7 @@ static __always_inline struct cgroup *get_task_cgroup(struct task_struct *task,
 	 *
 	 * Notes:
 	 * Newer controllers should be appended at the end. controllers
-	 * that are not upstreamed may mess the calculation here
+	 * that are not upstream may mess the calculation here
 	 * especially if they happen to be before the desired subsys_idx,
 	 * we fail.
 	 */
@@ -471,7 +473,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, CGROUP_TO_POLICY_MAX_ENTRIES);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
-	__type(key, __u64);   /* Key is the cgrpid */
+	__type(key, __u64);   /* Key is the cgrp id */
 	__type(value, __u64); /* Value is the policy id */
 } cg_to_policy_map SEC(".maps");
 
