@@ -16,12 +16,6 @@
  */
 union kernfs_node_id {
 	struct {
-		/*
-		 * blktrace will export this struct as a simplified 'struct
-		 * fid' (which is a big data struction), so userspace can use
-		 * it to find kernfs node. The layout must match the first two
-		 * fields of 'struct fid' exactly.
-		 */
 		u32 ino;
 		u32 generation;
 	};
