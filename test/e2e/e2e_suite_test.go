@@ -27,7 +27,6 @@ const (
 	helmRepoReleaseNotFound = "release: not found"
 
 	runtimeEnforcerE2EPrefix = "run-enf-e2e-"
-	otelCollectorNamespace   = runtimeEnforcerE2EPrefix + "otel-collector"
 	runtimeEnforcerNamespace = runtimeEnforcerE2EPrefix + "runtime-enforcer"
 )
 
@@ -55,22 +54,6 @@ func getCharts() []helmChart {
 	// There are the charts that are always installed by tests.
 	charts := []helmChart{
 		{
-			name:          "otel-collector",
-			namespace:     otelCollectorNamespace,
-			repoLocalName: runtimeEnforcerE2EPrefix + "otel-collector-repo",
-			repoURL:       "http://open-telemetry.github.io/opentelemetry-helm-charts",
-			path:          "/opentelemetry-collector",
-			helmOptions: []helm.Option{
-				helm.WithArgs("--version", "v0.136.0"),
-				helm.WithArgs("--set image.repository=otel/opentelemetry-collector-k8s"),
-				helm.WithArgs("--set mode=deployment"),
-				helm.WithArgs("--set config.exporters.file.path=/dev/stdout"),
-				helm.WithArgs("--set config.service.pipelines.traces.exporters[0]=file"),
-				helm.WithArgs("--set config.service.pipelines.metrics=null"),
-				helm.WithArgs("--set config.service.pipelines.logs=null"),
-			},
-		},
-		{
 			name:          "runtime-enforcer",
 			namespace:     runtimeEnforcerNamespace,
 			repoLocalName: runtimeEnforcerE2EPrefix + "runtime-enforcer-repo",
@@ -79,15 +62,8 @@ func getCharts() []helmChart {
 			helmOptions: []helm.Option{
 				helm.WithArgs("--set", "operator.image.tag=latest"),
 				helm.WithArgs("--set", "agent.image.tag=latest"),
-				helm.WithArgs("--set", "telemetry.mode=custom"),
-				helm.WithArgs("--set", "telemetry.tracing=true"),
 				// we need to reduce the timeout to see the wp status controller working properly in e2e tests
 				helm.WithArgs("--set", "operator.wpStatusUpdateInterval=2s"),
-				helm.WithArgs(
-					"--set",
-					"telemetry.custom.endpoint=http://otel-collector-opentelemetry-collector."+otelCollectorNamespace+".svc.cluster.local:4317",
-				),
-				helm.WithArgs("--set", "telemetry.custom.insecure=true"),
 			},
 		},
 	}

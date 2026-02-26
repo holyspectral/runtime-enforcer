@@ -4,21 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/ptrace"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
+	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
@@ -26,15 +22,6 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 	"sigs.k8s.io/e2e-framework/pkg/types"
 )
-
-type ExpectedEvent struct {
-	ExecutablePath string
-	Action         string
-}
-type MonitoringTestCase struct {
-	Commands       []string
-	ExpectedEvents []ExpectedEvent
-}
 
 // findPod is a utility function that calls k8s List API to find a pod with
 // a specific prefix in a given namespace.
@@ -58,119 +45,20 @@ func findPod(ctx context.Context, namespace string, prefix string) (string, erro
 	return "", errors.New("pod is not found")
 }
 
-func waitExpectedEvent(
-	ctx context.Context,
-	t *testing.T,
-	expectedEvent ExpectedEvent) error {
-	var err error
-	var value pcommon.Value
-	var ok bool
-
-	otelLogStream := ctx.Value(key("otelLogStream")).(*OtelLogStream)
-	expectedNamespace := ctx.Value(key("namespace")).(string)
-	expectedPodName := ctx.Value(key("targetPodName")).(string)
-
-	var foundSpan *ptrace.Span
-
-	t.Log("waiting for otel events:", expectedEvent)
-	err = otelLogStream.WaitUntil(ctx, DefaultOperationTimeout, func(span *ptrace.Span) (bool, error) {
-		assert.NotNil(t, span)
-
-		value, ok = span.Attributes().Get("proc.exepath")
-		if !ok {
-			// unexpected event type. ignore it.
-			return false, nil
-		}
-		t.Logf("span: %s, exepath: %s, expected: %s", span.Name(), value.AsString(), expectedEvent)
-
-		if value.Str() != expectedEvent.ExecutablePath {
-			// not the file that we expected
-			return false, nil
-		}
-
-		foundSpan = span
-		return true, nil
-	})
-
-	require.NoError(t, err, "should find the expected otel event")
-
-	value, ok = foundSpan.Attributes().Get("action")
-	assert.Equal(t, expectedEvent.Action, value.Str())
-
-	value, ok = foundSpan.Attributes().Get("k8s.pod.name")
-
-	assert.True(t, ok)
-	assert.Equal(t, expectedPodName, value.Str())
-
-	value, ok = foundSpan.Attributes().Get("k8s.ns.name")
-
-	assert.True(t, ok)
-	assert.Equal(t, expectedNamespace, value.Str())
-
-	return err
-}
-
-func verifyExpectedResult(
-	ctx context.Context,
-	t *testing.T,
-	tc MonitoringTestCase,
-) {
-	var err error
-	if len(tc.ExpectedEvents) == 0 {
-		return
-	}
-
-	for _, expectedEvent := range tc.ExpectedEvents {
-		err = waitExpectedEvent(ctx, t, expectedEvent)
-		require.NoError(t, err, "the otel events should be created as expected")
-	}
-}
-
 func createWorkloadPolicy(ctx context.Context, t *testing.T, policy *v1alpha1.WorkloadPolicy) {
 	r := ctx.Value(key("client")).(*resources.Resources)
 
-	// 1. Create the resource and wait for the status to be updated
 	err := r.Create(ctx, policy)
 	require.NoError(t, err, "create policy")
 
-	// todo!: we should now wait for the status of the WP to be updated
-	time.Sleep(5 * time.Second)
+	waitForWorkloadPolicyStatusToBeUpdated(ctx, t, policy)
 }
 
 func deleteWorkloadPolicy(ctx context.Context, t *testing.T, policy *v1alpha1.WorkloadPolicy) {
-	var err error
 	r := ctx.Value(key("client")).(*resources.Resources)
 
-	// Delete WorkloadPolicy
-	err = r.Delete(ctx, policy)
+	err := r.Delete(ctx, policy)
 	require.NoError(t, err)
-}
-
-func runMonitoringTestCase(
-	ctx context.Context,
-	t *testing.T,
-	tc MonitoringTestCase,
-) {
-	var err error
-	r := ctx.Value(key("client")).(*resources.Resources)
-	namespace := ctx.Value(key("namespace")).(string)
-	expectedPodName := ctx.Value(key("targetPodName")).(string)
-
-	var stdout, stderr bytes.Buffer
-
-	t.Log("running:", tc.Commands)
-	err = r.ExecInPod(
-		ctx,
-		namespace,
-		expectedPodName,
-		"ubuntu",
-		tc.Commands,
-		&stdout,
-		&stderr,
-	)
-	require.NoError(t, err)
-
-	verifyExpectedResult(ctx, t, tc)
 }
 
 func getMonitoringTest() types.Feature {
@@ -188,17 +76,6 @@ func getMonitoringTest() types.Feature {
 			require.NoError(t, err, "failed to create test namespace")
 
 			return context.WithValue(ctx, key("namespace"), workloadNamespace)
-		}).
-		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("setup open telemetry collector")
-
-			otelCollectorPodName, err := findPod(ctx,
-				otelCollectorNamespace,
-				"otel-collector-opentelemetry-collector")
-			require.NoError(t, err)
-			require.NotEmpty(t, otelCollectorPodName)
-
-			return context.WithValue(ctx, key("otelCollectorPodName"), otelCollectorPodName)
 		}).
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("installing test Ubuntu deployment")
@@ -233,42 +110,12 @@ func getMonitoringTest() types.Feature {
 
 			return context.WithValue(ctx, key("targetPodName"), ubuntuPodName)
 		}).
-		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("creating otel log stream for testing")
-
-			var err error
-			r := ctx.Value(key("client")).(*resources.Resources)
-			otelCollectorPodName := ctx.Value(key("otelCollectorPodName")).(string)
-
-			// We have to create another client because resources.Resources doesn't support pods/logs.
-			var clientset *kubernetes.Clientset
-			var stream io.ReadCloser
-
-			clientset, err = kubernetes.NewForConfig(r.GetConfig())
-			require.NoError(t, err)
-
-			pods := clientset.CoreV1().Pods(otelCollectorNamespace)
-			assert.NotNil(t, pods, "failed to create pod clientset")
-			request := pods.GetLogs(otelCollectorPodName, &corev1.PodLogOptions{Follow: true})
-			assert.NotNil(t, request, "failed to create log request")
-			stream, err = request.Stream(ctx)
-			require.NoError(t, err)
-
-			var otelLogStream *OtelLogStream
-			otelLogStream, err = NewOtelLogStream(stream)
-			require.NoError(t, err)
-
-			// start otel log stream
-			go func() {
-				assert.NoError(t, otelLogStream.Start(ctx, t))
-			}()
-			return context.WithValue(ctx, key("otelLogStream"), otelLogStream)
-		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
 		Assess("a namespace-scoped policy can monitor behaviors correctly",
 			func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-				t.Log("create a policy")
 				namespace := ctx.Value(key("namespace")).(string)
+				expectedPodName := ctx.Value(key("targetPodName")).(string)
+				r := ctx.Value(key("client")).(*resources.Resources)
 
 				policy := &v1alpha1.WorkloadPolicy{
 					ObjectMeta: metav1.ObjectMeta{
@@ -291,44 +138,70 @@ func getMonitoringTest() types.Feature {
 					},
 				}
 
-				// In the verification logic, the event listed in ExpectedEvents
-				// field will be evaluated in the given order.
-				testcases := []MonitoringTestCase{
-					{
-						Commands:       []string{"/usr/bin/ls"},
-						ExpectedEvents: []ExpectedEvent{},
-					},
-					{
-						Commands: []string{"/usr/bin/sh", "-c", "/usr/bin/apt update"},
-						ExpectedEvents: []ExpectedEvent{
-							{
-								ExecutablePath: "/usr/bin/dash", // dash is the real executable,
-								Action:         policymode.MonitorString,
-							},
-							{
-								ExecutablePath: "/usr/bin/apt",
-								Action:         policymode.MonitorString,
-							},
-						},
-					},
-				}
-
+				t.Log("creating workload policy and waiting for it to become Active")
 				createWorkloadPolicy(ctx, t, policy.DeepCopy())
-				for _, tc := range testcases {
-					runMonitoringTestCase(ctx, t, tc)
+
+				t.Log("executing allowed command (should not produce violations)")
+				var stdout, stderr bytes.Buffer
+				err := r.ExecInPod(ctx, namespace, expectedPodName, "ubuntu",
+					[]string{"/usr/bin/ls"}, &stdout, &stderr)
+				require.NoError(t, err)
+
+				t.Log("executing disallowed command to trigger violation")
+				stdout.Reset()
+				stderr.Reset()
+				err = r.ExecInPod(ctx, namespace, expectedPodName, "ubuntu",
+					[]string{"/usr/bin/sh", "-c", "/usr/bin/apt update"}, &stdout, &stderr)
+				require.NoError(t, err)
+
+				t.Log("waiting for violations to appear in WorkloadPolicy status")
+				policyToCheck := &v1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-policy",
+						Namespace: namespace,
+					},
 				}
+				err = wait.For(conditions.New(r).ResourceMatch(policyToCheck, func(obj k8s.Object) bool {
+					wp, ok := obj.(*v1alpha1.WorkloadPolicy)
+					if !ok {
+						return false
+					}
+					if wp.Status.Violations == nil {
+						return false
+					}
+					for _, v := range wp.Status.Violations.Violations {
+						if v.ExecutablePath == "/usr/bin/apt" &&
+							v.Action == policymode.MonitorString &&
+							v.PodName == expectedPodName &&
+							v.Count >= 1 {
+							return true
+						}
+					}
+					return false
+				}), wait.WithTimeout(DefaultOperationTimeout))
+				require.NoError(t, err, "violation for /usr/bin/apt should appear in WorkloadPolicy status")
+
+				t.Log("verifying violation record details")
+				err = r.Get(ctx, "test-policy", namespace, policyToCheck)
+				require.NoError(t, err)
+				require.NotNil(t, policyToCheck.Status.Violations)
+
+				var found bool
+				for _, v := range policyToCheck.Status.Violations.Violations {
+					if v.ExecutablePath == "/usr/bin/apt" {
+						assert.Equal(t, policymode.MonitorString, v.Action)
+						assert.Equal(t, expectedPodName, v.PodName)
+						assert.GreaterOrEqual(t, v.Count, int32(1))
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "should find violation record for /usr/bin/apt")
+
 				deleteWorkloadPolicy(ctx, t, policy.DeepCopy())
 
 				return ctx
 			}).
-		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("stop otel log stream")
-
-			otelLogStream := ctx.Value(key("otelLogStream")).(*OtelLogStream)
-			otelLogStream.Stop()
-
-			return ctx
-		}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			t.Log("uninstalling test resources")
 			namespace := ctx.Value(key("namespace")).(string)
