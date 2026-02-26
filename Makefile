@@ -47,6 +47,9 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=agent-role paths="./cmd/agent" paths="./internal/eventhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/agent
 	sed -i 's/operator-role/{{ include "runtime-enforcer.fullname" . }}-operator/' charts/runtime-enforcer/templates/operator/role.yaml
 	sed -i 's/agent-role/{{ include "runtime-enforcer.fullname" . }}-agent/' charts/runtime-enforcer/templates/agent/role.yaml
+	for f in ./charts/runtime-enforcer/templates/crd/*.yaml; do \
+		sed -i '/^[[:space:]]*annotations:/a\    helm.sh\/resource-policy: keep' "$$f"; \
+	done
 
 REPO ?= ghcr.io/rancher-sandbox/runtime-enforcer
 TAG ?= latest

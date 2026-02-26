@@ -6,7 +6,18 @@ You can remove the Runtime-Enforcer and all the policies created by uninstalling
 helm uninstall runtime-enforcer --namespace runtime-enforcer
 ```
 
-Please note that this command will delete all existing WorkloadPolicy and WorkloadPolicyProposal in an irreversible way.
+Please note that this command will not delete the existing WorkloadPolicy and WorkloadPolicyProposal.
+
+To remove them, you can run the following commands:
+
+```bash
+kubectl get workloadpolicies.security.rancher.io --all-namespaces -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace --no-headers | while read name namespace; do
+  kubectl patch workloadpolicies.security.rancher.io $name -n $namespace --type=merge -p '{"metadata":{"finalizers":[]}}'
+done
+
+kubectl delete crd workloadpolicies.security.rancher.io
+kubectl delete crd workloadpolicyproposals.security.rancher.io
+```
 
 Finally, delete the namespace where Runtime-Enforcer was deployed:
 
