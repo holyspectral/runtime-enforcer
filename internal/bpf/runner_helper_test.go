@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -88,8 +87,9 @@ func startManager(ctx context.Context, logger *slog.Logger) (*Manager, func(), e
 	}, nil
 }
 
-func checkManagerIsStarted(m *Manager) error {
+func checkManagerIsStarted(m *Manager, cgInfo *cgroupInfo) error {
 	timeoutChan := time.After(5 * time.Second)
+
 	for {
 		select {
 		case <-m.GetLearningChannel():
@@ -98,7 +98,7 @@ func checkManagerIsStarted(m *Manager) error {
 			return errors.New("timeout waiting for first event")
 		case <-time.After(250 * time.Millisecond):
 			// we continuously run a command to generate events
-			if err := exec.Command("/usr/bin/true").Run(); err != nil {
+			if err := cgInfo.RunInCgroup("/usr/bin/true", []string{}); err != nil {
 				return err
 			}
 		}
@@ -122,7 +122,7 @@ func (m *Manager) findEventInChannel(ty ChannelType, cgID uint64, expectedPath s
 		case event := <-channel:
 			m.logger.Info("Received event", "event", event)
 			if event.CgroupID == cgID &&
-				event.CgTrackerID == 0 &&
+				event.CgTrackerID == cgID &&
 				event.ExePath == expectedPath {
 				m.logger.Info("Found event", "event", event)
 				return nil
@@ -133,19 +133,6 @@ func (m *Manager) findEventInChannel(ty ChannelType, cgID uint64, expectedPath s
 			return errors.New("timeout waiting for event")
 		}
 	}
-}
-
-func waitRunningManager(t *testing.T) (*Manager, func(), error) {
-	manager, cleanup, err := startManager(t.Context(), newTestLogger(t))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if err = checkManagerIsStarted(manager); err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-	return manager, cleanup, nil
 }
 
 type runCommandArgs struct {
@@ -205,16 +192,26 @@ func newCgroupRunnerWithLogger(t *testing.T, logger *slog.Logger) (*cgroupRunner
 		return nil, err
 	}
 
-	if err = checkManagerIsStarted(manager); err != nil {
-		cleanup()
-		return nil, err
-	}
+	defer func() {
+		if err != nil {
+			cleanup()
+		}
+	}()
 
 	// Create the cgroup where we will run our commands
 	// the manager is already started so we can use `GetCgroupResolutionPrefix`
 	cgInfo, err := createTestCgroup(cgroups.GetCgroupResolutionPrefix())
 	if err != nil {
-		cleanup()
+		return nil, err
+	}
+
+	// track the cgroup
+	err = manager.GetCgroupTrackerUpdateFunc()(cgInfo.id, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if err = checkManagerIsStarted(manager, &cgInfo); err != nil {
 		return nil, err
 	}
 

@@ -432,6 +432,11 @@ int BPF_PROG(execve_send, struct task_struct *p, pid_t old_pid, struct linux_bin
 	evt->cg_tracker_id = cgrp_get_tracker_id(evt->cgid);
 	evt->mode = 0;  // default it to 0 for now
 
+	if(!evt->cg_tracker_id) {
+		// not a container being tracked.
+		return 0;
+	}
+
 	u32 current_offset = populate_evt_with_path(evt, bprm);
 	if(current_offset == 0) {
 		return 0;
