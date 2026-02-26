@@ -146,12 +146,14 @@ var _ = Describe("Learning", func() {
 					eventCache := eventhandler.NewLearningEventCache()
 					reconciler := newTestLearningReconciler(perWorkerClient, eventCache)
 
-					for _, learningEvent := range eventsToProcess {
-						eventCache.MergeEvent(learningEvent)
-					}
+					eventCache.MergeEvent(eventhandler.KubeWorkload{
+						Namespace:    "default",
+						Workload:     "ubuntu-deployment",
+						WorkloadKind: "Deployment",
+					}, eventsToProcess)
 
 					for _, learningEvent := range eventsToProcess {
-						_, err = reconciler.Reconcile(groupCtx, eventscraper.KubeWorkload{
+						_, err = reconciler.Reconcile(groupCtx, eventhandler.KubeWorkload{
 							Namespace:    learningEvent.Namespace,
 							Workload:     learningEvent.Workload,
 							WorkloadKind: learningEvent.WorkloadKind,
@@ -273,12 +275,14 @@ var _ = Describe("Learning", func() {
 				testProposal.Name = testProposalName
 				Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
 
-				for _, learningEvent := range tc.processEvents {
-					eventCache.MergeEvent(learningEvent)
-				}
+				eventCache.MergeEvent(eventhandler.KubeWorkload{
+					Namespace:    testNamespace,
+					Workload:     testResourceName,
+					WorkloadKind: "Deployment",
+				}, tc.processEvents)
 
 				var result ctrl.Result
-				result, err = reconciler.Reconcile(ctx, eventscraper.KubeWorkload{
+				result, err = reconciler.Reconcile(ctx, eventhandler.KubeWorkload{
 					Namespace:    testNamespace,
 					Workload:     testResourceName,
 					WorkloadKind: "Deployment",
@@ -345,12 +349,14 @@ var _ = Describe("Learning", func() {
 
 			Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
 
-			for _, learningEvent := range processEvents {
-				eventCache.MergeEvent(learningEvent)
-			}
+			eventCache.MergeEvent(eventhandler.KubeWorkload{
+				Namespace:    testNamespace,
+				Workload:     testResourceName,
+				WorkloadKind: "Deployment",
+			}, processEvents)
 
 			var result ctrl.Result
-			result, err = reconciler.Reconcile(ctx, eventscraper.KubeWorkload{
+			result, err = reconciler.Reconcile(ctx, eventhandler.KubeWorkload{
 				Namespace:    testNamespace,
 				Workload:     testResourceName,
 				WorkloadKind: "Deployment",

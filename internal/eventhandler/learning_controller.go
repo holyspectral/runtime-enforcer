@@ -30,6 +30,12 @@ import (
 // On a simple kind cluster we saw more than 4200 process exec during the initial process cache dump, so this seems a reasonable default for now.
 const DefaultEventChannelBufferSize = 4096
 
+type KubeWorkload struct {
+	Namespace    string `json:"namespace"`
+	Workload     string `json:"workload"`
+	WorkloadKind string `json:"workloadKind"`
+}
+
 // GetWorkloadPolicyProposalName returns the name of WorkloadPolicyProposal
 // based on a high level resource and its name.
 func GetWorkloadPolicyProposalName(kind string, resourceName string) (string, error) {
@@ -62,34 +68,30 @@ func GetWorkloadPolicyProposalName(kind string, resourceName string) (string, er
 
 type LearningEventCache struct {
 	mu            sync.Mutex
-	processEvents map[eventscraper.KubeWorkload][]eventscraper.KubeProcessInfo
+	processEvents map[KubeWorkload][]eventscraper.KubeProcessInfo
 }
 
 func NewLearningEventCache() *LearningEventCache {
 	return &LearningEventCache{
-		processEvents: make(map[eventscraper.KubeWorkload][]eventscraper.KubeProcessInfo),
+		processEvents: make(map[KubeWorkload][]eventscraper.KubeProcessInfo),
 	}
 }
 
-func (c *LearningEventCache) MergeEvent(event eventscraper.KubeProcessInfo) {
-	req := eventscraper.KubeWorkload{
-		Namespace:    event.Namespace,
-		Workload:     event.Workload,
-		WorkloadKind: event.WorkloadKind,
-	}
+func (c *LearningEventCache) MergeEvent(workload KubeWorkload, events []eventscraper.KubeProcessInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.processEvents[req] = append(c.processEvents[req], event)
+	c.processEvents[workload] = append(c.processEvents[workload], events...)
 }
 
-func (c *LearningEventCache) GetEvents(req eventscraper.KubeWorkload) []eventscraper.KubeProcessInfo {
+func (c *LearningEventCache) PopEvents(req KubeWorkload) []eventscraper.KubeProcessInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	events := c.processEvents[req]
+	delete(c.processEvents, req)
 	return events
 }
 
-func (c *LearningEventCache) Purge(req eventscraper.KubeWorkload) {
+func (c *LearningEventCache) Purge(req KubeWorkload) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.processEvents, req)
@@ -132,7 +134,7 @@ func NewLearningReconciler(client client.Client, eventCache *LearningEventCache)
 // Reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
 func (r *LearningReconciler) Reconcile(
 	ctx context.Context,
-	req eventscraper.KubeWorkload,
+	req KubeWorkload,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -153,7 +155,14 @@ func (r *LearningReconciler) Reconcile(
 		return ctrl.Result{}, nil
 	}
 
-	processEvts := r.eventCache.GetEvents(req)
+	processEvts := r.eventCache.PopEvents(req)
+
+	defer func() {
+		// If the data fails to be written into API server, we put the events back to cache.
+		if err != nil {
+			r.eventCache.MergeEvent(req, processEvts)
+		}
+	}()
 
 	proposalName, err = GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)
 	if err != nil {
@@ -197,9 +206,6 @@ func (r *LearningReconciler) Reconcile(
 	}
 
 	if result != controllerutil.OperationResultNone {
-		// clean up the event queue since they're all merged.
-		r.eventCache.Purge(req)
-
 		// Emit trace when a new process is learned.
 		var span trace.Span
 		now := time.Now()
@@ -232,7 +238,7 @@ type ProcessEventHandler struct {
 func (e ProcessEventHandler) Create(
 	_ context.Context,
 	_ event.TypedCreateEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
+	_ workqueue.TypedRateLimitingInterface[KubeWorkload],
 ) {
 
 }
@@ -240,7 +246,7 @@ func (e ProcessEventHandler) Create(
 func (e ProcessEventHandler) Update(
 	_ context.Context,
 	_ event.TypedUpdateEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
+	_ workqueue.TypedRateLimitingInterface[KubeWorkload],
 ) {
 
 }
@@ -248,7 +254,7 @@ func (e ProcessEventHandler) Update(
 func (e ProcessEventHandler) Delete(
 	_ context.Context,
 	_ event.TypedDeleteEvent[eventscraper.KubeProcessInfo],
-	_ workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
+	_ workqueue.TypedRateLimitingInterface[KubeWorkload],
 ) {
 
 }
@@ -256,10 +262,15 @@ func (e ProcessEventHandler) Delete(
 func (e ProcessEventHandler) Generic(
 	_ context.Context,
 	evt event.TypedGenericEvent[eventscraper.KubeProcessInfo],
-	q workqueue.TypedRateLimitingInterface[eventscraper.KubeWorkload],
+	q workqueue.TypedRateLimitingInterface[KubeWorkload],
 ) {
-	e.eventCache.MergeEvent(evt.Object)
-	q.AddRateLimited(eventscraper.KubeWorkload{
+	e.eventCache.MergeEvent(KubeWorkload{
+		Namespace:    evt.Object.Namespace,
+		Workload:     evt.Object.Workload,
+		WorkloadKind: evt.Object.WorkloadKind,
+	}, []eventscraper.KubeProcessInfo{evt.Object})
+
+	q.AddRateLimited(KubeWorkload{
 		Namespace:    evt.Object.Namespace,
 		Workload:     evt.Object.Workload,
 		WorkloadKind: evt.Object.WorkloadKind,
@@ -268,7 +279,7 @@ func (e ProcessEventHandler) Generic(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *LearningReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return builder.TypedControllerManagedBy[eventscraper.KubeWorkload](mgr).
+	return builder.TypedControllerManagedBy[KubeWorkload](mgr).
 		Named("learningEvent").
 		WatchesRawSource(
 			source.TypedChannel(

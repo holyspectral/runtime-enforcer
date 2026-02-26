@@ -81,6 +81,7 @@ func (p *plugin) Synchronize(
 			// we don't have cgroups so this pod will be never queried
 			p.logger.WarnContext(ctx, "received pod with no containers",
 				"pod", pod.GetName(),
+				"podID", pod.GetId(),
 				"namespace", pod.GetNamespace(),
 			)
 			continue

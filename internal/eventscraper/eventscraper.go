@@ -23,12 +23,6 @@ type EventScraper struct {
 	tracer              trace.Tracer
 }
 
-type KubeWorkload struct {
-	Namespace    string `json:"namespace"`
-	Workload     string `json:"workload"`
-	WorkloadKind string `json:"workloadKind"`
-}
-
 type KubeProcessInfo struct {
 	Namespace      string `json:"namespace"`
 	Workload       string `json:"workload"`
