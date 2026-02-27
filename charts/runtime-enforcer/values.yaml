@@ -12,7 +12,7 @@ operator:
         - ALL
     image:
       repository: ghcr.io/rancher-sandbox/runtime-enforcer/operator
-      tag: v0.2.0
+      tag: v0.3.0
       pullPolicy: IfNotPresent
     # To make the Pods "Guaranteed" (evicted last under node pressure), kubelet requires
     # requests and limits are specified for all the containers and they are equal.
