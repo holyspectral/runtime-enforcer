@@ -52,6 +52,15 @@ questions:
       Process enforcer remains unaffected.
     group: Learning
 
+  - variable: learning.namespaceSelector
+    type: string
+    default: ""
+    label: Namespace Selector
+    description: |
+      Label selector for namespaces to include in learning (empty = all).
+    group: Learning
+    show_if: learning.enabled=true
+
   ###############################################################################
   # OpenTelemetry
   ###############################################################################

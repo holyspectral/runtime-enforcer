@@ -35,6 +35,13 @@ spec:
         {{- if .Values.learning.enabled }}
         - --enable-learning
         {{- end }}
+        {{- if .Values.learning.namespaceSelector }}
+        {{- if kindIs "string" .Values.learning.namespaceSelector }}
+        - --learning-namespace-selector={{ .Values.learning.namespaceSelector }}
+        {{- else }}
+        - --learning-namespace-selector={{ .Values.learning.namespaceSelector | toJson }}
+        {{- end }}
+        {{- end }}
         - --grpc-port={{ .Values.agent.agent.grpcExporterPort }}
         - --grpc-mtls-cert-dir={{ include "runtime-enforcer.grpc.certDir" . }}
         - --log-level={{ .Values.agent.agent.logLevel }}

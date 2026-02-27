@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,8 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/nri"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -30,14 +33,15 @@ import (
 )
 
 type Config struct {
-	enableTracing     bool
-	enableOtelSidecar bool
-	enableLearning    bool
-	nriSocketPath     string
-	nriPluginIdx      string
-	probeAddr         string
-	grpcConf          grpcexporter.Config
-	logLevel          string
+	enableTracing             bool
+	enableOtelSidecar         bool
+	enableLearning            bool
+	learningNamespaceSelector string
+	nriSocketPath             string
+	nriPluginIdx              string
+	probeAddr                 string
+	grpcConf                  grpcexporter.Config
+	logLevel                  string
 }
 
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
@@ -87,11 +91,22 @@ func setupLearningReconciler(
 		}, nil
 	}
 
-	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient())
+	var nsSelector labels.Selector
+	// If the learning namespace selector is empty, the learning will apply to all namespaces.
+	// Otherwise, we parse the learning namespace selector.
+	if config.learningNamespaceSelector != "" {
+		selector, err := parseLearningNamespaceSelector(config.learningNamespaceSelector)
+		if err != nil {
+			return nil, fmt.Errorf("invalid learning-namespace-selector %q: %w", config.learningNamespaceSelector, err)
+		}
+		nsSelector = selector
+	}
+
+	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient(), nsSelector)
 	if err := learningReconciler.SetupWithManager(ctrlMgr); err != nil {
 		return nil, fmt.Errorf("unable to create learning reconciler: %w", err)
 	}
-	logger.InfoContext(ctx, "learning mode is enabled")
+	logger.InfoContext(ctx, "learning mode is enabled", "namespaceSelector", config.learningNamespaceSelector)
 	return learningReconciler.EnqueueEvent, nil
 }
 
@@ -242,6 +257,21 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
+// parseLearningNamespaceSelector parses the learning namespace selector from either:
+// - A JSON object (e.g. {"matchLabels":{"env":"prod"}}.
+// - A string in Kubernetes label selector format (e.g. "env=prod").
+func parseLearningNamespaceSelector(s string) (labels.Selector, error) {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "{") {
+		var ls metav1.LabelSelector
+		if err := json.Unmarshal([]byte(s), &ls); err != nil {
+			return nil, fmt.Errorf("invalid JSON label selector %q: %w", s, err)
+		}
+		return metav1.LabelSelectorAsSelector(&ls)
+	}
+	return labels.Parse(s)
+}
+
 func main() {
 	var err error
 	var config Config
@@ -253,6 +283,12 @@ func main() {
 	flag.BoolVar(&config.enableTracing, "enable-tracing", false, "Enable tracing collection")
 	flag.BoolVar(&config.enableOtelSidecar, "enable-otel-sidecar", false, "Enable OpenTelemetry sidecar")
 	flag.BoolVar(&config.enableLearning, "enable-learning", false, "Enable learning mode")
+	flag.StringVar(
+		&config.learningNamespaceSelector,
+		"learning-namespace-selector",
+		"",
+		"Label selector for namespaces to include in learning (empty = all)",
+	)
 	flag.StringVar(&config.nriSocketPath, "nri-socket-path", "/var/run/nri/nri.sock", "NRI socket path")
 	flag.StringVar(&config.nriPluginIdx, "nri-plugin-index", "00", "NRI plugin index")
 	flag.StringVar(&config.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")

@@ -9,6 +9,7 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -22,8 +23,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTestLearningReconciler(client client.Client) *eventhandler.LearningReconciler {
-	reconciler := eventhandler.NewLearningReconciler(client)
+func newTestLearningReconciler(client client.Client, selector labels.Selector) *eventhandler.LearningReconciler {
+	reconciler := eventhandler.NewLearningReconciler(client, selector)
 	// we don't want owner references to be added in tests because the webhook won't complete it and the api server will reject the resource creation with a partial ownerReference.
 	reconciler.OwnerRefEnricher = func(_ *securityv1alpha1.WorkloadPolicyProposal, _ string, _ string) {}
 	return reconciler
@@ -96,171 +97,239 @@ var _ = Describe("Learning", func() {
 			})).To(Succeed())
 		})
 
-		It("should learn container behavior correctly", func() {
-			By("appending process list without duplicate and missing")
-			// In this test, we create multiple reconcilers to simulate the behavior of multiple daemons/nodes.
-			// The test case here is pretty lenient to prevent tests from broken randomly.
-			const workerNum = 10
-			const eventsToProcessNum = 10
+		When("namespace selector is not specified", func() {
+			It("should learn container behavior correctly", func() {
+				By("appending process list without duplicate and missing")
+				// In this test, we create multiple reconcilers to simulate the behavior of multiple daemons/nodes.
+				// The test case here is pretty lenient to prevent tests from broken randomly.
+				const workerNum = 10
+				const eventsToProcessNum = 10
 
-			eventsToProcess := []eventscraper.KubeProcessInfo{}
-			expectedAllowList := []string{}
+				eventsToProcess := []eventscraper.KubeProcessInfo{}
+				expectedAllowList := []string{}
 
-			for i := range eventsToProcessNum {
-				eventsToProcess = append(eventsToProcess, eventscraper.KubeProcessInfo{
-					Namespace:      "default",
-					ContainerName:  "ubuntu",
-					ExecutablePath: fmt.Sprintf("/usr/bin/sleep%d", i),
-					Workload:       "ubuntu-deployment",
-					WorkloadKind:   "Deployment",
-				})
-				expectedAllowList = append(expectedAllowList, fmt.Sprintf("/usr/bin/sleep%d", i))
-			}
-
-			g, groupCtx := errgroup.WithContext(ctx)
-
-			for i := range workerNum {
-				index := i
-				g.Go(func() error {
-					var err error
-					var perWorkerClient client.Client
-					name := fmt.Sprintf("worker%d", index)
-					logf.Log.Info("worker started", "name", name)
-
-					scheme := runtime.NewScheme()
-					err = securityv1alpha1.AddToScheme(scheme)
-					if err != nil {
-						return fmt.Errorf("failed to add scheme: %w", err)
-					}
-
-					perWorkerClient, err = client.New(cfg, client.Options{
-						Scheme: scheme,
+				for i := range eventsToProcessNum {
+					eventsToProcess = append(eventsToProcess, eventscraper.KubeProcessInfo{
+						Namespace:      "default",
+						ContainerName:  "ubuntu",
+						ExecutablePath: fmt.Sprintf("/usr/bin/sleep%d", i),
+						Workload:       "ubuntu-deployment",
+						WorkloadKind:   "Deployment",
 					})
-					if err != nil {
-						return fmt.Errorf("failed to create client: %w", err)
-					}
+					expectedAllowList = append(expectedAllowList, fmt.Sprintf("/usr/bin/sleep%d", i))
+				}
 
-					reconciler := newTestLearningReconciler(perWorkerClient)
-					for _, learningEvent := range eventsToProcess {
-						for {
-							_, err = reconciler.Reconcile(groupCtx, learningEvent)
-							if err == nil {
-								break
-							}
-							if !errors.IsConflict(err) {
-								return err
+				g, groupCtx := errgroup.WithContext(ctx)
+
+				for i := range workerNum {
+					index := i
+					g.Go(func() error {
+						var err error
+						var perWorkerClient client.Client
+						name := fmt.Sprintf("worker%d", index)
+						logf.Log.Info("worker started", "name", name)
+
+						scheme := runtime.NewScheme()
+						err = securityv1alpha1.AddToScheme(scheme)
+						if err != nil {
+							return fmt.Errorf("failed to add scheme: %w", err)
+						}
+
+						perWorkerClient, err = client.New(cfg, client.Options{
+							Scheme: scheme,
+						})
+						if err != nil {
+							return fmt.Errorf("failed to create client: %w", err)
+						}
+
+						reconciler := newTestLearningReconciler(perWorkerClient, nil)
+						for _, learningEvent := range eventsToProcess {
+							for {
+								_, err = reconciler.Reconcile(groupCtx, learningEvent)
+								if err == nil {
+									break
+								}
+								if !errors.IsConflict(err) {
+									return err
+								}
 							}
 						}
-					}
-					logf.Log.Info("worker finished", "name", name)
-					return nil
-				})
-			}
+						logf.Log.Info("worker finished", "name", name)
+						return nil
+					})
+				}
 
-			if err := g.Wait(); err != nil {
+				if err := g.Wait(); err != nil {
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				proposalResult := securityv1alpha1.WorkloadPolicyProposal{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "deploy-ubuntu-deployment",
+						Namespace: "default",
+					},
+				}
+
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: proposalResult.Namespace,
+					Name:      proposalResult.Name,
+				}, &proposalResult)
 				Expect(err).NotTo(HaveOccurred())
-			}
 
-			proposalResult := securityv1alpha1.WorkloadPolicyProposal{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "deploy-ubuntu-deployment",
-					Namespace: "default",
-				},
-			}
+				rules := proposalResult.Spec.RulesByContainer["ubuntu"]
 
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Namespace: proposalResult.Namespace,
-				Name:      proposalResult.Name,
-			}, &proposalResult)
-			Expect(err).NotTo(HaveOccurred())
+				Expect(rules.Executables.Allowed).To(HaveLen(eventsToProcessNum))
+				Expect(rules.Executables.Allowed).To(ContainElements(expectedAllowList))
+			})
 
-			rules := proposalResult.Spec.RulesByContainer["ubuntu"]
+			It("should correctly learn process behavior", func() {
+				var err error
 
-			Expect(rules.Executables.Allowed).To(HaveLen(eventsToProcessNum))
-			Expect(rules.Executables.Allowed).To(ContainElements(expectedAllowList))
-		})
+				const testNamespace = "default"
+				const testResourceName = "ubuntu-deployment-2"
+				const testProposalName = "deploy-ubuntu-deployment-2"
 
-		It("should correctly learn process behavior", func() {
-			var err error
-
-			const testNamespace = "default"
-			const testResourceName = "ubuntu-deployment-2"
-			const testProposalName = "deploy-ubuntu-deployment-2"
-
-			tcs := []struct {
-				processEvents  []eventscraper.KubeProcessInfo
-				expectedResult []string
-			}{
-				{
-					processEvents: []eventscraper.KubeProcessInfo{
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/sleep",
+				tcs := []struct {
+					processEvents  []eventscraper.KubeProcessInfo
+					expectedResult []string
+				}{
+					{
+						processEvents: []eventscraper.KubeProcessInfo{
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/sleep",
+							},
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/bash",
+							},
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/ls",
+							},
 						},
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/bash",
-						},
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/ls",
+						expectedResult: []string{
+							"/usr/bin/sleep",
+							"/usr/bin/bash",
+							"/usr/bin/ls",
 						},
 					},
-					expectedResult: []string{
-						"/usr/bin/sleep",
-						"/usr/bin/bash",
-						"/usr/bin/ls",
-					},
-				},
-				{
-					processEvents: []eventscraper.KubeProcessInfo{
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/sleep",
+					{
+						processEvents: []eventscraper.KubeProcessInfo{
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/sleep",
+							},
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/sleep",
+							},
+							{
+								Namespace:      testNamespace,
+								Workload:       testResourceName,
+								WorkloadKind:   "Deployment",
+								ContainerName:  "ubuntu",
+								ExecutablePath: "/usr/bin/sleep",
+							},
 						},
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/sleep",
-						},
-						{
-							Namespace:      testNamespace,
-							Workload:       testResourceName,
-							WorkloadKind:   "Deployment",
-							ContainerName:  "ubuntu",
-							ExecutablePath: "/usr/bin/sleep",
+						expectedResult: []string{
+							"/usr/bin/sleep",
 						},
 					},
-					expectedResult: []string{
-						"/usr/bin/sleep",
-					},
-				},
-			}
+				}
 
-			reconciler := newTestLearningReconciler(k8sClient)
+				reconciler := newTestLearningReconciler(k8sClient, nil)
 
-			for _, tc := range tcs {
-				// Create an empty policy proposal
+				for _, tc := range tcs {
+					// Create an empty policy proposal
+					testProposal := proposal.DeepCopy()
+					testProposal.Namespace = testNamespace
+					testProposal.Name = testProposalName
+					Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
+
+					for _, learningEvent := range tc.processEvents {
+						var result ctrl.Result
+						result, err = reconciler.Reconcile(ctx, learningEvent)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(result).To(Equal(ctrl.Result{}))
+					}
+
+					err = k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: testNamespace,
+						Name:      testProposalName,
+					}, testProposal)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(
+						testProposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed,
+					).To(ContainElements(tc.expectedResult))
+
+					Expect(k8sClient.Delete(ctx, &securityv1alpha1.WorkloadPolicyProposal{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      testProposal.Name,
+							Namespace: testProposal.Namespace,
+						},
+					})).To(Succeed())
+				}
+			})
+
+			It("should not learn process behavior when a policy proposal is labeled as ready", func() {
+				const testNamespace = "default"
+				const testResourceName = "ubuntu-deployment-3"
+				const testProposalName = "deploy-ubuntu-deployment-3"
+
+				var err error
+
+				processEvents := []eventscraper.KubeProcessInfo{
+					{
+						Namespace:      testNamespace,
+						Workload:       testResourceName,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/sleep",
+					},
+					{
+						Namespace:      testNamespace,
+						Workload:       testResourceName,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/bash",
+					},
+					{
+						Namespace:      testNamespace,
+						Workload:       testResourceName,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/ls",
+					},
+				}
+
+				reconciler := eventhandler.NewLearningReconciler(k8sClient, nil)
+
 				testProposal := proposal.DeepCopy()
 				testProposal.Namespace = testNamespace
 				testProposal.Name = testProposalName
+				labels := map[string]string{}
+				labels[securityv1alpha1.ApprovalLabelKey] = "true"
+				testProposal.SetLabels(labels)
+
 				Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
 
-				for _, learningEvent := range tc.processEvents {
+				for _, learningEvent := range processEvents {
 					var result ctrl.Result
 					result, err = reconciler.Reconcile(ctx, learningEvent)
 					Expect(err).NotTo(HaveOccurred())
@@ -272,7 +341,7 @@ var _ = Describe("Learning", func() {
 					Name:      testProposalName,
 				}, testProposal)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(testProposal.Spec.RulesByContainer["ubuntu"].Executables.Allowed).To(Equal(tc.expectedResult))
+				Expect(testProposal.Spec.RulesByContainer).To(BeNil())
 
 				Expect(k8sClient.Delete(ctx, &securityv1alpha1.WorkloadPolicyProposal{
 					ObjectMeta: metav1.ObjectMeta{
@@ -280,71 +349,88 @@ var _ = Describe("Learning", func() {
 						Namespace: testProposal.Namespace,
 					},
 				})).To(Succeed())
-			}
+			})
 		})
 
-		It("should not learn process behavior when a policy proposal is labeled as ready", func() {
-			const testNamespace = "default"
-			const testResourceName = "ubuntu-deployment-3"
-			const testProposalName = "deploy-ubuntu-deployment-3"
+		When("namespace selector is specified", func() {
+			When("namespace does not match selector", func() {
+				It("should skip reconciliation and not create resources", func(ctx context.Context) {
+					By("Creating a reconciler with a namespace selector")
+					selector := labels.Set{
+						"env": "testing",
+					}.AsSelector()
+					reconciler := newTestLearningReconciler(k8sClient, selector)
 
-			var err error
+					By("Creating a namespace that does not match the selector")
+					namespace := &corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "unmatched-namespace",
+							Labels: map[string]string{
+								"env": "development",
+							},
+						},
+					}
+					Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
 
-			processEvents := []eventscraper.KubeProcessInfo{
-				{
-					Namespace:      testNamespace,
-					Workload:       testResourceName,
-					WorkloadKind:   "Deployment",
-					ContainerName:  "ubuntu",
-					ExecutablePath: "/usr/bin/sleep",
-				},
-				{
-					Namespace:      testNamespace,
-					Workload:       testResourceName,
-					WorkloadKind:   "Deployment",
-					ContainerName:  "ubuntu",
-					ExecutablePath: "/usr/bin/bash",
-				},
-				{
-					Namespace:      testNamespace,
-					Workload:       testResourceName,
-					WorkloadKind:   "Deployment",
-					ContainerName:  "ubuntu",
-					ExecutablePath: "/usr/bin/ls",
-				},
-			}
+					By("Reconciling a namespace that does not match the selector")
+					_, err := reconciler.Reconcile(ctx, eventscraper.KubeProcessInfo{
+						Namespace:      namespace.Name,
+						Workload:       deployment.Name,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/sleep",
+					})
+					Expect(err).NotTo(HaveOccurred())
 
-			reconciler := eventhandler.NewLearningReconciler(k8sClient)
+					By("Verifying no WorkloadPolicyProposal is created")
+					var proposalList securityv1alpha1.WorkloadPolicyProposalList
+					Expect(k8sClient.List(ctx, &proposalList, client.InNamespace(namespace.Name))).To(Succeed())
+					Expect(proposalList.Items).To(BeEmpty())
 
-			testProposal := proposal.DeepCopy()
-			testProposal.Namespace = testNamespace
-			testProposal.Name = testProposalName
-			labels := map[string]string{}
-			labels[securityv1alpha1.ApprovalLabelKey] = "true"
-			testProposal.SetLabels(labels)
+					Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
+				})
+			})
 
-			Expect(k8sClient.Create(ctx, testProposal)).To(Succeed())
+			When("namespace matches selector", func() {
+				It("should create WorkloadPolicyProposal and learn process behavior", func(ctx context.Context) {
+					By("Creating a reconciler with a namespace selector")
+					selector := labels.Set{
+						"env": "testing",
+					}.AsSelector()
+					reconciler := newTestLearningReconciler(k8sClient, selector)
 
-			for _, learningEvent := range processEvents {
-				var result ctrl.Result
-				result, err = reconciler.Reconcile(ctx, learningEvent)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(ctrl.Result{}))
-			}
+					By("Creating a namespace that matches the selector")
+					namespace := &corev1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "matched-namespace",
+							Labels: map[string]string{
+								"env": "testing",
+							},
+						},
+					}
+					Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
+					By("Reconciling a namespace that matches the selector")
+					_, err := reconciler.Reconcile(ctx, eventscraper.KubeProcessInfo{
+						Namespace:      namespace.Name,
+						Workload:       deployment.Name,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/sleep",
+					})
+					Expect(err).NotTo(HaveOccurred())
 
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Namespace: testNamespace,
-				Name:      testProposalName,
-			}, testProposal)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(testProposal.Spec.RulesByContainer).To(BeNil())
+					By("Verifying WorkloadPolicyProposal is created")
+					var proposalList securityv1alpha1.WorkloadPolicyProposalList
+					Expect(k8sClient.List(ctx, &proposalList, client.InNamespace(namespace.Name))).To(Succeed())
+					Expect(proposalList.Items).To(HaveLen(1))
+					Expect(proposalList.Items[0].Spec.RulesByContainer).To(HaveKey("ubuntu"))
+					Expect(
+						proposalList.Items[0].Spec.RulesByContainer["ubuntu"].Executables.Allowed,
+					).To(ContainElement("/usr/bin/sleep"))
 
-			Expect(k8sClient.Delete(ctx, &securityv1alpha1.WorkloadPolicyProposal{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      testProposal.Name,
-					Namespace: testProposal.Namespace,
-				},
-			})).To(Succeed())
+					Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
+				})
+			})
 		})
 	})
 })
