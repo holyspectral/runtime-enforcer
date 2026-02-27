@@ -57,7 +57,7 @@ actions:
 targets:
   update_helm_version:
     scmid: default
-    name: Update Helm chart version
+    name: update Helm chart version
     kind: yaml
     sourceid: chartVersion
     spec:
@@ -65,7 +65,7 @@ targets:
       key: $.version
   update_appversion:
     scmid: default
-    name: Update Helm chart appVersion
+    name: update Helm chart appVersion
     kind: yaml
     sourceid: releaseVersion
     spec:
@@ -73,7 +73,7 @@ targets:
       key: $.appVersion
   update_operator_version:
     scmid: default
-    name: Update Helm chart operator version
+    name: update Helm chart operator version
     kind: yaml
     sourceid: releaseVersion
     spec:
@@ -81,7 +81,7 @@ targets:
       key: $.operator.manager.image.tag
   update_agent_version:
     scmid: default
-    name: Update Helm chart agent version
+    name: update Helm chart agent version
     kind: yaml
     sourceid: releaseVersion
     spec:
