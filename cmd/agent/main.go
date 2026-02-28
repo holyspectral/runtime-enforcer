@@ -17,6 +17,7 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/nri"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
+	workloadpolicyhandler "github.com/rancher-sandbox/runtime-enforcer/internal/workloadpolicy_handler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,6 +75,17 @@ func setupGRPCExporter(
 	}
 	if err = ctrlMgr.Add(exporter); err != nil {
 		return fmt.Errorf("failed to add gRPC exporter to controller manager: %w", err)
+	}
+	return nil
+}
+
+func setupWorkloadPolicyHandler(
+	ctrlMgr manager.Manager,
+	resolver *resolver.Resolver,
+) error {
+	wpHandler := workloadpolicyhandler.NewWorkloadPolicyHandler(ctrlMgr.GetClient(), resolver)
+	if err := wpHandler.SetupWithManager(ctrlMgr); err != nil {
+		return fmt.Errorf("unable to set up WorkloadPolicy handler: %w", err)
 	}
 	return nil
 }
@@ -184,6 +196,10 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create resolver: %w", err)
+	}
+
+	if err = setupWorkloadPolicyHandler(ctrlMgr, resolver); err != nil {
+		return err
 	}
 
 	var nriHandler *nri.Handler

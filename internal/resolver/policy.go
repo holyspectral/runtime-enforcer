@@ -7,7 +7,6 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
-	"k8s.io/client-go/tools/cache"
 )
 
 type (
@@ -169,8 +168,8 @@ func (r *Resolver) syncWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) (policyByCont
 	return newContainers, nil
 }
 
-// handleWPAdd adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
-func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
+// HandleWPAdd adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
+func (r *Resolver) HandleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"add-wp-policy",
 		"name", wp.Name,
@@ -317,41 +316,6 @@ func resourceCheck(method string, obj interface{}) *v1alpha1.WorkloadPolicy {
 		panic(fmt.Sprintf("unexpected object type: method=%s, object=%v", method, obj))
 	}
 	return wp
-}
-
-func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			wp := resourceCheck("add-policy", obj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPAdd(wp); err != nil {
-				r.logger.Error("failed to add policy", "error", err)
-				return
-			}
-		},
-		UpdateFunc: func(_ interface{}, newObj interface{}) {
-			wp := resourceCheck("update-policy", newObj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPUpdate(wp); err != nil {
-				r.logger.Error("failed to update policy", "error", err)
-				return
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			wp := resourceCheck("delete-policy", obj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPDelete(wp); err != nil {
-				r.logger.Error("failed to delete policy", "error", err)
-				return
-			}
-		},
-	}
 }
 
 // GetPolicyStatuses returns the current policy statuses keyed by namespaced name (e.g. "namespace/name").

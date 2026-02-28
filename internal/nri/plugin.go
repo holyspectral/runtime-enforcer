@@ -139,7 +139,7 @@ func (p *plugin) StartContainer(
 
 	if err = p.resolver.AddPodContainerFromNri(podData); err != nil {
 		p.logger.ErrorContext(ctx, "failed to add pod container from NRI",
-			"error", err)
+			"error", err, "pod", pod.GetName(), "container", container.GetName())
 	}
 	return nil
 }
@@ -151,7 +151,7 @@ func (p *plugin) StartContainer(
 func (p *plugin) RemoveContainer(ctx context.Context, pod *api.PodSandbox, container *api.Container) error {
 	if err := p.resolver.RemovePodContainerFromNri(pod.GetId(), container.GetId()); err != nil {
 		p.logger.ErrorContext(ctx, "failed to remove pod container from NRI",
-			"error", err)
+			"error", err, "pod", pod.GetName(), "container", container.GetName())
 	}
 	return nil
 }

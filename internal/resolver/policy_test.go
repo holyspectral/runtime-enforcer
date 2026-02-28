@@ -97,7 +97,7 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 	r.mu.Unlock()
 
 	// Add
-	require.NoError(t, r.handleWPAdd(wp))
+	require.NoError(t, r.HandleWPAdd(wp))
 	require.Contains(t, r.wpState, key)
 	state := r.wpState[key]
 	require.Len(t, state.polByContainer, 2)
