@@ -1,10 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
-HELM_VALUES_SCHEMA_JSON_VERSION := v2.3.1
-
-HELM_SCHEMA ?= go run github.com/losisin/helm-values-schema-json/v2@$(HELM_VALUES_SCHEMA_JSON_VERSION)
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -72,7 +68,7 @@ TARGET=operator agent
 $(foreach T,$(TARGET),$(eval $(call BUILD_template,$(T))))
 
 .PHONY: generate
-generate: manifests generate-ebpf generate-proto generate-api generate-crd-docs
+generate: manifests generate-ebpf generate-proto generate-api generate-crd-docs generate-chart
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
@@ -210,6 +206,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 PROTOC_GEN_GO=$(LOCALBIN)/protoc-gen-go
 PROTOC_GEN_GO_GRPC=$(LOCALBIN)/protoc-gen-go-grpc
+HELM_VALUES_SCHEMA_JSON ?= $(LOCALBIN)/helm-values-schema-json
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0
@@ -219,6 +216,7 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v1.63.4
+HELM_VALUES_SCHEMA_JSON_VERSION ?= v2.3.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -263,9 +261,12 @@ generate-api:
 	go install ./hack/tools.go
 	API_KNOWN_VIOLATIONS_DIR=. UPDATE_API_KNOWN_VIOLATIONS=true ./hack/update-codegen.sh
 
+$(HELM_VALUES_SCHEMA_JSON): | $(LOCALBIN)
+	$(call go-install-tool,$(HELM_VALUES_SCHEMA_JSON),github.com/losisin/helm-values-schema-json/v2,$(HELM_VALUES_SCHEMA_JSON_VERSION))
+
 .PHONY: generate-chart
-generate-chart: ## Generate Helm chart values schema.
-	$(HELM_SCHEMA) --values charts/runtime-enforcer/values.yaml --output charts/runtime-enforcer/values.schema.json
+generate-chart: $(HELM_VALUES_SCHEMA_JSON) ## Generate Helm chart values schema.
+	$(HELM_VALUES_SCHEMA_JSON) --values charts/runtime-enforcer/values.yaml --output charts/runtime-enforcer/values.schema.json
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
