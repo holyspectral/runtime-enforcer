@@ -17,8 +17,14 @@ spec:
     metadata:
       labels:
       {{- include "runtime-enforcer.agent.labelSelector" . | nindent 8 }}
+      {{- with .Values.agent.podLabels }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       annotations:
         kubectl.kubernetes.io/default-container: agent
+      {{- with .Values.agent.podAnnotations }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- if .Values.priorityClass.name }}
       priorityClassName: {{ .Values.priorityClass.name }}
@@ -49,27 +55,30 @@ spec:
         command:
         - /agent
         env:
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-        {{- if or .Values.telemetry.metrics .Values.telemetry.tracing }}
-        {{- if eq .Values.telemetry.mode "custom" }}
-          - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: {{.Values.telemetry.custom.endpoint}}
-          - name: OTEL_EXPORTER_OTLP_INSECURE
-            value: {{ .Values.telemetry.custom.insecure | default false | quote }}
-        {{- if and (not .Values.telemetry.custom.insecure) .Values.telemetry.custom.otelCollectorCertificateSecret }}
-          - name: OTEL_EXPORTER_OTLP_CERTIFICATE
-            value: /tmp/otel-collector-certs/ca.crt 
-        {{- end }}
-        {{- if and (not .Values.telemetry.custom.insecure) .Values.telemetry.custom.otelCollectorClientCertificateSecret }}
-          - name: OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE
-            value: /tmp/otel-collector-client-certs/tls.crt
-          - name: OTEL_EXPORTER_OTLP_CLIENT_KEY
-            value: /tmp/otel-collector-client-certs/tls.key
-        {{- end }}
-        {{- end }}
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      {{- if or .Values.telemetry.metrics .Values.telemetry.tracing }}
+      {{- if eq .Values.telemetry.mode "custom" }}
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: {{.Values.telemetry.custom.endpoint}}
+        - name: OTEL_EXPORTER_OTLP_INSECURE
+          value: {{ .Values.telemetry.custom.insecure | default false | quote }}
+      {{- if and (not .Values.telemetry.custom.insecure) .Values.telemetry.custom.otelCollectorCertificateSecret }}
+        - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+          value: /tmp/otel-collector-certs/ca.crt 
+      {{- end }}
+      {{- if and (not .Values.telemetry.custom.insecure) .Values.telemetry.custom.otelCollectorClientCertificateSecret }}
+        - name: OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE
+          value: /tmp/otel-collector-client-certs/tls.crt
+        - name: OTEL_EXPORTER_OTLP_CLIENT_KEY
+          value: /tmp/otel-collector-client-certs/tls.key
+      {{- end }}
+      {{- end }}
+      {{- end }}
+        {{- with .Values.agent.agent.env }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
         image: {{ .Values.agent.agent.image.repository }}:{{ .Values.agent.agent.image.tag
           | default .Chart.AppVersion }}
@@ -99,6 +108,14 @@ spec:
       terminationGracePeriodSeconds: 10
       {{- with .Values.agent.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:

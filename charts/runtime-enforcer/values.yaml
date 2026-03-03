@@ -4,6 +4,8 @@ operator:
     - --metrics-bind-address=:8443
     - --leader-elect
     - --health-probe-bind-address=:8081
+    # operator.manager.env -- Additional environment variables
+    env: {}
     containerSecurityContext:
       runAsUser: 1000
       allowPrivilegeEscalation: false
@@ -39,10 +41,20 @@ operator:
   serviceAccount:
     annotations: {}
   tolerations: []
+  # operator.podLabels -- Additional labels to add to the operator pods.
+  podLabels: {}
+  # operator.podAnnotations -- Additional annotations to add to the operator pods.
+  podAnnotations: {}
+  # operator.nodeSelector -- Node selector for the operator pods.
+  nodeSelector: {}
+  # operator.affinity -- Affinity rules for the operator pods.
+  affinity: {}
 agent:
   agent:
     args:
     - ""
+    # agent.agent.env -- Additional environment variables
+    env: {}
     containerSecurityContext:
       privileged: true
       allowPrivilegeEscalation: true
@@ -88,6 +100,14 @@ agent:
   serviceAccount:
     annotations: {}
   tolerations: []
+  # agent.podLabels -- Additional labels to add to the agent pods.
+  podLabels: {}
+  # agent.podAnnotations -- Additional annotations to add to the agent pods.
+  podAnnotations: {}
+  # agent.nodeSelector -- Node selector for the agent pods.
+  nodeSelector: {}
+  # agent.affinity -- Affinity rules for the agent pods.
+  affinity: {}
   nriSocketPath: /var/run/nri/
 kubernetesClusterDomain: cluster.local
 

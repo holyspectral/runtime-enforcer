@@ -16,8 +16,14 @@ spec:
       labels:
         app.kubernetes.io/component: operator
       {{- include "runtime-enforcer.selectorLabels" . | nindent 8 }}
+      {{- with .Values.operator.podLabels }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       annotations:
         kubectl.kubernetes.io/default-container: manager
+      {{- with .Values.operator.podAnnotations }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- if .Values.priorityClass.name }}
       priorityClassName: {{ .Values.priorityClass.name }}
@@ -38,6 +44,9 @@ spec:
         env:
         - name: KUBERNETES_CLUSTER_DOMAIN
           value: {{ quote .Values.kubernetesClusterDomain }}
+        {{- with .Values.operator.manager.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         image: {{ .Values.operator.manager.image.repository }}:{{ .Values.operator.manager.image.tag
           | default .Chart.AppVersion }}
         imagePullPolicy: {{ .Values.operator.manager.image.pullPolicy }}
@@ -86,6 +95,14 @@ spec:
         8 }}
       {{- with .Values.operator.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.affinity }}
+      affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "runtime-enforcer.fullname" . }}-controller-manager

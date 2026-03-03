@@ -5,6 +5,9 @@
         "agent": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object"
+                },
                 "agent": {
                     "type": "object",
                     "properties": {
@@ -41,6 +44,9 @@
                                     "type": "boolean"
                                 }
                             }
+                        },
+                        "env": {
+                            "type": "object"
                         },
                         "grpcExporterPort": {
                             "type": "string"
@@ -94,8 +100,17 @@
                 "hostPID": {
                     "type": "boolean"
                 },
+                "nodeSelector": {
+                    "type": "object"
+                },
                 "nriSocketPath": {
                     "type": "string"
+                },
+                "podAnnotations": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
                 },
                 "podSecurityContext": {
                     "type": "object",
@@ -143,6 +158,9 @@
         "operator": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object"
+                },
                 "manager": {
                     "type": "object",
                     "properties": {
@@ -173,6 +191,9 @@
                                     "type": "integer"
                                 }
                             }
+                        },
+                        "env": {
+                            "type": "object"
                         },
                         "image": {
                             "type": "object",
@@ -219,6 +240,15 @@
                             "type": "string"
                         }
                     }
+                },
+                "nodeSelector": {
+                    "type": "object"
+                },
+                "podAnnotations": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
                 },
                 "podSecurityContext": {
                     "type": "object",

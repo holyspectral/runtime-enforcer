@@ -68,3 +68,90 @@ tests:
             operator: "Equal"
             value: "experimental"
             effect: "NoSchedule"
+
+  - it: "should add extra pod environment variables"
+    set:
+      operator:
+        manager:
+          env:
+            - name: EXTRA_ENV
+              value: extra_value
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].env"
+          content:
+            name: EXTRA_ENV
+            value: extra_value
+
+  - it: "should add extra pod labels"
+    set:
+      operator:
+        podLabels:
+          environment: production
+          team: infra
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels.environment
+          value: production
+      - equal:
+          path: spec.template.metadata.labels.team
+          value: infra
+
+  - it: "should add extra pod annotations"
+    set:
+      operator:
+        podAnnotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "8443"
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+          value: "true"
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/port"]
+          value: "8443"
+
+  - it: "should set nodeSelector"
+    set:
+      operator:
+        nodeSelector:
+          kubernetes.io/os: linux
+          node-role: control-plane
+    asserts:
+      - equal:
+          path: spec.template.spec.nodeSelector["kubernetes.io/os"]
+          value: linux
+      - equal:
+          path: spec.template.spec.nodeSelector["node-role"]
+          value: control-plane
+
+  - it: "should not render nodeSelector when empty"
+    set:
+      operator:
+        nodeSelector: {}
+    asserts:
+      - notExists:
+          path: spec.template.spec.nodeSelector
+
+  - it: "should set affinity"
+    set:
+      operator:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: runtime-enforcer
+                topologyKey: kubernetes.io/hostname
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey
+          value: kubernetes.io/hostname
+
+  - it: "should not render affinity when empty"
+    set:
+      operator:
+        affinity: {}
+    asserts:
+      - notExists:
+          path: spec.template.spec.affinity
