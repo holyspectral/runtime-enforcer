@@ -3,6 +3,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -10,9 +11,11 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -37,7 +40,9 @@ func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 }
 
 type testAgentClient struct {
-	policies map[string]*pb.PolicyStatus
+	policies   map[string]*pb.PolicyStatus
+	violations []*pb.ViolationRecord
+	scrapeErr  error
 }
 
 func newTestAgentClient(policies map[string]*pb.PolicyStatus) *testAgentClient {
@@ -51,7 +56,7 @@ func (c *testAgentClient) listPoliciesStatus(_ context.Context) (map[string]*pb.
 }
 
 func (c *testAgentClient) scrapeViolations(_ context.Context) ([]*pb.ViolationRecord, error) {
-	return nil, nil
+	return c.violations, c.scrapeErr
 }
 
 func (c *testAgentClient) close() error {
@@ -330,4 +335,119 @@ func TestMergeViolations(t *testing.T) {
 			require.Equal(t, tt.expected, got)
 		})
 	}
+}
+
+func TestGetViolationsByPolicy(t *testing.T) {
+	ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	pbRec := func(policy, pod, node string) *pb.ViolationRecord {
+		return &pb.ViolationRecord{
+			Timestamp:      timestamppb.New(ts),
+			PolicyName:     policy,
+			PodName:        pod,
+			ContainerName:  "c",
+			ExecutablePath: "/usr/bin/test",
+			NodeName:       node,
+			Action:         "monitor",
+		}
+	}
+
+	apiRec := func(pod, node string) v1alpha1.ViolationRecord {
+		return v1alpha1.ViolationRecord{
+			Timestamp:      metav1.NewTime(ts),
+			PodName:        pod,
+			ContainerName:  "c",
+			ExecutablePath: "/usr/bin/test",
+			NodeName:       node,
+			Action:         "monitor",
+		}
+	}
+
+	t.Run("collects violations from healthy nodes", func(t *testing.T) {
+		r := createTestWPStatusSync(t)
+
+		client1 := &testAgentClient{
+			violations: []*pb.ViolationRecord{
+				pbRec("default/policy-a", "pod-1", "node1"),
+			},
+		}
+		client2 := &testAgentClient{
+			violations: []*pb.ViolationRecord{
+				pbRec("default/policy-a", "pod-2", "node2"),
+				pbRec("default/policy-b", "pod-3", "node2"),
+			},
+		}
+		r.conns = map[string]agentClientAPI{
+			"node1": client1,
+			"node2": client2,
+		}
+
+		nodesInfo := nodesInfoMap{
+			"node1": nodeInfo{issue: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueNone}},
+			"node2": nodeInfo{issue: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueNone}},
+		}
+
+		got := r.getViolationsByPolicy(context.Background(), nodesInfo)
+
+		nnA := types.NamespacedName{Namespace: "default", Name: "policy-a"}
+		nnB := types.NamespacedName{Namespace: "default", Name: "policy-b"}
+
+		require.Len(t, got[nnA], 2)
+		require.Contains(t, got[nnA], apiRec("pod-1", "node1"))
+		require.Contains(t, got[nnA], apiRec("pod-2", "node2"))
+		require.Equal(t, []v1alpha1.ViolationRecord{apiRec("pod-3", "node2")}, got[nnB])
+	})
+
+	t.Run("skips nodes with issues", func(t *testing.T) {
+		r := createTestWPStatusSync(t)
+
+		client := &testAgentClient{
+			violations: []*pb.ViolationRecord{
+				pbRec("default/policy-a", "pod-1", "node1"),
+			},
+		}
+		r.conns = map[string]agentClientAPI{
+			"node1": client,
+		}
+
+		nodesInfo := nodesInfoMap{
+			"node1": nodeInfo{issue: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueMissingPolicy}},
+		}
+
+		got := r.getViolationsByPolicy(context.Background(), nodesInfo)
+		require.Empty(t, got)
+	})
+
+	t.Run("skips nodes without connection", func(t *testing.T) {
+		r := createTestWPStatusSync(t)
+		// No connections set up.
+
+		nodesInfo := nodesInfoMap{
+			"node1": nodeInfo{issue: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueNone}},
+		}
+
+		got := r.getViolationsByPolicy(context.Background(), nodesInfo)
+		require.Empty(t, got)
+	})
+
+	t.Run("skips node on scrape error", func(t *testing.T) {
+		r := createTestWPStatusSync(t)
+
+		r.conns = map[string]agentClientAPI{
+			"node1": &testAgentClient{scrapeErr: errors.New("connection refused")},
+		}
+
+		nodesInfo := nodesInfoMap{
+			"node1": nodeInfo{issue: v1alpha1.NodeIssue{Code: v1alpha1.NodeIssueNone}},
+		}
+
+		got := r.getViolationsByPolicy(context.Background(), nodesInfo)
+		require.Empty(t, got)
+	})
+
+	t.Run("empty nodes returns empty map", func(t *testing.T) {
+		r := createTestWPStatusSync(t)
+		got := r.getViolationsByPolicy(context.Background(), nodesInfoMap{})
+		require.Empty(t, got)
+	})
 }
