@@ -42,11 +42,11 @@ spec:
         command:
         - /operator
         env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
         {{- with .Values.operator.manager.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        - name: KUBERNETES_CLUSTER_DOMAIN
-          value: {{ quote .Values.kubernetesClusterDomain }}
         image: {{ .Values.operator.manager.image.repository }}:{{ .Values.operator.manager.image.tag
           | default .Chart.AppVersion }}
         imagePullPolicy: {{ .Values.operator.manager.image.pullPolicy }}

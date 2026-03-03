@@ -55,9 +55,6 @@ spec:
         command:
         - /agent
         env:
-        {{- with .Values.agent.agent.env }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
         - name: NODE_NAME
           valueFrom:
             fieldRef:
@@ -80,6 +77,9 @@ spec:
       {{- end }}
       {{- end }}
       {{- end }}
+        {{- with .Values.agent.agent.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         image: {{ .Values.agent.agent.image.repository }}:{{ .Values.agent.agent.image.tag
           | default .Chart.AppVersion }}
         imagePullPolicy: {{ .Values.agent.agent.image.pullPolicy }}
