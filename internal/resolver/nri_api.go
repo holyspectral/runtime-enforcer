@@ -83,6 +83,7 @@ func (r *Resolver) RemovePodContainerFromNri(podID PodID, containerID ContainerI
 	container, ok := state.containers[containerID]
 	if !ok {
 		// container not found
+		// todo: suppress the error here
 		return fmt.Errorf("container %s not found for pod %s", containerID, podID)
 	}
 

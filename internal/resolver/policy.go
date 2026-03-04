@@ -7,7 +7,6 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
-	"k8s.io/client-go/tools/cache"
 )
 
 type (
@@ -173,60 +172,9 @@ func (r *Resolver) syncWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) (policyByCont
 	return newContainers, nil
 }
 
-// handleWPAdd adds a new workload policy into the resolver cache and applies the policies to all running pods that require it.
-func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
-	r.logger.Info(
-		"add-wp-policy",
-		"name", wp.Name,
-		"namespace", wp.Namespace,
-	)
-	r.mu.Lock()
-
-	var info *wpInfo
-	var err error
-	mode := policymode.ParsePolicyModeToProto(wp.Spec.Mode)
-	defer func() {
-		if err != nil && info != nil {
-			info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_ERROR, mode, err.Error())
-		}
-		r.mu.Unlock()
-	}()
-
-	wpKey := wp.NamespacedName()
-	info = r.wpState[wpKey]
-	if info != nil {
-		return fmt.Errorf("workload policy already exists in internal state: %s", wpKey)
-	}
-
-	state := make(policyByContainer, len(wp.Spec.RulesByContainer))
-	info = &wpInfo{polByContainer: state}
-	r.wpState[wpKey] = info
-	var newContainers policyByContainer
-	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
-		return err
-	}
-	for containerName, policyID := range newContainers {
-		state[containerName] = policyID
-	}
-
-	// Now we search for pods that match the policy
-	for _, podEntry := range r.podCache {
-		if !podEntry.matchPolicy(wp.Name, wp.Namespace) {
-			continue
-		}
-
-		if err = r.applyPolicyToPod(podEntry, state); err != nil {
-			return err
-		}
-	}
-
-	info.setPolicyStatus(agentv1.PolicyState_POLICY_STATE_READY, mode, "")
-	return nil
-}
-
-// handleWPUpdate reinforces the workload policy from the current spec, removes containers
+// HandleWPUpdate reinforces the workload policy from the current spec, removes containers
 // that are no longer in the spec, then applies policy to all matching pods.
-func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
+func (r *Resolver) HandleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"update-wp-policy",
 		"name", wp.Name,
@@ -247,7 +195,9 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	wpKey := wp.NamespacedName()
 	info = r.wpState[wpKey]
 	if info == nil {
-		return fmt.Errorf("workload policy does not exist in internal state: %s", wpKey)
+		state := make(policyByContainer, len(wp.Spec.RulesByContainer))
+		info = &wpInfo{polByContainer: state}
+		r.wpState[wpKey] = info
 	}
 
 	var newContainers policyByContainer
@@ -284,8 +234,8 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
-// handleWPDelete removes a workload policy from the resolver cache and updates the BPF maps accordingly.
-func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
+// HandleWPDelete removes a workload policy from the resolver cache and updates the BPF maps accordingly.
+func (r *Resolver) HandleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"delete-wp-policy",
 		"name", wp.Name,
@@ -313,49 +263,6 @@ func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 		}
 	}
 	return nil
-}
-
-func resourceCheck(method string, obj interface{}) *v1alpha1.WorkloadPolicy {
-	wp, ok := obj.(*v1alpha1.WorkloadPolicy)
-	if !ok {
-		panic(fmt.Sprintf("unexpected object type: method=%s, object=%v", method, obj))
-	}
-	return wp
-}
-
-func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
-	return cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			wp := resourceCheck("add-policy", obj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPAdd(wp); err != nil {
-				r.logger.Error("failed to add policy", "error", err)
-				return
-			}
-		},
-		UpdateFunc: func(_ interface{}, newObj interface{}) {
-			wp := resourceCheck("update-policy", newObj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPUpdate(wp); err != nil {
-				r.logger.Error("failed to update policy", "error", err)
-				return
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			wp := resourceCheck("delete-policy", obj)
-			if wp == nil {
-				return
-			}
-			if err := r.handleWPDelete(wp); err != nil {
-				r.logger.Error("failed to delete policy", "error", err)
-				return
-			}
-		},
-	}
 }
 
 // GetPolicyStatuses returns the current policy statuses keyed by namespaced name (e.g. "namespace/name").

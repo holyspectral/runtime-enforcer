@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
@@ -44,8 +42,6 @@ type Config struct {
 	logLevel                  string
 }
 
-// +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
-
 func newControllerManager(config Config) (manager.Manager, error) {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
@@ -74,6 +70,17 @@ func setupGRPCExporter(
 	}
 	if err = ctrlMgr.Add(exporter); err != nil {
 		return fmt.Errorf("failed to add gRPC exporter to controller manager: %w", err)
+	}
+	return nil
+}
+
+func setupWorkloadPolicyHandler(
+	ctrlMgr manager.Manager,
+	resolver *resolver.Resolver,
+) error {
+	wpHandler := agenthandler.NewWorkloadPolicyHandler(ctrlMgr.GetClient(), resolver)
+	if err := wpHandler.SetupWithManager(ctrlMgr); err != nil {
+		return fmt.Errorf("unable to set up WorkloadPolicy handler: %w", err)
 	}
 	return nil
 }
@@ -108,38 +115,6 @@ func setupLearningReconciler(
 	}
 	logger.InfoContext(ctx, "learning mode is enabled", "namespaceSelector", config.learningNamespaceSelector)
 	return learningReconciler.EnqueueEvent, nil
-}
-
-func setupPolicyInformer(
-	ctx context.Context,
-	logger *slog.Logger,
-	ctrlMgr manager.Manager,
-	resolver *resolver.Resolver,
-) error {
-	workloadPolicyInformer, err := ctrlMgr.GetCache().GetInformer(ctx, &securityv1alpha1.WorkloadPolicy{})
-	if err != nil {
-		return fmt.Errorf("cannot get workload policy informer: %w", err)
-	}
-	handlerRegistration, err := workloadPolicyInformer.AddEventHandler(resolver.PolicyEventHandlers())
-	if err != nil {
-		return fmt.Errorf("failed to add event handler for workload policy: %w", err)
-	}
-
-	// controller-runtime doesn't support a separate startup probe, so we use the readiness probe instead.
-	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2644 for more details.
-	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(_ *http.Request) error {
-		// Instead of informer.HasSynced(), which checks if the internal storage is synced,
-		// we use ResourceEventHandlerRegistration.HasSynced() to ensure that
-		// the event handlers have been synced.
-		if !handlerRegistration.HasSynced() {
-			logger.Warn("workload policy informer has not yet synced")
-			return errors.New("workload policy informer has not yet synced")
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to add policy readiness probe: %w", err)
-	}
-	return nil
 }
 
 func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
@@ -186,6 +161,11 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		return fmt.Errorf("failed to create resolver: %w", err)
 	}
 
+	// TODO: handle startup probe
+	if err = setupWorkloadPolicyHandler(ctrlMgr, resolver); err != nil {
+		return err
+	}
+
 	var nriHandler *nri.Handler
 	nriHandler, err = nri.NewNRIHandler(
 		config.nriSocketPath,
@@ -193,6 +173,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		logger,
 		resolver,
 	)
+
 	if err != nil {
 		return fmt.Errorf("failed to create NRI handler: %w", err)
 	}
@@ -218,13 +199,6 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	)
 	if err = ctrlMgr.Add(evtScraper); err != nil {
 		return fmt.Errorf("failed to add event scraper to controller manager: %w", err)
-	}
-
-	//////////////////////
-	// Setup Policy Generator with the workload informer
-	//////////////////////
-	if err = setupPolicyInformer(ctx, logger, ctrlMgr, resolver); err != nil {
-		return err
 	}
 
 	//////////////////////
