@@ -1,11 +1,11 @@
-package eventhandler_test
+package agenthandler_test
 
 import (
 	"context"
 	"fmt"
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
-	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/agenthandler"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,8 +23,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTestLearningReconciler(client client.Client, selector labels.Selector) *eventhandler.LearningReconciler {
-	reconciler := eventhandler.NewLearningReconciler(client, selector)
+func newTestLearningReconciler(client client.Client, selector labels.Selector) *agenthandler.LearningReconciler {
+	reconciler := agenthandler.NewLearningReconciler(client, selector)
 	// we don't want owner references to be added in tests because the webhook won't complete it and the api server will reject the resource creation with a partial ownerReference.
 	reconciler.OwnerRefEnricher = func(_ *securityv1alpha1.WorkloadPolicyProposal, _ string, _ string) {}
 	return reconciler
@@ -318,7 +318,7 @@ var _ = Describe("Learning", func() {
 					},
 				}
 
-				reconciler := eventhandler.NewLearningReconciler(k8sClient, nil)
+				reconciler := agenthandler.NewLearningReconciler(k8sClient, nil)
 
 				testProposal := proposal.DeepCopy()
 				testProposal.Namespace = testNamespace
