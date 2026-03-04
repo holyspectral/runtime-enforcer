@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
@@ -81,12 +83,26 @@ func setupGRPCExporter(
 
 func setupWorkloadPolicyHandler(
 	ctrlMgr manager.Manager,
+	logger *slog.Logger,
 	resolver *resolver.Resolver,
 ) error {
-	wpHandler := agenthandler.NewWorkloadPolicyHandler(ctrlMgr.GetClient(), resolver)
-	if err := wpHandler.SetupWithManager(ctrlMgr); err != nil {
+	wpHandler := agenthandler.NewWorkloadPolicyHandler(ctrlMgr.GetClient(), logger, resolver)
+	err := wpHandler.SetupWithManager(ctrlMgr)
+	if err != nil {
 		return fmt.Errorf("unable to set up WorkloadPolicy handler: %w", err)
 	}
+	// controller-runtime doesn't support a separate startup probe, so we use the readiness probe instead.
+	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2644 for more details.
+	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(_ *http.Request) error {
+		if !wpHandler.HasSynced() {
+			logger.Warn("workload policy handler has not yet synced")
+			return errors.New("workload policy handler has not yet synced")
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to add policy readiness probe: %w", err)
+	}
+
 	return nil
 }
 
@@ -167,7 +183,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	}
 
 	// TODO: handle startup probe
-	if err = setupWorkloadPolicyHandler(ctrlMgr, resolver); err != nil {
+	if err = setupWorkloadPolicyHandler(ctrlMgr, logger, resolver); err != nil {
 		return err
 	}
 
