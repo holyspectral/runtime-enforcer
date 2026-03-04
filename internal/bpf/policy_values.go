@@ -216,9 +216,9 @@ func (m *Manager) generateBPFMaps(policyID uint64, values []string) error {
 	}
 
 	isPre5_9 := m.isKernelPre5_9()
-	for i := range subMaps {
+	for i, subMap := range subMaps {
 		// if the subMap is empty we skip it
-		if len(subMaps[i]) == 0 { //nolint:gosec // false positive
+		if len(subMap) == 0 {
 			continue
 		}
 
@@ -226,7 +226,7 @@ func (m *Manager) generateBPFMaps(policyID uint64, values []string) error {
 			policyID,
 			i,
 			isPre5_9,
-			subMaps[i], //nolint:gosec // false positive
+			subMap,
 		); err != nil {
 			return err
 		}
@@ -250,8 +250,8 @@ func (m *Manager) replaceBPFMaps(policyID uint64, values []string) error {
 	}
 
 	isPre5_9 := m.isKernelPre5_9()
-	for i := range subMaps {
-		if len(subMaps[i]) == 0 { //nolint:gosec // false positive
+	for i, subMap := range subMaps {
+		if len(subMap) == 0 {
 			// No values for this size bucket - delete the old inner map if it exists
 			if err = m.policyStringMaps[i].Delete(policyID); err != nil && !errors.Is(err, ebpf.ErrKeyNotExist) {
 				return fmt.Errorf("failed to remove policy (id=%d) from map %s: %w",
@@ -261,7 +261,7 @@ func (m *Manager) replaceBPFMaps(policyID uint64, values []string) error {
 		}
 
 		// Create and populate new inner map, then atomically replace
-		if err = m.replaceInnerBPFMap(policyID, i, isPre5_9, subMaps[i]); err != nil { //nolint:gosec // false positive
+		if err = m.replaceInnerBPFMap(policyID, i, isPre5_9, subMap); err != nil {
 			return err
 		}
 	}
