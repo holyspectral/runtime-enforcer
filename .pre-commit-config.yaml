@@ -22,3 +22,7 @@ repos:
           - --version=19
           - --checks=.clang-tidy
         files: ^bpf/.*\.c$
+  - repo: https://github.com/yoheimuta/protolint
+    rev: v0.56.4
+    hooks:
+      - id: protolint

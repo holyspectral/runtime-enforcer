@@ -14,6 +14,13 @@ sources:
       url: https://github.com/golangci/golangci-lint/
       versionFilter:
         kind: latest
+  protolintTag:
+    kind: gittag
+    spec:
+      key: name
+      url: https://github.com/yoheimuta/protolint/
+      versionFilter:
+        kind: latest
   cppLinterVersion:
     kind: gittag
     spec:
@@ -26,6 +33,13 @@ sources:
     spec:
       key: hash
       url: https://github.com/golangci/golangci-lint/
+      versionFilter:
+        kind: latest
+  protolintVersion:
+    kind: gittag
+    spec:
+      key: hash
+      url: https://github.com/yoheimuta/protolint/
       versionFilter:
         kind: latest
 
@@ -84,4 +98,14 @@ targets:
       file: .pre-commit-config.yaml
       key: $.repos[1].rev
       comment: '{{ source "cppLinterTag" }}'
+      engine: yamlpath
+  update_protolint_version:
+    scmid: default
+    name: 'Update protolint version to {{ source "protolintTag" }}'
+    kind: yaml
+    sourceid: protolintVersion
+    spec:
+      file: .pre-commit-config.yaml
+      key: $.repos[2].rev
+      comment: '{{ source "protolintTag" }}'
       engine: yamlpath
