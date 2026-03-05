@@ -76,14 +76,20 @@ func (r *Resolver) RemovePodContainerFromNri(podID PodID, containerID ContainerI
 
 	state, ok := r.podCache[podID]
 	if !ok {
-		return fmt.Errorf("pod %s not found", podID)
+		// This can happen with containerd when its NRI implementation doesn't send the containers with EXITED state in Synchronize() call,
+		// and we still see the exited container in RemoveContainer() call.
+		// Given the pod is not present in the cache, there is nothing we can do here.
+		r.logger.Info("the pod being removed is not in the cache. It was probably not in an active state.",
+			"containerID", containerID,
+			"podID", podID)
+		return nil
 	}
 
 	// remove the container from the pod
 	container, ok := state.containers[containerID]
 	if !ok {
-		// container not found
-		return fmt.Errorf("container %s not found for pod %s", containerID, podID)
+		r.logger.Warn("container not found", "containerID", containerID, "podID", podID)
+		return nil
 	}
 
 	if len(state.containers) == 1 {
