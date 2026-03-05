@@ -32,6 +32,32 @@ func (p *plugin) getWorkloadInfoAndLog(ctx context.Context, pod *api.PodSandbox)
 	return workloadName, workloadKind
 }
 
+func podSandboxToPodMeta(pod *api.PodSandbox, workloadName string, workloadKind workloadkind.Kind) resolver.PodMeta {
+	return resolver.PodMeta{
+		// K8s static pods are created by the Kubelet with a pod uid that is different from the one
+		// assigned by the API server. The pod uid created by the kubelet will be put in the `kubernetes.io/config.hash`
+		// annotations of the pod. Example:
+		//
+		// apiVersion: v1
+		// kind: Pod
+		// metadata:
+		//   annotations:
+		//     kubernetes.io/config.hash: b3cae5f340c39f8cecdf0bddc7a4cdf1 // UID assigned by the kubelet
+		//     kubernetes.io/config.mirror: b3cae5f340c39f8cecdf0bddc7a4cdf1
+		//   name: kube-scheduler-kind-control-plane
+		//   namespace: kube-system
+		//   uid: a2533bd3-3631-48b3-88e4-2d139233d057 // UID assigned by the API server
+		//
+		// We cannot recover the UID assigned by the API-server from the NRI context.
+		ID:           pod.GetUid(),
+		Name:         pod.GetName(),
+		Namespace:    pod.GetNamespace(),
+		WorkloadName: workloadName,
+		WorkloadType: string(workloadKind),
+		Labels:       pod.GetLabels(),
+	}
+}
+
 // Synchronize synchronizes the state of the NRI plugin with the current state of the pods and containers.
 func (p *plugin) Synchronize(
 	ctx context.Context,
@@ -89,14 +115,7 @@ func (p *plugin) Synchronize(
 
 		workloadName, workloadKind := p.getWorkloadInfoAndLog(ctx, pod)
 		podData := resolver.PodInput{
-			Meta: resolver.PodMeta{
-				ID:           pod.GetId(),
-				Name:         pod.GetName(),
-				Namespace:    pod.GetNamespace(),
-				WorkloadName: workloadName,
-				WorkloadType: string(workloadKind),
-				Labels:       pod.GetLabels(),
-			},
+			Meta:       podSandboxToPodMeta(pod, workloadName, workloadKind),
 			Containers: containers,
 		}
 
@@ -126,14 +145,7 @@ func (p *plugin) StartContainer(
 
 	workloadName, workloadKind := p.getWorkloadInfoAndLog(ctx, pod)
 	podData := resolver.PodInput{
-		Meta: resolver.PodMeta{
-			ID:           pod.GetId(),
-			Name:         pod.GetName(),
-			Namespace:    pod.GetNamespace(),
-			Labels:       pod.GetLabels(),
-			WorkloadName: workloadName,
-			WorkloadType: string(workloadKind),
-		},
+		Meta: podSandboxToPodMeta(pod, workloadName, workloadKind),
 		Containers: map[resolver.ContainerID]resolver.ContainerMeta{
 			container.GetId(): {
 				CgroupID: cgroupID,
@@ -155,7 +167,7 @@ func (p *plugin) StartContainer(
 // so it's possible that even if the container is stopped, we are still receiving some old events, and we want to enrich them.
 // That's the reason why we preferred `RemoveContainer` over `StopContainer`.
 func (p *plugin) RemoveContainer(ctx context.Context, pod *api.PodSandbox, container *api.Container) error {
-	if err := p.resolver.RemovePodContainerFromNri(pod.GetId(), container.GetId()); err != nil {
+	if err := p.resolver.RemovePodContainerFromNri(pod.GetUid(), container.GetId()); err != nil {
 		p.logger.ErrorContext(ctx, "failed to remove pod container from NRI",
 			"error", err)
 	}
