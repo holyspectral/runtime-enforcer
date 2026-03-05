@@ -166,10 +166,10 @@ func getMonitoringTest() types.Feature {
 					if !ok {
 						return false
 					}
-					if wp.Status.Violations == nil {
+					if len(wp.Status.Violations) == 0 {
 						return false
 					}
-					for _, v := range wp.Status.Violations.Violations {
+					for _, v := range wp.Status.Violations {
 						if v.ExecutablePath == "/usr/bin/apt" &&
 							v.Action == policymode.MonitorString &&
 							v.PodName == expectedPodName {
@@ -183,10 +183,10 @@ func getMonitoringTest() types.Feature {
 				t.Log("verifying violation record details")
 				err = r.Get(ctx, "test-policy", namespace, policyToCheck)
 				require.NoError(t, err)
-				require.NotNil(t, policyToCheck.Status.Violations)
+				require.NotEmpty(t, policyToCheck.Status.Violations)
 
 				var found bool
-				for _, v := range policyToCheck.Status.Violations.Violations {
+				for _, v := range policyToCheck.Status.Violations {
 					if v.ExecutablePath == "/usr/bin/apt" {
 						assert.Equal(t, policymode.MonitorString, v.Action)
 						assert.Equal(t, expectedPodName, v.PodName)

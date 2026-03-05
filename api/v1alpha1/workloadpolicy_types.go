@@ -73,13 +73,6 @@ type ViolationRecord struct {
 	Action string `json:"action"`
 }
 
-// ViolationStatus holds recent violation records for a WorkloadPolicy.
-type ViolationStatus struct {
-	// violations is the list of the most recent violation records (max 100).
-	// Oldest entries are dropped when the limit is reached.
-	Violations []ViolationRecord `json:"violations,omitempty"`
-}
-
 type WorkloadPolicyStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// nodesWithIssues contains the status of each node with issues.
@@ -96,9 +89,10 @@ type WorkloadPolicyStatus struct {
 	NodesTransitioning []string `json:"nodesTransitioning,omitempty"`
 	// phase indicates the current phase of the workload policy.
 	Phase Phase `json:"phase,omitempty"`
-	// violations holds recent violation records for the policy.
+	// violations is the list of the most recent violation records (max MaxViolationRecords).
+	// Oldest entries are dropped when the limit is reached.
 	// +optional
-	Violations *ViolationStatus `json:"violations,omitempty"`
+	Violations []ViolationRecord `json:"violations,omitempty"`
 }
 
 func (s *WorkloadPolicyStatus) AddNodeIssue(nodeName string, issue NodeIssue) {

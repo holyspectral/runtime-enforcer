@@ -24,8 +24,9 @@ type WorkloadPolicyStatusApplyConfiguration struct {
 	NodesTransitioning []string `json:"nodesTransitioning,omitempty"`
 	// phase indicates the current phase of the workload policy.
 	Phase *apiv1alpha1.Phase `json:"phase,omitempty"`
-	// violations holds recent violation records for the policy.
-	Violations *ViolationStatusApplyConfiguration `json:"violations,omitempty"`
+	// violations is the list of the most recent violation records (max MaxViolationRecords).
+	// Oldest entries are dropped when the limit is reached.
+	Violations []ViolationRecordApplyConfiguration `json:"violations,omitempty"`
 }
 
 // WorkloadPolicyStatusApplyConfiguration constructs a declarative configuration of the WorkloadPolicyStatus type for use with
@@ -106,10 +107,15 @@ func (b *WorkloadPolicyStatusApplyConfiguration) WithPhase(value apiv1alpha1.Pha
 	return b
 }
 
-// WithViolations sets the Violations field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Violations field is set to the value of the last call.
-func (b *WorkloadPolicyStatusApplyConfiguration) WithViolations(value *ViolationStatusApplyConfiguration) *WorkloadPolicyStatusApplyConfiguration {
-	b.Violations = value
+// WithViolations adds the given value to the Violations field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Violations field.
+func (b *WorkloadPolicyStatusApplyConfiguration) WithViolations(values ...*ViolationRecordApplyConfiguration) *WorkloadPolicyStatusApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithViolations")
+		}
+		b.Violations = append(b.Violations, *values[i])
+	}
 	return b
 }

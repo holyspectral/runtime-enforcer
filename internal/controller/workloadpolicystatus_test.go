@@ -256,9 +256,9 @@ func makeRecord(i int) v1alpha1.ViolationRecord {
 func TestMergeViolations(t *testing.T) {
 	tests := []struct {
 		name     string
-		existing *v1alpha1.ViolationStatus
+		existing []v1alpha1.ViolationRecord
 		scraped  []v1alpha1.ViolationRecord
-		expected *v1alpha1.ViolationStatus
+		expected []v1alpha1.ViolationRecord
 	}{
 		{
 			name:     "both nil/empty returns nil",
@@ -270,62 +270,38 @@ func TestMergeViolations(t *testing.T) {
 			name:     "scraped only",
 			existing: nil,
 			scraped:  []v1alpha1.ViolationRecord{makeRecord(2), makeRecord(1)},
-			expected: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(2), makeRecord(1)},
-			},
+			expected: []v1alpha1.ViolationRecord{makeRecord(2), makeRecord(1)},
 		},
 		{
-			name: "existing only",
-			existing: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(1)},
-			},
-			scraped: nil,
-			expected: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(1)},
-			},
+			name:     "existing only",
+			existing: []v1alpha1.ViolationRecord{makeRecord(1)},
+			scraped:  nil,
+			expected: []v1alpha1.ViolationRecord{makeRecord(1)},
 		},
 		{
-			name: "scraped prepended before existing",
-			existing: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(1)},
-			},
-			scraped: []v1alpha1.ViolationRecord{makeRecord(3), makeRecord(2)},
-			expected: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(3), makeRecord(2), makeRecord(1)},
-			},
+			name:     "scraped prepended before existing",
+			existing: []v1alpha1.ViolationRecord{makeRecord(1)},
+			scraped:  []v1alpha1.ViolationRecord{makeRecord(3), makeRecord(2)},
+			expected: []v1alpha1.ViolationRecord{makeRecord(3), makeRecord(2), makeRecord(1)},
 		},
 		{
 			name: "trims to MaxViolationRecords",
-			existing: func() *v1alpha1.ViolationStatus {
+			existing: func() []v1alpha1.ViolationRecord {
 				recs := make([]v1alpha1.ViolationRecord, v1alpha1.MaxViolationRecords)
 				for i := range recs {
 					recs[i] = makeRecord(i)
 				}
-				return &v1alpha1.ViolationStatus{Violations: recs}
+				return recs
 			}(),
 			scraped: []v1alpha1.ViolationRecord{makeRecord(999)},
-			expected: func() *v1alpha1.ViolationStatus {
+			expected: func() []v1alpha1.ViolationRecord {
 				recs := make([]v1alpha1.ViolationRecord, v1alpha1.MaxViolationRecords)
 				recs[0] = makeRecord(999)
 				for i := 1; i < v1alpha1.MaxViolationRecords; i++ {
 					recs[i] = makeRecord(i - 1)
 				}
-				return &v1alpha1.ViolationStatus{Violations: recs}
+				return recs
 			}(),
-		},
-		{
-			name:     "existing with empty violations returns scraped",
-			existing: &v1alpha1.ViolationStatus{},
-			scraped:  []v1alpha1.ViolationRecord{makeRecord(1)},
-			expected: &v1alpha1.ViolationStatus{
-				Violations: []v1alpha1.ViolationRecord{makeRecord(1)},
-			},
-		},
-		{
-			name:     "existing with empty violations and no scraped returns nil",
-			existing: &v1alpha1.ViolationStatus{},
-			scraped:  nil,
-			expected: nil,
 		},
 	}
 

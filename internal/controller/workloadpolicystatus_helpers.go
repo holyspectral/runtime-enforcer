@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
@@ -158,7 +159,7 @@ func (r *WorkloadPolicyStatusSync) processWorkloadPolicy(
 	}
 	newPolicy.Status.ObservedGeneration = wp.Generation
 
-	// Merge scraped violations into status: append new violations to existing,
+	// Merge scraped violations into status: prepend new violations to existing,
 	// then trim to the most recent MaxViolationRecords entries.
 	newPolicy.Status.Violations = mergeViolations(wp.Status.Violations, scrapedViolations)
 
@@ -168,34 +169,20 @@ func (r *WorkloadPolicyStatusSync) processWorkloadPolicy(
 	return r.Status().Update(ctx, newPolicy)
 }
 
-// mergeViolations prepends scraped violations to the existing violation status,
+// mergeViolations prepends scraped violations to the existing list,
 // trimming the tail (oldest) to keep only the most recent MaxViolationRecords.
 // The resulting list is ordered newest-to-oldest.
 func mergeViolations(
-	existing *v1alpha1.ViolationStatus,
+	existing []v1alpha1.ViolationRecord,
 	scraped []v1alpha1.ViolationRecord,
-) *v1alpha1.ViolationStatus {
-	if len(scraped) == 0 && existing == nil {
-		return nil
-	}
-
+) []v1alpha1.ViolationRecord {
 	// Prepend scraped (newest) before existing (older) so the list is newest-to-oldest.
-	var merged []v1alpha1.ViolationRecord
-	merged = append(merged, scraped...)
-	if existing != nil {
-		merged = append(merged, existing.Violations...)
-	}
+	merged := slices.Concat(scraped, existing)
 
 	// Trim tail (oldest entries) to keep the most recent MaxViolationRecords.
 	if len(merged) > v1alpha1.MaxViolationRecords {
 		merged = merged[:v1alpha1.MaxViolationRecords]
 	}
 
-	if len(merged) == 0 {
-		return nil
-	}
-
-	return &v1alpha1.ViolationStatus{
-		Violations: merged,
-	}
+	return merged
 }
