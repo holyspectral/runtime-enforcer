@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,23 +36,17 @@ type nodesInfoMap map[string]nodeInfo
 type WorkloadPolicyStatusSync struct {
 	client.Client
 
-	conns              map[string]agentClientAPI
-	agentClientFactory *agentClientFactory
+	conns              map[string]grpcexporter.AgentClientAPI
+	agentClientFactory *grpcexporter.AgentClientFactory
 	updateInterval     time.Duration
 	agentNamespace     string
 	agentLabelSelector map[string]string
 	logger             logr.Logger
 }
 
-type AgentGRPCConfig struct {
-	MTLSEnabled bool
-	CertDirPath string
-	Port        int
-}
-
 // WorkloadPolicyStatusSyncConfig holds the configuration for the WorkloadPolicyStatusSync.
 type WorkloadPolicyStatusSyncConfig struct {
-	AgentGRPCConf      AgentGRPCConfig
+	AgentGRPCConf      grpcexporter.AgentFactoryConfig
 	UpdateInterval     time.Duration
 	AgentNamespace     string
 	AgentLabelSelector string
@@ -77,14 +72,14 @@ func NewWorkloadPolicyStatusSync(
 		agentLabelSelector[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 	}
 
-	factory, err := newAgentClientFactory(&config.AgentGRPCConf)
+	factory, err := grpcexporter.NewAgentClientFactory(&config.AgentGRPCConf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create agent client factory: %w", err)
 	}
 
 	return &WorkloadPolicyStatusSync{
 		Client:             c,
-		conns:              make(map[string]agentClientAPI),
+		conns:              make(map[string]grpcexporter.AgentClientAPI),
 		agentClientFactory: factory,
 		updateInterval:     config.UpdateInterval,
 		agentNamespace:     config.AgentNamespace,
@@ -219,7 +214,7 @@ func (r *WorkloadPolicyStatusSync) getViolationsByPolicy(
 		if !nodeReady {
 			continue
 		}
-		pbViolations, err := agentClient.scrapeViolations(ctx)
+		pbViolations, err := agentClient.ScrapeViolations(ctx)
 		if err != nil {
 			r.logger.Error(err, "failed to scrape violations", "node", nodeName)
 			continue

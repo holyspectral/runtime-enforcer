@@ -1,4 +1,4 @@
-package controller
+package grpcexporter
 
 import (
 	"context"
@@ -20,14 +20,10 @@ import (
 
 const (
 	agentClientTimeout = 5 * time.Second
-
-	tlsCertFile = "tls.crt"
-	tlsKeyFile  = "tls.key"
-	caCertFile  = "ca.crt"
 )
 
-// agentClientFactory is responsible for creating agent clients.
-type agentClientFactory struct {
+// AgentClientFactory is responsible for creating agent clients.
+type AgentClientFactory struct {
 	port        string
 	mTLSEnabled bool
 	tlsCertPath string
@@ -35,7 +31,13 @@ type agentClientFactory struct {
 	caCertPath  string
 }
 
-func newAgentClientFactory(conf *AgentGRPCConfig) (*agentClientFactory, error) {
+type AgentFactoryConfig struct {
+	MTLSEnabled bool
+	CertDirPath string
+	Port        int
+}
+
+func NewAgentClientFactory(conf *AgentFactoryConfig) (*AgentClientFactory, error) {
 	if conf.Port == 0 {
 		return nil, fmt.Errorf("invalid gRPC port: %d", conf.Port)
 	}
@@ -59,7 +61,7 @@ func newAgentClientFactory(conf *AgentGRPCConfig) (*agentClientFactory, error) {
 			return nil, fmt.Errorf("failed to load key pair: %w", err)
 		}
 	}
-	return &agentClientFactory{
+	return &AgentClientFactory{
 		port:        strconv.Itoa(conf.Port),
 		tlsCertPath: tlsCertPath,
 		tlsKeyPath:  tlsKeyPath,
@@ -68,7 +70,7 @@ func newAgentClientFactory(conf *AgentGRPCConfig) (*agentClientFactory, error) {
 	}, nil
 }
 
-func (f *agentClientFactory) getConnCredentials(podNamespacedName string) (credentials.TransportCredentials, error) {
+func (f *AgentClientFactory) getConnCredentials(podNamespacedName string) (credentials.TransportCredentials, error) {
 	if !f.mTLSEnabled {
 		return insecure.NewCredentials(), nil
 	}
@@ -98,7 +100,7 @@ func (f *agentClientFactory) getConnCredentials(podNamespacedName string) (crede
 	return credentials.NewTLS(tlsConfig), nil
 }
 
-func (f *agentClientFactory) newClient(podIP, podName, podNamespace string) (*agentClient, error) {
+func (f *AgentClientFactory) NewClient(podIP, podName, podNamespace string) (*AgentClient, error) {
 	creds, err := f.getConnCredentials(fmt.Sprintf("%s.%s", podName, podNamespace))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connection credentials: %w", err)
@@ -110,26 +112,26 @@ func (f *agentClientFactory) newClient(podIP, podName, podNamespace string) (*ag
 		return nil, fmt.Errorf("grpc dial failed host %s: %w", host, err)
 	}
 
-	return &agentClient{
+	return &AgentClient{
 		conn:   conn,
 		client: pb.NewAgentObserverClient(conn),
 	}, nil
 }
 
-// agentClientAPI this interface is used to mock the client in tests.
-type agentClientAPI interface {
-	listPoliciesStatus(ctx context.Context) (map[string]*pb.PolicyStatus, error)
-	scrapeViolations(ctx context.Context) ([]*pb.ViolationRecord, error)
-	close() error
+// AgentClientAPI this interface could be used to mock clients in tests.
+type AgentClientAPI interface {
+	ListPoliciesStatus(ctx context.Context) (map[string]*pb.PolicyStatus, error)
+	ScrapeViolations(ctx context.Context) ([]*pb.ViolationRecord, error)
+	Close() error
 }
 
-// This is the implementation of agentClientAPI used in the production code.
-type agentClient struct {
+// AgentClient is the implementation of AgentClientAPI used in the production code.
+type AgentClient struct {
 	conn   *grpc.ClientConn
 	client pb.AgentObserverClient
 }
 
-func (c *agentClient) listPoliciesStatus(ctx context.Context) (map[string]*pb.PolicyStatus, error) {
+func (c *AgentClient) ListPoliciesStatus(ctx context.Context) (map[string]*pb.PolicyStatus, error) {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, agentClientTimeout)
 	defer timeoutCancel()
 
@@ -140,7 +142,7 @@ func (c *agentClient) listPoliciesStatus(ctx context.Context) (map[string]*pb.Po
 	return resp.GetPolicies(), nil
 }
 
-func (c *agentClient) scrapeViolations(ctx context.Context) ([]*pb.ViolationRecord, error) {
+func (c *AgentClient) ScrapeViolations(ctx context.Context) ([]*pb.ViolationRecord, error) {
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, agentClientTimeout)
 	defer timeoutCancel()
 
@@ -151,7 +153,7 @@ func (c *agentClient) scrapeViolations(ctx context.Context) ([]*pb.ViolationReco
 	return resp.GetViolations(), nil
 }
 
-func (c *agentClient) close() error {
+func (c *AgentClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -25,7 +26,7 @@ func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 	v1alpha1.AddToScheme(scheme)
 	cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 	config := &WorkloadPolicyStatusSyncConfig{
-		AgentGRPCConf: AgentGRPCConfig{
+		AgentGRPCConf: grpcexporter.AgentFactoryConfig{
 			Port:        50051,
 			MTLSEnabled: false,
 		},
@@ -51,15 +52,15 @@ func newTestAgentClient(policies map[string]*pb.PolicyStatus) *testAgentClient {
 	}
 }
 
-func (c *testAgentClient) listPoliciesStatus(_ context.Context) (map[string]*pb.PolicyStatus, error) {
+func (c *testAgentClient) ListPoliciesStatus(_ context.Context) (map[string]*pb.PolicyStatus, error) {
 	return c.policies, nil
 }
 
-func (c *testAgentClient) scrapeViolations(_ context.Context) ([]*pb.ViolationRecord, error) {
+func (c *testAgentClient) ScrapeViolations(_ context.Context) ([]*pb.ViolationRecord, error) {
 	return c.violations, c.scrapeErr
 }
 
-func (c *testAgentClient) close() error {
+func (c *testAgentClient) Close() error {
 	return nil
 }
 
@@ -70,7 +71,7 @@ func TestGCStaleConnections(t *testing.T) {
 	mockAgentClient := newTestAgentClient(nil)
 
 	// populate the connections for the controller
-	r.conns = map[string]agentClientAPI{
+	r.conns = map[string]grpcexporter.AgentClientAPI{
 		node1: mockAgentClient,
 		node2: mockAgentClient,
 		node3: mockAgentClient,
@@ -88,7 +89,7 @@ func TestGCStaleConnections(t *testing.T) {
 		},
 	}
 	r.gcStaleConnections(podList)
-	require.Equal(t, map[string]agentClientAPI{
+	require.Equal(t, map[string]grpcexporter.AgentClientAPI{
 		node1: mockAgentClient,
 		node2: mockAgentClient,
 	}, r.conns)
@@ -353,7 +354,7 @@ func TestGetViolationsByPolicy(t *testing.T) {
 				pbRec("default/policy-b", "pod-3", "node2"),
 			},
 		}
-		r.conns = map[string]agentClientAPI{
+		r.conns = map[string]grpcexporter.AgentClientAPI{
 			"node1": client1,
 			"node2": client2,
 		}
@@ -382,7 +383,7 @@ func TestGetViolationsByPolicy(t *testing.T) {
 				pbRec("default/policy-a", "pod-1", "node1"),
 			},
 		}
-		r.conns = map[string]agentClientAPI{
+		r.conns = map[string]grpcexporter.AgentClientAPI{
 			"node1": client,
 		}
 
@@ -409,7 +410,7 @@ func TestGetViolationsByPolicy(t *testing.T) {
 	t.Run("skips node on scrape error", func(t *testing.T) {
 		r := createTestWPStatusSync(t)
 
-		r.conns = map[string]agentClientAPI{
+		r.conns = map[string]grpcexporter.AgentClientAPI{
 			"node1": &testAgentClient{scrapeErr: errors.New("connection refused")},
 		}
 
