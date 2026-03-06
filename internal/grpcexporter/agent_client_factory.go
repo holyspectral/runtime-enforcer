@@ -107,7 +107,8 @@ func (f *AgentClientFactory) NewClient(podIP, podName, podNamespace string) (*Ag
 	}
 
 	return &AgentClient{
-		conn:   conn,
-		client: pb.NewAgentObserverClient(conn),
+		conn:    conn,
+		client:  pb.NewAgentObserverClient(conn),
+		timeout: agentClientTimeout, // for now this is a constant
 	}, nil
 }

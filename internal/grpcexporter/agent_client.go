@@ -21,12 +21,13 @@ type AgentClientAPI interface {
 
 // AgentClient is the implementation of AgentClientAPI used in the production code.
 type AgentClient struct {
-	conn   *grpc.ClientConn
-	client pb.AgentObserverClient
+	conn    *grpc.ClientConn
+	client  pb.AgentObserverClient
+	timeout time.Duration
 }
 
 func (c *AgentClient) ListPoliciesStatus(ctx context.Context) (map[string]*pb.PolicyStatus, error) {
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, agentClientTimeout)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, c.timeout)
 	defer timeoutCancel()
 
 	resp, err := c.client.ListPoliciesStatus(timeoutCtx, &pb.ListPoliciesStatusRequest{})
@@ -37,7 +38,7 @@ func (c *AgentClient) ListPoliciesStatus(ctx context.Context) (map[string]*pb.Po
 }
 
 func (c *AgentClient) ScrapeViolations(ctx context.Context) ([]*pb.ViolationRecord, error) {
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, agentClientTimeout)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, c.timeout)
 	defer timeoutCancel()
 
 	resp, err := c.client.ScrapeViolations(timeoutCtx, &pb.ScrapeViolationsRequest{})
