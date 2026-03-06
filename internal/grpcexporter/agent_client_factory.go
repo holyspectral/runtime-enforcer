@@ -2,7 +2,6 @@ package grpcexporter
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/rancher-sandbox/runtime-enforcer/internal/tlsutil"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -70,13 +70,9 @@ func (f *AgentClientFactory) getConnCredentials(podNamespacedName string) (crede
 	}
 
 	// we get them at each new connection so that we manage certificate rotation.
-	caPem, err := os.ReadFile(f.caCertPath)
+	certPool, err := tlsutil.LoadCACertPool(f.caCertPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA: %w", err)
-	}
-	certPool := x509.NewCertPool()
-	if !certPool.AppendCertsFromPEM(caPem) {
-		return nil, errors.New("failed to parse CA")
+		return nil, err
 	}
 
 	clientCert, err := tls.LoadX509KeyPair(f.tlsCertPath, f.tlsKeyPath)
