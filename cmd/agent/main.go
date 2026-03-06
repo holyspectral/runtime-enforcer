@@ -13,6 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/agenthandler"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/nri"
@@ -125,7 +126,7 @@ func setupLearningReconciler(
 		nsSelector = selector
 	}
 
-	learningReconciler := agenthandler.NewLearningReconciler(ctrlMgr.GetClient(), nsSelector)
+	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient(), nsSelector)
 	if err := learningReconciler.SetupWithManager(ctrlMgr); err != nil {
 		return nil, fmt.Errorf("unable to create learning reconciler: %w", err)
 	}
