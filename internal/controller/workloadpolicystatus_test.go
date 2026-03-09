@@ -55,6 +55,10 @@ func (c *testAgentClient) ListPoliciesStatus(_ context.Context) (map[string]*pb.
 	return c.policies, nil
 }
 
+func (c *testAgentClient) ListPodCache(_ context.Context) ([]*pb.PodView, error) {
+	return nil, nil
+}
+
 func (c *testAgentClient) ScrapeViolations(_ context.Context) ([]*pb.ViolationRecord, error) {
 	return c.violations, c.scrapeErr
 }
