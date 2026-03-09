@@ -20,7 +20,7 @@ import (
 // certificate pool is used.
 func Init(ctx context.Context, endpoint, caCertPath string) (otellog.Logger, func(context.Context) error, error) {
 	opts := []otlploggrpc.Option{
-		otlploggrpc.WithEndpoint(endpoint),
+		otlploggrpc.WithEndpointURL(endpoint),
 	}
 
 	if caCertPath != "" {
