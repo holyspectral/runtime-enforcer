@@ -89,8 +89,8 @@ func parseDaemonSet(podName string) (string, workloadkind.Kind) {
 	// we remove the suffix that is always present
 	nameWithoutSuffix := podName[:len(podName)-randomSuffixLen]
 
-	if strings.HasSuffix(nameWithoutSuffix, "-") {
-		return strings.TrimSuffix(nameWithoutSuffix, "-"), workloadkind.DaemonSet
+	if before, ok := strings.CutSuffix(nameWithoutSuffix, "-"); ok {
+		return before, workloadkind.DaemonSet
 	}
 	// if the `-` is not present, we consider the name as truncated, we add a suffix to signal it
 	return nameWithoutSuffix + truncatedSuffix, workloadkind.DaemonSet

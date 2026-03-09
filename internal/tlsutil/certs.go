@@ -19,7 +19,7 @@ const (
 )
 
 // LoadCACertPool reads PEM-encoded CA certificates from the given path and
-// return an x509.CertPool containing it.
+// return an "[x509.CertPool]" containing it.
 // This is useful for setting up TLS connections that verify against a custom CA,
 // and supports certificate rotation when called on each handshake.
 func LoadCACertPool(path string) (*x509.CertPool, error) {
@@ -35,7 +35,7 @@ func LoadCACertPool(path string) (*x509.CertPool, error) {
 }
 
 // LoadKeyPair loads a TLS certificate and private key from the given paths.
-// It is a thin wrapper around tls.LoadX509KeyPair that normalises the error
+// It is a thin wrapper around "[tls.LoadX509KeyPair]" that normalises the error
 // message for consistency.
 func LoadKeyPair(certPath, keyPath string) (tls.Certificate, error) {
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)

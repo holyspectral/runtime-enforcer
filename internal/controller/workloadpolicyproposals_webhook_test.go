@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("WorkloadPolicyProposal Webhook", func() {
@@ -109,8 +108,8 @@ var _ = Describe("WorkloadPolicyProposal Webhook", func() {
 									Kind:               "Deployment",
 									Name:               "ubuntu-deployment",
 									APIVersion:         "apps/v1",
-									Controller:         ptr.To(true),
-									BlockOwnerDeletion: ptr.To(true),
+									Controller:         new(true),
+									BlockOwnerDeletion: new(true),
 								},
 							},
 						},

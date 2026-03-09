@@ -61,8 +61,8 @@ func NewWorkloadPolicyStatusSync(
 	}
 
 	agentLabelSelector := make(map[string]string)
-	labels := strings.Split(config.AgentLabelSelector, ",")
-	for _, label := range labels {
+	labels := strings.SplitSeq(config.AgentLabelSelector, ",")
+	for label := range labels {
 		parts := strings.Split(label, "=")
 		if len(parts) != 2 { //nolint:mnd // label is composed of 2 parts
 			return nil, fmt.Errorf("label should be in the format 'key=value': %s. Invalid selector %s",

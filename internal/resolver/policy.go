@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
@@ -205,9 +206,7 @@ func (r *Resolver) handleWPAdd(wp *v1alpha1.WorkloadPolicy) error {
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
 		return err
 	}
-	for containerName, policyID := range newContainers {
-		state[containerName] = policyID
-	}
+	maps.Copy(state, newContainers)
 
 	// Now we search for pods that match the policy
 	for _, podEntry := range r.podCache {
@@ -254,9 +253,7 @@ func (r *Resolver) handleWPUpdate(wp *v1alpha1.WorkloadPolicy) error {
 	if newContainers, err = r.syncWorkloadPolicy(wp); err != nil {
 		return err
 	}
-	for containerName, policyID := range newContainers {
-		info.polByContainer[containerName] = policyID
-	}
+	maps.Copy(info.polByContainer, newContainers)
 
 	// Split state into applied (still in spec) vs removed (no longer in spec).
 	appliedMap := make(policyByContainer, len(wp.Spec.RulesByContainer))
@@ -315,7 +312,7 @@ func (r *Resolver) handleWPDelete(wp *v1alpha1.WorkloadPolicy) error {
 	return nil
 }
 
-func resourceCheck(method string, obj interface{}) *v1alpha1.WorkloadPolicy {
+func resourceCheck(method string, obj any) *v1alpha1.WorkloadPolicy {
 	wp, ok := obj.(*v1alpha1.WorkloadPolicy)
 	if !ok {
 		panic(fmt.Sprintf("unexpected object type: method=%s, object=%v", method, obj))
@@ -325,7 +322,7 @@ func resourceCheck(method string, obj interface{}) *v1alpha1.WorkloadPolicy {
 
 func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			wp := resourceCheck("add-policy", obj)
 			if wp == nil {
 				return
@@ -335,7 +332,7 @@ func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 				return
 			}
 		},
-		UpdateFunc: func(_ interface{}, newObj interface{}) {
+		UpdateFunc: func(_ any, newObj any) {
 			wp := resourceCheck("update-policy", newObj)
 			if wp == nil {
 				return
@@ -345,7 +342,7 @@ func (r *Resolver) PolicyEventHandlers() cache.ResourceEventHandler {
 				return
 			}
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			wp := resourceCheck("delete-policy", obj)
 			if wp == nil {
 				return

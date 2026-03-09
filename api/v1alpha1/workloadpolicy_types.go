@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"sort"
+	"slices"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -123,9 +123,7 @@ func (s *WorkloadPolicyStatus) SortTransitioningNodes() {
 	// updates on the WP if only the order of transitioning nodes has changed.
 	// Note: since this list is truncated it is still possible we trigger some updates if
 	// the number of transitioning nodes is greater than MaxTransitioningNodes.
-	sort.Slice(s.NodesTransitioning, func(i, j int) bool {
-		return s.NodesTransitioning[i] < s.NodesTransitioning[j]
-	})
+	slices.Sort(s.NodesTransitioning)
 }
 
 func (s *WorkloadPolicyStatus) AddTransitioningNode(nodeName string) {
