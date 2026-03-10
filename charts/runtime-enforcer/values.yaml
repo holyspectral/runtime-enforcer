@@ -181,8 +181,8 @@ telemetry:
     # collector using TLS. Both secrets must be created in the same namespace
     # where the controller is deployed.
     #
-    # telemetry.externalCollector.otelCollectorCertificateSecret should contains a key ca.crt
-    # storing the certifcate to validate the remote collector certificate.
+    # telemetry.externalCollector.otelCollectorCertificateSecret should contain a key ca.crt
+    # storing the certificate to validate the remote collector certificate.
     otelCollectorCertificateSecret: ""
     # telemetry.externalCollector.otelCollectorClientCertificateSecret secret is optional. It's
     # only required when the remote collector requires client authentication
