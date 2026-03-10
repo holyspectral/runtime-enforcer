@@ -1,13 +1,26 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 var version = "dev"
+
+// Custom usage template: no "kubectl [command]" line.
+const (
+	rootUsageTemplate = `Usage:
+  {{.UseLine}}
+
+Available Commands:
+{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}  {{rpad .Name .NamePadding}} {{.Short}}
+{{end}}{{end}}
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+`
+)
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -19,13 +32,17 @@ func newRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+
+	cmd.SetUsageTemplate(rootUsageTemplate)
+
+	cmd.AddCommand(newMarkReadyCmd())
+
 	return cmd
 }
 
 func main() {
 	cmd := newRootCmd()
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
