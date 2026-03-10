@@ -23,6 +23,13 @@ type markReadyOptions struct {
 const (
 	markReadyTimeout      = 30 * time.Second
 	markReadyPollInterval = 500 * time.Millisecond
+	// Custom usage template: no “Available Commands”.
+	markReadyUsageTemplate = `Usage:
+  {{.UseLine}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+`
 )
 
 func newMarkReadyCmd() *cobra.Command {
@@ -36,13 +43,7 @@ func newMarkReadyCmd() *cobra.Command {
 		RunE:  runMarkReadyCmd(opts),
 	}
 
-	// Custom usage template for this leaf command: no “Available Commands”.
-	cmd.SetUsageTemplate(`Usage:
-  {{.UseLine}}
-
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
-`)
+	cmd.SetUsageTemplate(markReadyUsageTemplate)
 
 	cmd.Flags().StringVarP(&opts.Namespace, "namespace", "n", "", "Namespace of the WorkloadPolicyProposal")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")

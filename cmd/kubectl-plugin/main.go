@@ -4,9 +4,23 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 var version = "dev"
+
+// Custom usage template: no "kubectl [command]" line.
+const (
+	rootUsageTemplate = `Usage:
+  {{.UseLine}}
+
+Available Commands:
+{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}  {{rpad .Name .NamePadding}} {{.Short}}
+{{end}}{{end}}
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+`
+)
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -19,19 +33,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	// Disable Cobra’s built-in "completion" command.
-	cmd.CompletionOptions.DisableDefaultCmd = true
-
-	// Custom usage template: no "kubectl [command]" line.
-	cmd.SetUsageTemplate(`Usage:
-  {{.UseLine}}
-
-Available Commands:
-{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}  {{rpad .Name .NamePadding}} {{.Short}}
-{{end}}{{end}}
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
-`)
+	cmd.SetUsageTemplate(rootUsageTemplate)
 
 	cmd.AddCommand(newMarkReadyCmd())
 
