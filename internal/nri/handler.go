@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"time"
 
 	retry "github.com/avast/retry-go/v4"
@@ -33,6 +34,7 @@ func newNRIPlugin(
 	p := &plugin{
 		logger:   logger.With("component", "nri-plugin"),
 		resolver: resolver,
+		failOpen: os.Getenv("NRI_FAILOPEN") == "true",
 	}
 
 	p.stub, err = stub.New(p, opts...)

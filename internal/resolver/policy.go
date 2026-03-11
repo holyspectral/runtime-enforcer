@@ -132,12 +132,19 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podEntry) error {
 	key := fmt.Sprintf("%s/%s", state.podNamespace(), policyName)
 	info := r.wpState[key]
 	if info == nil {
-		return fmt.Errorf(
-			"pod has policy label but policy does not exist. pod-name: %s, pod-namespace: %s, policy-name: %s",
-			state.podName(),
-			state.podNamespace(),
-			policyName,
+		// This can happen when the pod runs before the policy is created/reconciled when using GitOps to deploy.
+		// After the policy is reconciled, the policy will be applied, so we can safely ignore it for now.
+		//
+		// Another case is that the policy is just not created at all, which is likely an user error.
+		// We log a warning for both cases and return without applying any policy.
+		// This is to avoid the risk of blocking the pod creation unexpectedly.
+		r.logger.Warn(
+			"pod has policy label but policy does not exist. .",
+			"pod-name", state.podName(),
+			"pod-namespace", state.podNamespace(),
+			"policy-name", policyName,
 		)
+		return nil
 	}
 
 	return r.applyPolicyToPod(state, info.polByContainer)
