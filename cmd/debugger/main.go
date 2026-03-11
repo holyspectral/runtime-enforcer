@@ -2,10 +2,10 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -30,6 +30,52 @@ type conf struct {
 	agentPoolConf grpcexporter.AgentClientPoolConfig
 }
 
+func loadConfig() (conf, error) {
+	var config conf
+
+	// DEBUGGER_GRPC_PORT
+	portStr := os.Getenv("DEBUGGER_GRPC_PORT")
+	if portStr == "" {
+		config.agentPoolConf.Port = grpcexporter.DefaultAgentPort
+	} else {
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return conf{}, fmt.Errorf("invalid DEBUGGER_GRPC_PORT %q: %w", portStr, err)
+		}
+		config.agentPoolConf.Port = port
+	}
+
+	// DEBUGGER_INTERVAL
+	intervalStr := os.Getenv("DEBUGGER_INTERVAL")
+	if intervalStr == "" {
+		config.interval = defaultInterval
+	} else {
+		interval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			return conf{}, fmt.Errorf("invalid DEBUGGER_INTERVAL %q: %w", intervalStr, err)
+		}
+		config.interval = interval
+	}
+
+	// DEBUGGER_AGENT_LABEL_SELECTOR
+	labelSelector := os.Getenv("DEBUGGER_AGENT_LABEL_SELECTOR")
+	if labelSelector == "" {
+		config.agentPoolConf.LabelSelectorString = grpcexporter.DefaultAgentLabelSelectorString
+	} else {
+		config.agentPoolConf.LabelSelectorString = labelSelector
+	}
+
+	// DEBUGGER_CERT_DIR
+	certDir := os.Getenv("DEBUGGER_CERT_DIR")
+	if certDir == "" {
+		config.agentPoolConf.CertDirPath = grpcexporter.DefaultCertDirPath
+	} else {
+		config.agentPoolConf.CertDirPath = certDir
+	}
+
+	return config, nil
+}
+
 func getPodCache() (cache.Cache, error) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
@@ -52,24 +98,11 @@ func main() {
 	slog.SetDefault(slogger)
 	ctrl.SetLogger(logr.FromSlogHandler(slogger.Handler()))
 
-	var config conf
-	flag.IntVar(&config.agentPoolConf.Port,
-		"grpc-port",
-		grpcexporter.DefaultAgentPort,
-		"The port the agent grpc server listens on.")
-	flag.DurationVar(&config.interval,
-		"interval",
-		defaultInterval,
-		"The interval at which the debugger checks everything is fine.")
-	flag.StringVar(&config.agentPoolConf.LabelSelectorString,
-		"agent-label-selector",
-		grpcexporter.DefaultAgentLabelSelectorString,
-		"The label selector for the agent pods as a comma concatenated string.")
-	flag.StringVar(&config.agentPoolConf.CertDirPath,
-		"cert-dir",
-		grpcexporter.DefaultCertDirPath,
-		"The directory where the agent certificates are stored.")
-	flag.Parse()
+	config, err := loadConfig()
+	if err != nil {
+		slogger.Error("Failed to load configuration", "error", err)
+		return
+	}
 
 	cache, err := getPodCache()
 	if err != nil {

@@ -23,11 +23,15 @@ spec:
       - name: debugger
         image: {{ .Values.debugger.image.repository }}:{{ .Values.debugger.image.tag }}
         imagePullPolicy: {{ .Values.debugger.image.pullPolicy }}
-        args:
-        - --grpc-port={{ .Values.agent.grpcExporterPort }}
-        - --interval={{ .Values.debugger.interval }}
-        - --agent-label-selector={{ include "runtime-enforcer.agent.labelSelectorString" . }}
-        - --cert-dir={{ include "runtime-enforcer.grpc.certDir" . }}
+        env:
+        - name: DEBUGGER_GRPC_PORT
+          value: {{ .Values.agent.grpcExporterPort | quote }}
+        - name: DEBUGGER_INTERVAL
+          value: {{ .Values.debugger.interval | quote }}
+        - name: DEBUGGER_AGENT_LABEL_SELECTOR
+          value: {{ include "runtime-enforcer.agent.labelSelectorString" . | quote }}
+        - name: DEBUGGER_CERT_DIR
+          value: {{ include "runtime-enforcer.grpc.certDir" . | quote }}
         {{- with .Values.debugger.resources }}
         resources:
           {{- toYaml . | nindent 10 }}
