@@ -33,7 +33,7 @@ func generateMockPodEntry(n int) (PodID, *podEntry) {
 }
 
 func TestPodCacheSnapshot(t *testing.T) {
-	r := newTestResolver(t)
+	r := NewTestResolver(t)
 
 	// Populate the pod cache
 	podID1, pod1 := generateMockPodEntry(1)

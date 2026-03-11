@@ -1,20 +1,19 @@
-package workloadpolicyhandler_test
+package resolver
 
 import (
 	"log/slog"
 	"testing"
 
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
-	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/require"
 )
 
-func mockPolicyUpdateBinariesFunc(_ resolver.PolicyID, _ []string, _ bpf.PolicyValuesOperation) error {
+func mockPolicyUpdateBinariesFunc(_ PolicyID, _ []string, _ bpf.PolicyValuesOperation) error {
 	return nil
 }
 
-func mockPolicyModeUpdateFunc(_ resolver.PolicyID, _ policymode.Mode, _ bpf.PolicyModeOperation) error {
+func mockPolicyModeUpdateFunc(_ PolicyID, _ policymode.Mode, _ bpf.PolicyModeOperation) error {
 	return nil
 }
 
@@ -22,7 +21,7 @@ func mockCgTrackerUpdateFunc(_ uint64, _ string) error {
 	return nil
 }
 
-func mockCgroupToPolicyMapUpdateFunc(_ resolver.PolicyID, _ []resolver.CgroupID, _ bpf.CgroupPolicyOperation) error {
+func mockCgroupToPolicyMapUpdateFunc(_ PolicyID, _ []CgroupID, _ bpf.CgroupPolicyOperation) error {
 	return nil
 }
 
@@ -36,9 +35,9 @@ func (w testWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func newMockResolver(t testing.TB) *resolver.Resolver {
+func NewTestResolver(t testing.TB) *Resolver {
 	t.Helper()
-	r, err := resolver.NewResolver(
+	r, err := NewResolver(
 		slog.New(slog.NewJSONHandler(testWriter{t}, nil)),
 		mockCgTrackerUpdateFunc,
 		mockCgroupToPolicyMapUpdateFunc,
