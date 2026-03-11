@@ -70,6 +70,9 @@ Certificates helpers
 {{- define "runtime-enforcer.caIssuerName" -}}
 {{ include "runtime-enforcer.fullname" . }}-ca
 {{- end -}}
+{{- define "runtime-enforcer.otelCollector.certDir" -}}
+/etc/otel-collector/certs
+{{- end -}}
 
 {{/* Agent label selector string derived from agent pod labels */}}
 {{- define "runtime-enforcer.agent.labelSelector" -}}

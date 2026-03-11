@@ -17,18 +17,18 @@ func newNRILogger(logger *slog.Logger) nrilog.Logger {
 	return &nriLogger{logger: logger.With("component", "nri-stub")}
 }
 
-func (s *nriLogger) Debugf(ctx context.Context, format string, args ...interface{}) {
+func (s *nriLogger) Debugf(ctx context.Context, format string, args ...any) {
 	s.logger.DebugContext(ctx, fmt.Sprintf(format, args...))
 }
 
-func (s *nriLogger) Infof(ctx context.Context, format string, args ...interface{}) {
+func (s *nriLogger) Infof(ctx context.Context, format string, args ...any) {
 	s.logger.InfoContext(ctx, fmt.Sprintf(format, args...))
 }
 
-func (s *nriLogger) Warnf(ctx context.Context, format string, args ...interface{}) {
+func (s *nriLogger) Warnf(ctx context.Context, format string, args ...any) {
 	s.logger.WarnContext(ctx, fmt.Sprintf(format, args...))
 }
 
-func (s *nriLogger) Errorf(ctx context.Context, format string, args ...interface{}) {
+func (s *nriLogger) Errorf(ctx context.Context, format string, args ...any) {
 	s.logger.ErrorContext(ctx, fmt.Sprintf(format, args...))
 }

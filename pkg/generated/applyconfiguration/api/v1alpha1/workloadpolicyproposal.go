@@ -3,8 +3,11 @@
 package v1alpha1
 
 import (
+	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	internal "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/applyconfiguration/internal"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -27,6 +30,41 @@ func WorkloadPolicyProposal(name, namespace string) *WorkloadPolicyProposalApply
 	b.WithKind("WorkloadPolicyProposal")
 	b.WithAPIVersion("security.rancher.io/v1alpha1")
 	return b
+}
+
+// ExtractWorkloadPolicyProposalFrom extracts the applied configuration owned by fieldManager from
+// workloadPolicyProposal for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// workloadPolicyProposal must be a unmodified WorkloadPolicyProposal API object that was retrieved from the Kubernetes API.
+// ExtractWorkloadPolicyProposalFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractWorkloadPolicyProposalFrom(workloadPolicyProposal *apiv1alpha1.WorkloadPolicyProposal, fieldManager string, subresource string) (*WorkloadPolicyProposalApplyConfiguration, error) {
+	b := &WorkloadPolicyProposalApplyConfiguration{}
+	err := managedfields.ExtractInto(workloadPolicyProposal, internal.Parser().Type("com.github.rancher-sandbox.runtime-enforcer.api.v1alpha1.WorkloadPolicyProposal"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(workloadPolicyProposal.Name)
+	b.WithNamespace(workloadPolicyProposal.Namespace)
+
+	b.WithKind("WorkloadPolicyProposal")
+	b.WithAPIVersion("security.rancher.io/v1alpha1")
+	return b, nil
+}
+
+// ExtractWorkloadPolicyProposal extracts the applied configuration owned by fieldManager from
+// workloadPolicyProposal. If no managedFields are found in workloadPolicyProposal for fieldManager, a
+// WorkloadPolicyProposalApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// workloadPolicyProposal must be a unmodified WorkloadPolicyProposal API object that was retrieved from the Kubernetes API.
+// ExtractWorkloadPolicyProposal provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractWorkloadPolicyProposal(workloadPolicyProposal *apiv1alpha1.WorkloadPolicyProposal, fieldManager string) (*WorkloadPolicyProposalApplyConfiguration, error) {
+	return ExtractWorkloadPolicyProposalFrom(workloadPolicyProposal, fieldManager, "")
 }
 
 func (b WorkloadPolicyProposalApplyConfiguration) IsApplyConfiguration() {}

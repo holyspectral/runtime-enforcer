@@ -83,8 +83,34 @@ jobs:
           repo: ${{github.repository}}
           artifact_prefix: RuntimeEnforcer-
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # kubectl plugin – build binaries for all target platforms via the Makefile.
+  plugin-build:
+    name: Plugin build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: "go.mod"
+      - name: Build kubectl plugin for all platforms
+        run: make kubectl-plugin-cross KUBECTL_PLUGIN_VERSION=${{ github.ref_name }}
+      - name: Generate checksums
+        run: |
+          cd bin/kubectl-plugin
+          for f in kubectl-runtime_enforcer-*; do
+            sha256sum "$f" > "$f.sha256"
+          done
+      - name: Upload plugin artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: kubectl-plugin
+          path: bin/kubectl-plugin/
+          if-no-files-found: error
+
   create-release:
-    needs: [attest]
+    needs: [attest, plugin-build]
     permissions:
       contents: write # Creating a release
     runs-on: ubuntu-latest
@@ -114,6 +140,11 @@ jobs:
         with:
           pattern: attestation-RuntimeEnforcer-*
           merge-multiple: true
+      - name: Download plugin artifacts
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: kubectl-plugin
+          merge-multiple: true
       - name: Display structure of downloaded files
         run: ls -R
 
@@ -142,6 +173,14 @@ jobs:
                 'RuntimeEnforcer-operator-attestation-arm64-provenance.intoto.jsonl.bundle.sigstore',
                 'RuntimeEnforcer-operator-attestation-arm64-sbom.json',
                 'RuntimeEnforcer-operator-attestation-arm64-sbom.json.bundle.sigstore',
+                'kubectl-runtime_enforcer-linux-amd64',
+                'kubectl-runtime_enforcer-linux-amd64.sha256',
+                'kubectl-runtime_enforcer-linux-arm64',
+                'kubectl-runtime_enforcer-linux-arm64.sha256',
+                'kubectl-runtime_enforcer-darwin-amd64',
+                'kubectl-runtime_enforcer-darwin-amd64.sha256',
+                'kubectl-runtime_enforcer-darwin-arm64',
+                'kubectl-runtime_enforcer-darwin-arm64.sha256',
                 ]
             const {RELEASE_ID} = process.env
             for (const file of files) {

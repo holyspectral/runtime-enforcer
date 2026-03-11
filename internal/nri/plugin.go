@@ -32,13 +32,42 @@ func (p *plugin) getWorkloadInfoAndLog(ctx context.Context, pod *api.PodSandbox)
 	return workloadName, workloadKind
 }
 
+func podSandboxToPodMeta(pod *api.PodSandbox, workloadName string, workloadKind workloadkind.Kind) resolver.PodMeta {
+	return resolver.PodMeta{
+		// K8s static pods are created by the Kubelet with a pod uid that is different from the one
+		// assigned by the API server. The pod uid created by the kubelet will be put in the `kubernetes.io/config.hash`
+		// annotations of the pod. Example:
+		//
+		// apiVersion: v1
+		// kind: Pod
+		// metadata:
+		//   annotations:
+		//     kubernetes.io/config.hash: b3cae5f340c39f8cecdf0bddc7a4cdf1 // UID assigned by the kubelet
+		//     kubernetes.io/config.mirror: b3cae5f340c39f8cecdf0bddc7a4cdf1
+		//   name: kube-scheduler-kind-control-plane
+		//   namespace: kube-system
+		//   uid: a2533bd3-3631-48b3-88e4-2d139233d057 // UID assigned by the API server
+		//
+		// We cannot recover the UID assigned by the API-server from the NRI context.
+		ID:           pod.GetUid(),
+		Name:         pod.GetName(),
+		Namespace:    pod.GetNamespace(),
+		WorkloadName: workloadName,
+		WorkloadType: string(workloadKind),
+		Labels:       pod.GetLabels(),
+	}
+}
+
 // Synchronize synchronizes the state of the NRI plugin with the current state of the pods and containers.
 func (p *plugin) Synchronize(
 	ctx context.Context,
 	pods []*api.PodSandbox,
 	containers []*api.Container,
 ) ([]*api.ContainerUpdate, error) {
-	p.logger.InfoContext(ctx, "Synchronizing pod sandboxes", "podCount", len(pods))
+	p.logger.InfoContext(ctx, "Synchronizing pod sandboxes",
+		"podCount", len(pods),
+		"containers", len(containers),
+	)
 
 	// we store the container for now and we associate them later with the pod sandbox
 	tmpSandboxes := make(map[string]map[resolver.ContainerID]resolver.ContainerMeta)
@@ -78,9 +107,13 @@ func (p *plugin) Synchronize(
 
 		containers, ok := tmpSandboxes[pod.GetId()]
 		if !ok {
-			// no containers found for pod, it is possible if the sandbox is just created but there is no reason to add it to the cache.
-			// we don't have cgroups so this pod will be never queried
-			p.logger.WarnContext(ctx, "received pod with no containers",
+			// no containers found for pod. There are at least 2 possible reasons for this:
+			// 1. the pod sandbox is just created, so there are no containers yet.
+			// 2. the pod is in terminating state and exiting containers are not sent.
+			// See https://github.com/containerd/containerd/blob/1677a17964311325ed1c31e2c0a3589ce6d5c30d/pkg/nri/nri.go#L446 and https://github.com/containerd/containerd/blob/ff6324c9532b60137729a0e75fc589a2b20242b7/pkg/cri/nri/nri_api_linux.go#L393.
+			// In both cases there is no reason to add the pod sandbox to the cache,
+			// since we have no containers.
+			p.logger.InfoContext(ctx, "received pod sandbox with no containers",
 				"pod", pod.GetName(),
 				"namespace", pod.GetNamespace(),
 			)
@@ -89,17 +122,16 @@ func (p *plugin) Synchronize(
 
 		workloadName, workloadKind := p.getWorkloadInfoAndLog(ctx, pod)
 		podData := resolver.PodInput{
-			Meta: resolver.PodMeta{
-				ID:           pod.GetId(),
-				Name:         pod.GetName(),
-				Namespace:    pod.GetNamespace(),
-				WorkloadName: workloadName,
-				WorkloadType: string(workloadKind),
-				Labels:       pod.GetLabels(),
-			},
+			Meta:       podSandboxToPodMeta(pod, workloadName, workloadKind),
 			Containers: containers,
 		}
 
+		// Add also the full list for debugging purpose
+		p.logger.DebugContext(ctx, "Synchronize pod with containers",
+			"pod", pod.GetName(),
+			"namespace", pod.GetNamespace(),
+			"containers", containers,
+		)
 		if err := p.resolver.AddPodContainerFromNri(podData); err != nil {
 			p.logger.ErrorContext(ctx, "failed to add pod container from NRI",
 				"error", err)
@@ -115,6 +147,11 @@ func (p *plugin) StartContainer(
 	pod *api.PodSandbox,
 	container *api.Container,
 ) error {
+	p.logger.InfoContext(ctx, "Starting container",
+		"podName", pod.GetName(),
+		"containerName", container.GetName(),
+	)
+
 	cgroupID, err := cgroupFromContainer(container)
 	if err != nil {
 		// this should never happen but if we are not able to obtain the cgroup ID, it's useless to add the container
@@ -126,14 +163,7 @@ func (p *plugin) StartContainer(
 
 	workloadName, workloadKind := p.getWorkloadInfoAndLog(ctx, pod)
 	podData := resolver.PodInput{
-		Meta: resolver.PodMeta{
-			ID:           pod.GetId(),
-			Name:         pod.GetName(),
-			Namespace:    pod.GetNamespace(),
-			Labels:       pod.GetLabels(),
-			WorkloadName: workloadName,
-			WorkloadType: string(workloadKind),
-		},
+		Meta: podSandboxToPodMeta(pod, workloadName, workloadKind),
 		Containers: map[resolver.ContainerID]resolver.ContainerMeta{
 			container.GetId(): {
 				CgroupID: cgroupID,
@@ -155,9 +185,20 @@ func (p *plugin) StartContainer(
 // so it's possible that even if the container is stopped, we are still receiving some old events, and we want to enrich them.
 // That's the reason why we preferred `RemoveContainer` over `StopContainer`.
 func (p *plugin) RemoveContainer(ctx context.Context, pod *api.PodSandbox, container *api.Container) error {
-	if err := p.resolver.RemovePodContainerFromNri(pod.GetId(), container.GetId()); err != nil {
-		p.logger.ErrorContext(ctx, "failed to remove pod container from NRI",
-			"error", err)
+	// Here we want to log also the podID and the containerID so that we can easily
+	// correlate logs in inner methods.
+	p.logger.InfoContext(ctx, "Removing container",
+		"podName", pod.GetName(),
+		"podID", pod.GetUid(),
+		"containerName", container.GetName(),
+		"containerID", container.GetId(),
+	)
+	if err := p.resolver.RemovePodContainerFromNri(pod.GetUid(), container.GetId()); err != nil {
+		p.logger.ErrorContext(ctx, "failed to remove pod container from cache",
+			"podName", pod.GetName(),
+			"containerName", container.GetName(),
+			"error", err,
+		)
 	}
 	return nil
 }

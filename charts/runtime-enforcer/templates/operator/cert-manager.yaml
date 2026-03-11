@@ -25,6 +25,7 @@ spec:
   privateKey:
     algorithm: ECDSA
     size: 256
+    rotationPolicy: Always
   issuerRef:
     name: {{ include "runtime-enforcer.fullname" . }}-selfsigned-issuer
     kind: Issuer

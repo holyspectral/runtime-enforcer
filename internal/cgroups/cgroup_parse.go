@@ -64,7 +64,7 @@ func SystemdExpandSlice(slice string) (string, error) {
 		prefixBuilder strings.Builder
 	)
 
-	for _, component := range strings.Split(sliceName, "-") {
+	for component := range strings.SplitSeq(sliceName, "-") {
 		// test--a.slice isn't permitted, nor is -test.slice.
 		if component == "" {
 			return "", fmt.Errorf("invalid slice name: %s", slice)

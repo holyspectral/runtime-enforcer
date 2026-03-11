@@ -1,6 +1,9 @@
+// protolint:disable MAX_LINE_LENGTH
 syntax = "proto3";
 
 package runtimeenforcer.agent.v1;
+
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/neuvector/runtime-enforcer/proto/agent/v1;agentv1";
 
@@ -8,9 +11,47 @@ option go_package = "github.com/neuvector/runtime-enforcer/proto/agent/v1;agentv
 service AgentObserver {
   // ListPoliciesStatus returns the status of workload Policies.
   rpc ListPoliciesStatus(ListPoliciesStatusRequest) returns (ListPoliciesStatusResponse) {}
+
+  // ListPodCache returns the current pod cache.
+  rpc ListPodCache(ListPodCacheRequest) returns (ListPodCacheResponse) {}
+
+  // ScrapeViolations drains the agent's in-memory violation buffer and
+  // returns all accumulated records since the last scrape.
+  rpc ScrapeViolations(ScrapeViolationsRequest) returns (ScrapeViolationsResponse) {}
 }
 
-message ListPoliciesStatusRequest {}
+message ContainerMeta {
+  string id = 1;
+  string name = 2;
+  uint64 cgroup_id = 3;
+}
+
+message PodMeta {
+  string id = 1;
+  string name = 2;
+  string namespace = 3;
+  string workload_name = 4;
+  string workload_type = 5;
+  map<string,string> labels = 6;
+}
+
+message PodView {
+  PodMeta meta = 1;
+  // The key is the container ID
+  map<string, ContainerMeta> containers = 2;
+}
+
+// ListPodCacheRequest is the request for listing the pod cache.
+message ListPodCacheRequest {
+}
+
+// ListPodCacheResponse is the response containing the pod cache.
+message ListPodCacheResponse {
+  repeated PodView pods = 1;
+}
+
+message ListPoliciesStatusRequest {
+}
 
 enum PolicyState {
   POLICY_STATE_UNSPECIFIED = 0;
@@ -24,7 +65,7 @@ enum PolicyState {
 
 enum PolicyMode {
   POLICY_MODE_UNSPECIFIED = 0;
-  
+
   // Policy monitor mode
   POLICY_MODE_MONITOR = 1;
 
@@ -40,4 +81,21 @@ message PolicyStatus {
 
 message ListPoliciesStatusResponse {
   map<string, PolicyStatus> policies = 1;
+}
+
+message ScrapeViolationsRequest {
+}
+
+message ViolationRecord {
+  google.protobuf.Timestamp timestamp = 1;
+  string pod_name = 2;
+  string container_name = 3;
+  string executable_path = 4;
+  string node_name = 5;
+  string action = 6;
+  string policy_name = 7;
+}
+
+message ScrapeViolationsResponse {
+  repeated ViolationRecord violations = 1;
 }

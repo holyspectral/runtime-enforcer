@@ -24,7 +24,11 @@ type Handler struct {
 	resolver    *resolver.Resolver
 }
 
-func newNRIPlugin(logger *slog.Logger, resolver *resolver.Resolver, opts ...stub.Option) (*plugin, error) {
+func newNRIPlugin(
+	logger *slog.Logger,
+	resolver *resolver.Resolver,
+	opts ...stub.Option,
+) (*plugin, error) {
 	var err error
 	p := &plugin{
 		logger:   logger.With("component", "nri-plugin"),
@@ -57,7 +61,11 @@ func (p *plugin) Run(ctx context.Context) error {
 	return err
 }
 
-func NewNRIHandler(socketPath, pluginIndex string, logger *slog.Logger, r *resolver.Resolver) (*Handler, error) {
+func NewNRIHandler(
+	socketPath, pluginIndex string,
+	logger *slog.Logger,
+	r *resolver.Resolver,
+) (*Handler, error) {
 	h := &Handler{
 		socketPath:  socketPath,
 		pluginIndex: pluginIndex,

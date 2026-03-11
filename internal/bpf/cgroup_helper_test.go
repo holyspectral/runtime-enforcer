@@ -1,4 +1,3 @@
-//nolint:testpackage // we are testing unexported functions
 package bpf
 
 import (

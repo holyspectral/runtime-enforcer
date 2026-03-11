@@ -1,0 +1,29 @@
+name: Build and Upload kubectl plugin
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+
+  push:
+    branches:
+      - "main"
+jobs:
+  upload-kubectl-plugin:
+    name: Upload kubectl plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version-file: "go.mod"
+      - name: Build kubectl plugin for all platforms
+        run: make kubectl-plugin-cross
+      - name: Upload plugin artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: kubectl-plugin
+          path: bin/kubectl-plugin/
+          if-no-files-found: error
+          retention-days: 7

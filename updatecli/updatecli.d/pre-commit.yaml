@@ -14,6 +14,13 @@ sources:
       url: https://github.com/golangci/golangci-lint/
       versionFilter:
         kind: latest
+  protolintTag:
+    kind: gittag
+    spec:
+      key: name
+      url: https://github.com/yoheimuta/protolint/
+      versionFilter:
+        kind: latest
   cppLinterVersion:
     kind: gittag
     spec:
@@ -26,6 +33,13 @@ sources:
     spec:
       key: hash
       url: https://github.com/golangci/golangci-lint/
+      versionFilter:
+        kind: latest
+  protolintVersion:
+    kind: gittag
+    spec:
+      key: hash
+      url: https://github.com/yoheimuta/protolint/
       versionFilter:
         kind: latest
 
@@ -67,7 +81,7 @@ actions:
 targets:
   update_golangci_lint_version:
     scmid: default
-    name: 'Update golangci-lint version to {{ source "golangcilintTag" }}'
+    name: 'update golangci-lint version to {{ source "golangcilintTag" }}'
     kind: yaml
     sourceid: golangcilintVersion
     spec:
@@ -77,11 +91,21 @@ targets:
       key: $.repos[0].rev
   update_cpplinter_version:
     scmid: default
-    name: 'Update cpp linter version to {{ source "cppLinterTag" }}'
+    name: 'update cpp linter version to {{ source "cppLinterTag" }}'
     kind: yaml
     sourceid: cppLinterVersion
     spec:
       file: .pre-commit-config.yaml
       key: $.repos[1].rev
       comment: '{{ source "cppLinterTag" }}'
+      engine: yamlpath
+  update_protolint_version:
+    scmid: default
+    name: 'update protolint version to {{ source "protolintTag" }}'
+    kind: yaml
+    sourceid: protolintVersion
+    spec:
+      file: .pre-commit-config.yaml
+      key: $.repos[2].rev
+      comment: '{{ source "protolintTag" }}'
       engine: yamlpath

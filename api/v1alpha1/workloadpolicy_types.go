@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"sort"
+	"slices"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -55,6 +55,24 @@ type WorkloadPolicySpec struct {
 	RulesByContainer map[string]*WorkloadPolicyRules `json:"rulesByContainer,omitempty"`
 }
 
+const MaxViolationRecords = 100
+
+// ViolationRecord holds the details of a single policy violation.
+type ViolationRecord struct {
+	// timestamp is when the violation occurred.
+	Timestamp metav1.Time `json:"timestamp"`
+	// podName is the name of the pod where the violation occurred.
+	PodName string `json:"podName"`
+	// containerName is the container where the unauthorized executable ran.
+	ContainerName string `json:"containerName"`
+	// executablePath is the path of the unauthorized executable.
+	ExecutablePath string `json:"executablePath"`
+	// nodeName is the node where the violation occurred.
+	NodeName string `json:"nodeName"`
+	// action is the enforcement action taken (monitor or protect).
+	Action string `json:"action"`
+}
+
 type WorkloadPolicyStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// nodesWithIssues contains the status of each node with issues.
@@ -71,6 +89,10 @@ type WorkloadPolicyStatus struct {
 	NodesTransitioning []string `json:"nodesTransitioning,omitempty"`
 	// phase indicates the current phase of the workload policy.
 	Phase Phase `json:"phase,omitempty"`
+	// violations is the list of the most recent violation records (max MaxViolationRecords).
+	// Oldest entries are dropped when the limit is reached.
+	// +optional
+	Violations []ViolationRecord `json:"violations,omitempty"`
 }
 
 func (s *WorkloadPolicyStatus) AddNodeIssue(nodeName string, issue NodeIssue) {
@@ -101,9 +123,7 @@ func (s *WorkloadPolicyStatus) SortTransitioningNodes() {
 	// updates on the WP if only the order of transitioning nodes has changed.
 	// Note: since this list is truncated it is still possible we trigger some updates if
 	// the number of transitioning nodes is greater than MaxTransitioningNodes.
-	sort.Slice(s.NodesTransitioning, func(i, j int) bool {
-		return s.NodesTransitioning[i] < s.NodesTransitioning[j]
-	})
+	slices.Sort(s.NodesTransitioning)
 }
 
 func (s *WorkloadPolicyStatus) AddTransitioningNode(nodeName string) {

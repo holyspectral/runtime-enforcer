@@ -2,17 +2,46 @@ package eventscraper
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/violationbuf"
+	otellog "go.opentelemetry.io/otel/log"
+	"golang.org/x/time/rate"
 )
+
+const (
+	suppressionMsg        = "logs suppressed by rate limiting"
+	suppressedCountLogKey = "count"
+	suppressedLogTypeKey  = "log_type"
+	bufferFullMsg         = "violation buffer full, oldest entry dropped"
+)
+
+type logRateLimiter struct {
+	limiter    *rate.Limiter
+	suppressed int64
+}
+
+func (l *logRateLimiter) shouldLog() bool {
+	if !l.limiter.Allow() {
+		l.suppressed++
+		return false
+	}
+	return true
+}
+
+func (l *logRateLimiter) flushSuppressed(logger *slog.Logger, msg string) {
+	if l.suppressed > 0 {
+		logger.Warn(suppressionMsg,
+			suppressedCountLogKey, l.suppressed,
+			suppressedLogTypeKey, msg,
+		)
+		l.suppressed = 0
+	}
+}
 
 type EventScraper struct {
 	learningChannel     <-chan bpf.ProcessEvent
@@ -20,7 +49,10 @@ type EventScraper struct {
 	logger              *slog.Logger
 	resolver            *resolver.Resolver
 	learningEnqueueFunc func(evt KubeProcessInfo)
-	tracer              trace.Tracer
+	violationLogger     otellog.Logger
+	violationBuffer     *violationbuf.Buffer
+	nodeName            string
+	bufferFullLimiter   *logRateLimiter
 }
 
 type KubeProcessInfo struct {
@@ -34,76 +66,78 @@ type KubeProcessInfo struct {
 	PolicyName     string `json:"policyName,omitempty"`
 }
 
+type Option func(*EventScraper)
+
+// WithViolationLogger sets an OTEL logger for emitting violation event records.
+func WithViolationLogger(l otellog.Logger, nodeName string) Option {
+	return func(es *EventScraper) {
+		es.violationLogger = l
+		es.nodeName = nodeName
+	}
+}
+
+// WithViolationBuffer sets the ViolationBuffer for buffering violation
+// records in-memory for later scraping by the controller.
+func WithViolationBuffer(buf *violationbuf.Buffer, nodeName string) Option {
+	return func(es *EventScraper) {
+		es.violationBuffer = buf
+		es.nodeName = nodeName
+	}
+}
+
 func NewEventScraper(
 	learningChannel <-chan bpf.ProcessEvent,
 	monitoringChannel <-chan bpf.ProcessEvent,
 	logger *slog.Logger,
 	resolver *resolver.Resolver,
 	learningEnqueueFunc func(evt KubeProcessInfo),
+	opts ...Option,
 ) *EventScraper {
-	return &EventScraper{
+	es := &EventScraper{
 		learningChannel:     learningChannel,
 		monitoringChannel:   monitoringChannel,
 		logger:              logger,
 		resolver:            resolver,
 		learningEnqueueFunc: learningEnqueueFunc,
-		tracer:              otel.Tracer("event-scraper"),
+		bufferFullLimiter: &logRateLimiter{
+			limiter: rate.NewLimiter(rate.Every(1*time.Second), 1),
+		},
 	}
+	for _, option := range opts {
+		option(es)
+	}
+	return es
 }
 
 func (es *EventScraper) getKubeProcessInfo(event *bpf.ProcessEvent) *KubeProcessInfo {
-	// trackerID should be the ID of the cgroup of the container where the process is running
-	cgIDLookup := event.CgTrackerID
-	// this could happen if the resolver has not yet seen the pod or it was not able to scrape the container info
-	if cgIDLookup == 0 {
-		// most of the times the cgroupID should be identical to the trackerID if the process is not in a nested cgroup inside the container
-		if event.CgroupID == 0 {
-			es.logger.Warn("process event with empty cgroupID and cgIDTracker, skipping event")
-			return nil
-		}
-		cgIDLookup = event.CgroupID
-	}
-	es.logger.Debug("process event with empty cgIDTracker, falling back to cgroupID", "cgID", event.CgroupID)
-	containerView, err := es.resolver.GetContainerView(cgIDLookup)
-	if err == nil {
-		policyName := ""
-		pod := containerView.PodMeta
-		container := containerView.Meta
-		if pod.Labels != nil {
-			policyName = pod.Labels[v1alpha1.PolicyLabelKey]
-		}
-
-		return &KubeProcessInfo{
-			Namespace:      pod.Namespace,
-			Workload:       pod.WorkloadName,
-			WorkloadKind:   pod.WorkloadType,
-			ContainerName:  container.Name,
-			ExecutablePath: event.ExePath,
-			PodName:        pod.Name,
-			ContainerID:    container.ID,
-			PolicyName:     policyName,
-		}
-	}
-	switch {
-	case errors.Is(err, resolver.ErrMissingPodUID):
-		// This could happen if the cgroup ID is not associated with any pod (is on the host), that's why we put it in debug
-		// todo!: with the debug we could miss some real miss in production but not sure we can ignore cgroup IDs on the host in some other way
-		es.logger.Debug("missing pod UID for process event",
-			"msg", err.Error(),
-			"exe", event.ExePath)
-	case errors.Is(err, resolver.ErrMissingPodInfo):
-		// This could happen if the pod was found but the info is not yet populated
-		es.logger.Warn("missing pod info for process event",
-			"msg", err.Error(),
-			"exe", event.ExePath)
-	default:
-		// Some other error
-		es.logger.Error("unknown error getting kube info for process event",
-			"cgID", cgIDLookup,
+	// trackerID is the ID of the container cgroup where the process is running.
+	// NRI will populate cgroup tracker map before we will start to generate learning/monitor events from ebpf.
+	containerView, err := es.resolver.GetContainerView(event.CgTrackerID)
+	if err != nil {
+		es.logger.Error("failed to get pod info",
+			"cgTrackerID", event.CgTrackerID,
 			"exe", event.ExePath,
 			"error", err)
+		return nil
 	}
-	return nil
+
+	podMeta := containerView.PodMeta
+	containerMeta := containerView.Meta
+	policyName := ""
+	if podMeta.Labels != nil {
+		policyName = podMeta.Labels[v1alpha1.PolicyLabelKey]
+	}
+
+	return &KubeProcessInfo{
+		Namespace:      podMeta.Namespace,
+		Workload:       podMeta.WorkloadName,
+		WorkloadKind:   podMeta.WorkloadType,
+		ContainerName:  containerMeta.Name,
+		ExecutablePath: event.ExePath,
+		PodName:        podMeta.Name,
+		ContainerID:    containerMeta.ID,
+		PolicyName:     policyName,
+	}
 }
 
 // Start begins the event scraping process.
@@ -129,8 +163,6 @@ func (es *EventScraper) Start(ctx context.Context) error {
 				continue
 			}
 
-			now := time.Now()
-			var span trace.Span
 			action := event.Mode
 
 			policyName := kubeInfo.PolicyName
@@ -139,21 +171,51 @@ func (es *EventScraper) Start(ctx context.Context) error {
 					"pod", kubeInfo.PodName,
 					"namespace", kubeInfo.Namespace)
 			}
-			_, span = es.tracer.Start(ctx, action)
-			span.SetAttributes(
-				attribute.String("evt.time", now.Format(time.RFC3339)),
-				attribute.Int64("evt.rawtime", now.UnixNano()),
-				attribute.String("policy.name", policyName),
-				attribute.String("k8s.ns.name", kubeInfo.Namespace),
-				attribute.String("k8s.workload.name", kubeInfo.Workload),
-				attribute.String("k8s.workload.kind", kubeInfo.WorkloadKind),
-				attribute.String("k8s.pod.name", kubeInfo.PodName),
-				attribute.String("container.full_id", kubeInfo.ContainerID),
-				attribute.String("container.name", kubeInfo.ContainerName),
-				attribute.String("proc.exepath", kubeInfo.ExecutablePath),
-				attribute.String("action", action),
-			)
-			span.End()
+
+			es.emitViolationEvent(ctx, kubeInfo, action)
+			es.reportViolation(kubeInfo, action)
+		}
+	}
+}
+
+func (es *EventScraper) emitViolationEvent(ctx context.Context, info *KubeProcessInfo, action string) {
+	if es.violationLogger == nil {
+		return
+	}
+
+	var rec otellog.Record
+	rec.SetEventName("policy_violation")
+	rec.SetSeverity(otellog.SeverityWarn)
+	rec.SetBody(otellog.StringValue("policy_violation"))
+	rec.SetTimestamp(time.Now())
+	rec.AddAttributes(
+		otellog.String("policy.name", info.PolicyName),
+		otellog.String("k8s.namespace.name", info.Namespace),
+		otellog.String("k8s.pod.name", info.PodName),
+		otellog.String("container.name", info.ContainerName),
+		otellog.String("proc.exepath", info.ExecutablePath),
+		otellog.String("node.name", es.nodeName),
+		otellog.String("action", action),
+	)
+
+	es.violationLogger.Emit(ctx, rec)
+}
+
+func (es *EventScraper) reportViolation(info *KubeProcessInfo, action string) {
+	dropped := es.violationBuffer.Record(violationbuf.ViolationRecord{
+		Timestamp:     time.Now(),
+		PolicyName:    info.PolicyName,
+		Namespace:     info.Namespace,
+		PodName:       info.PodName,
+		ContainerName: info.ContainerName,
+		ExePath:       info.ExecutablePath,
+		NodeName:      es.nodeName,
+		Action:        action,
+	})
+	if dropped {
+		if es.bufferFullLimiter.shouldLog() {
+			es.bufferFullLimiter.flushSuppressed(es.logger, bufferFullMsg)
+			es.logger.Warn(bufferFullMsg)
 		}
 	}
 }

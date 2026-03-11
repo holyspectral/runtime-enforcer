@@ -1,4 +1,3 @@
-//nolint:testpackage // testing internal methods
 package resolver
 
 import (

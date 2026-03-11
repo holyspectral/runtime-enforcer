@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
@@ -30,7 +31,7 @@ func (r *WorkloadPolicyStatusSync) gcStaleConnections(podList *corev1.PodList) {
 		if activeNodes.Has(nodeName) {
 			continue
 		}
-		_ = c.close()
+		_ = c.Close()
 		delete(r.conns, nodeName)
 	}
 }
@@ -42,7 +43,7 @@ func (r *WorkloadPolicyStatusSync) getPodPoliciesStatus(
 	// Check if we need to create a new connection or reuse an existing one
 	agentClient, ok := r.conns[pod.Spec.NodeName]
 	if !ok {
-		c, err := r.agentClientFactory.newClient(pod.Status.PodIP, pod.Name, pod.Namespace)
+		c, err := r.agentClientFactory.NewClient(pod.Status.PodIP, pod.Name, pod.Namespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create connection to pod %s: %w", pod.Name, err)
 		}
@@ -50,10 +51,10 @@ func (r *WorkloadPolicyStatusSync) getPodPoliciesStatus(
 		agentClient = c
 	}
 
-	resp, err := agentClient.listPoliciesStatus(ctx)
+	resp, err := agentClient.ListPoliciesStatus(ctx)
 	if err != nil {
 		// in case of error we close the connection and we will open a new one at the next sync
-		_ = agentClient.close()
+		_ = agentClient.Close()
 		delete(r.conns, pod.Spec.NodeName)
 		return nil, fmt.Errorf("failed to list policies status for pod %s: %w", pod.Name, err)
 	}
@@ -148,6 +149,7 @@ func (r *WorkloadPolicyStatusSync) processWorkloadPolicy(
 	ctx context.Context,
 	wp *v1alpha1.WorkloadPolicy,
 	nodesInfo nodesInfoMap,
+	scrapedViolations []v1alpha1.ViolationRecord,
 ) error {
 	expectedMode := convertToPolicyMode(wp.Spec.Mode)
 	newPolicy := wp.DeepCopy()
@@ -156,8 +158,31 @@ func (r *WorkloadPolicyStatusSync) processWorkloadPolicy(
 		return fmt.Errorf("failed to compute status for policy %s: %w", newPolicy.NamespacedName(), err)
 	}
 	newPolicy.Status.ObservedGeneration = wp.Generation
+
+	// Merge scraped violations into status: prepend new violations to existing,
+	// then trim to the most recent MaxViolationRecords entries.
+	newPolicy.Status.Violations = mergeViolations(wp.Status.Violations, scrapedViolations)
+
 	r.logger.V(1).Info("updating",
 		"policy", newPolicy.NamespacedName(),
 		"status", newPolicy.Status)
 	return r.Status().Update(ctx, newPolicy)
+}
+
+// mergeViolations prepends scraped violations to the existing list,
+// trimming the tail (oldest) to keep only the most recent MaxViolationRecords.
+// The resulting list is ordered newest-to-oldest.
+func mergeViolations(
+	existing []v1alpha1.ViolationRecord,
+	scraped []v1alpha1.ViolationRecord,
+) []v1alpha1.ViolationRecord {
+	// Prepend scraped (newest) before existing (older) so the list is newest-to-oldest.
+	merged := slices.Concat(scraped, existing)
+
+	// Trim tail (oldest entries) to keep the most recent MaxViolationRecords.
+	if len(merged) > v1alpha1.MaxViolationRecords {
+		merged = merged[:v1alpha1.MaxViolationRecords]
+	}
+
+	return merged
 }

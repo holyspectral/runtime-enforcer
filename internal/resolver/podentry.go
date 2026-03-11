@@ -1,6 +1,10 @@
 package resolver
 
-import "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+import (
+	"maps"
+
+	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+)
 
 // podEntry is the internal representation of a pod inside our cache.
 type podEntry struct {
@@ -32,9 +36,7 @@ func (pod *podEntry) toView() PodView {
 	}
 	// We need a deep copy
 	view.Meta.Labels = make(map[string]string, len(pod.meta.Labels))
-	for k, v := range pod.meta.Labels {
-		view.Meta.Labels[k] = v
-	}
+	maps.Copy(view.Meta.Labels, pod.meta.Labels)
 	for id, meta := range pod.containers {
 		view.Containers[id] = *meta
 	}

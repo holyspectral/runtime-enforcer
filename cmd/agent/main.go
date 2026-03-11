@@ -3,38 +3,37 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
+
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/bpf"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/events"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/nri"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/workloadpolicyhandler"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
-	"github.com/rancher-sandbox/runtime-enforcer/internal/traces"
-	"k8s.io/api/node/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/violationbuf"
+	otellog "go.opentelemetry.io/otel/log"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	"log/slog"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 type Config struct {
-	enableTracing             bool
-	enableOtelSidecar         bool
 	enableLearning            bool
 	learningNamespaceSelector string
 	nriSocketPath             string
@@ -42,13 +41,16 @@ type Config struct {
 	probeAddr                 string
 	grpcConf                  grpcexporter.Config
 	logLevel                  string
+	otlpEndpoint              string
+	otlpCACert                string
+	otlpClientCert            string
+	otlpClientKey             string
+	nodeName                  string
+	violationLogger           otellog.Logger
 }
-
-// +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
 
 func newControllerManager(config Config) (manager.Manager, error) {
 	scheme := runtime.NewScheme()
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(securityv1alpha1.AddToScheme(scheme))
 	controllerOptions := ctrl.Options{
@@ -67,14 +69,40 @@ func setupGRPCExporter(
 	logger *slog.Logger,
 	conf *grpcexporter.Config,
 	r *resolver.Resolver,
+	violationBuffer *violationbuf.Buffer,
 ) error {
-	exporter, err := grpcexporter.New(logger, conf, r)
+	exporter, err := grpcexporter.New(logger, conf, r, violationBuffer)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC exporter: %w", err)
 	}
 	if err = ctrlMgr.Add(exporter); err != nil {
 		return fmt.Errorf("failed to add gRPC exporter to controller manager: %w", err)
 	}
+	return nil
+}
+
+func setupWorkloadPolicyHandler(
+	ctrlMgr manager.Manager,
+	logger *slog.Logger,
+	resolver *resolver.Resolver,
+) error {
+	wpHandler := workloadpolicyhandler.NewWorkloadPolicyHandler(ctrlMgr.GetClient(), logger, resolver)
+	err := wpHandler.SetupWithManager(ctrlMgr)
+	if err != nil {
+		return fmt.Errorf("unable to set up WorkloadPolicy handler: %w", err)
+	}
+	// controller-runtime doesn't support a separate startup probe, so we use the readiness probe instead.
+	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2644 for more details.
+	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(req *http.Request) error {
+		if syncErr := wpHandler.HasSynced(req.Context()); syncErr != nil {
+			logger.ErrorContext(req.Context(), "WorkloadPolicy handler is not synced", "error", syncErr)
+			return fmt.Errorf("WorkloadPolicy handler is not synced: %w", syncErr)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to add policy readiness probe: %w", err)
+	}
+
 	return nil
 }
 
@@ -108,38 +136,6 @@ func setupLearningReconciler(
 	}
 	logger.InfoContext(ctx, "learning mode is enabled", "namespaceSelector", config.learningNamespaceSelector)
 	return learningReconciler.EnqueueEvent, nil
-}
-
-func setupPolicyInformer(
-	ctx context.Context,
-	logger *slog.Logger,
-	ctrlMgr manager.Manager,
-	resolver *resolver.Resolver,
-) error {
-	workloadPolicyInformer, err := ctrlMgr.GetCache().GetInformer(ctx, &securityv1alpha1.WorkloadPolicy{})
-	if err != nil {
-		return fmt.Errorf("cannot get workload policy informer: %w", err)
-	}
-	handlerRegistration, err := workloadPolicyInformer.AddEventHandler(resolver.PolicyEventHandlers())
-	if err != nil {
-		return fmt.Errorf("failed to add event handler for workload policy: %w", err)
-	}
-
-	// controller-runtime doesn't support a separate startup probe, so we use the readiness probe instead.
-	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2644 for more details.
-	if err = ctrlMgr.AddReadyzCheck("policy readyz", func(_ *http.Request) error {
-		// Instead of informer.HasSynced(), which checks if the internal storage is synced,
-		// we use ResourceEventHandlerRegistration.HasSynced() to ensure that
-		// the event handlers have been synced.
-		if !handlerRegistration.HasSynced() {
-			logger.Warn("workload policy informer has not yet synced")
-			return errors.New("workload policy informer has not yet synced")
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to add policy readiness probe: %w", err)
-	}
-	return nil
 }
 
 func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
@@ -186,6 +182,10 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		return fmt.Errorf("failed to create resolver: %w", err)
 	}
 
+	if err = setupWorkloadPolicyHandler(ctrlMgr, logger, resolver); err != nil {
+		return err
+	}
+
 	var nriHandler *nri.Handler
 	nriHandler, err = nri.NewNRIHandler(
 		config.nriSocketPath,
@@ -193,6 +193,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		logger,
 		resolver,
 	)
+
 	if err != nil {
 		return fmt.Errorf("failed to create NRI handler: %w", err)
 	}
@@ -207,30 +208,34 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	}
 
 	//////////////////////
+	// Create the violation buffer
+	//////////////////////
+	violationBuffer := violationbuf.NewBuffer()
+
+	//////////////////////
 	// Create the scraper
 	//////////////////////
+	var scraperOpts []eventscraper.Option
+	if config.violationLogger != nil {
+		scraperOpts = append(scraperOpts, eventscraper.WithViolationLogger(config.violationLogger, config.nodeName))
+	}
+	scraperOpts = append(scraperOpts, eventscraper.WithViolationBuffer(violationBuffer, config.nodeName))
 	evtScraper := eventscraper.NewEventScraper(
 		bpfManager.GetLearningChannel(),
 		bpfManager.GetMonitoringChannel(),
 		logger,
 		resolver,
 		enqueueFunc,
+		scraperOpts...,
 	)
 	if err = ctrlMgr.Add(evtScraper); err != nil {
 		return fmt.Errorf("failed to add event scraper to controller manager: %w", err)
 	}
 
 	//////////////////////
-	// Setup Policy Generator with the workload informer
-	//////////////////////
-	if err = setupPolicyInformer(ctx, logger, ctrlMgr, resolver); err != nil {
-		return err
-	}
-
-	//////////////////////
 	// Add GRPC exporter
 	//////////////////////
-	if err = setupGRPCExporter(ctrlMgr, logger, &config.grpcConf, resolver); err != nil {
+	if err = setupGRPCExporter(ctrlMgr, logger, &config.grpcConf, resolver, violationBuffer); err != nil {
 		return err
 	}
 
@@ -272,16 +277,8 @@ func parseLearningNamespaceSelector(s string) (labels.Selector, error) {
 	return labels.Parse(s)
 }
 
-func main() {
-	var err error
+func parseFlags() Config {
 	var config Config
-
-	var traceShutdown func(context.Context) error
-
-	ctx := ctrl.SetupSignalHandler()
-
-	flag.BoolVar(&config.enableTracing, "enable-tracing", false, "Enable tracing collection")
-	flag.BoolVar(&config.enableOtelSidecar, "enable-otel-sidecar", false, "Enable OpenTelemetry sidecar")
 	flag.BoolVar(&config.enableLearning, "enable-learning", false, "Enable learning mode")
 	flag.StringVar(
 		&config.learningNamespaceSelector,
@@ -303,20 +300,63 @@ func main() {
 		"info",
 		"agent logger level (debug, info, warn, error)",
 	)
+	flag.StringVar(
+		&config.otlpEndpoint,
+		"otlp-endpoint",
+		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		"OTLP gRPC endpoint (defaults to OTEL_EXPORTER_OTLP_ENDPOINT env var, empty = disabled)",
+	)
+	flag.StringVar(
+		&config.otlpCACert,
+		"otlp-ca-cert",
+		os.Getenv("OTEL_EXPORTER_OTLP_CERTIFICATE"),
+		"Path to the CA certificate for verifying the OTLP collector's TLS certificate (defaults to OTEL_EXPORTER_OTLP_CERTIFICATE env var)",
+	)
+	flag.StringVar(
+		&config.otlpClientCert,
+		"otlp-client-cert",
+		os.Getenv("OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE"),
+		"Path to the client TLS certificate for mTLS with the OTLP collector (defaults to OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE env var)",
+	)
+	flag.StringVar(
+		&config.otlpClientKey,
+		"otlp-client-key",
+		os.Getenv("OTEL_EXPORTER_OTLP_CLIENT_KEY"),
+		"Path to the client TLS key for mTLS with the OTLP collector (defaults to OTEL_EXPORTER_OTLP_CLIENT_KEY env var)",
+	)
+	flag.StringVar(&config.nodeName, "node-name", os.Getenv("NODE_NAME"),
+		"Node name for violation reporting (defaults to NODE_NAME env var)")
 	flag.Parse()
+	return config
+}
+
+func main() {
+	var err error
+	config := parseFlags()
+
+	ctx := ctrl.SetupSignalHandler()
 
 	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(config.logLevel)})
 	slogger := slog.New(slogHandler).With("component", "agent")
 	slog.SetDefault(slogger)
 	ctrl.SetLogger(logr.FromSlogHandler(slogger.Handler()))
 
-	if config.enableTracing {
-		// Start otel traces
-		traceShutdown, err = traces.Init()
+	var eventShutdown func(context.Context) error
+	if config.otlpEndpoint != "" {
+		var violationLogger otellog.Logger
+		violationLogger, eventShutdown, err = events.Init(
+			ctx,
+			config.otlpEndpoint,
+			config.otlpCACert,
+			config.otlpClientCert,
+			config.otlpClientKey,
+		)
 		if err != nil {
-			slogger.ErrorContext(ctx, "failed to initiate open telemetry trace", "error", err)
+			slogger.ErrorContext(ctx, "failed to initiate violation event pipeline", "error", err)
 			os.Exit(1)
 		}
+		config.violationLogger = violationLogger
+		slogger.InfoContext(ctx, "OTLP telemetry enabled", "endpoint", config.otlpEndpoint)
 	}
 
 	// This function blocks if everything is alright.
@@ -325,9 +365,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if traceShutdown != nil {
-		if err = traceShutdown(ctx); err != nil {
-			slogger.ErrorContext(ctx, "failed to shutdown telemetry trace", "error", err)
+	if eventShutdown != nil {
+		if err = eventShutdown(ctx); err != nil {
+			slogger.ErrorContext(ctx, "failed to shutdown violation event pipeline", "error", err)
 		}
 	}
 }
