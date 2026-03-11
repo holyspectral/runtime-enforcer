@@ -5,17 +5,6 @@ import (
 	"time"
 )
 
-// ViolationInfo contains the details of a single policy violation event.
-type ViolationInfo struct {
-	PolicyName    string
-	Namespace     string
-	PodName       string
-	ContainerName string
-	ExePath       string
-	NodeName      string
-	Action        string
-}
-
 // ViolationRecord is a violation record ready for scraping.
 type ViolationRecord struct {
 	Timestamp     time.Time
@@ -36,11 +25,9 @@ const MaxBufferEntries = 10_000
 // The EventScraper calls Record() for each violation; the gRPC server calls
 // Drain() when the controller scrapes.
 type Buffer struct {
-	mtx  sync.Mutex
-	buf  []ViolationRecord
-	head int
-	tail int
-	full bool
+	mtx sync.Mutex
+	buf []ViolationRecord
+	pos int64
 }
 
 // NewBuffer creates a new violation buffer.
@@ -51,29 +38,17 @@ func NewBuffer() *Buffer {
 }
 
 // Record appends a violation to the ring buffer. If the buffer is full,
-// the oldest entry is overwritten.
-func (b *Buffer) Record(info ViolationInfo) {
+// the oldest entry is overwritten and dropped is returned as true.
+func (b *Buffer) Record(rec ViolationRecord) bool {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	b.buf[b.head] = ViolationRecord{
-		Timestamp:     time.Now(),
-		PolicyName:    info.PolicyName,
-		Namespace:     info.Namespace,
-		PodName:       info.PodName,
-		ContainerName: info.ContainerName,
-		ExePath:       info.ExePath,
-		NodeName:      info.NodeName,
-		Action:        info.Action,
-	}
+	dropped := b.pos >= MaxBufferEntries
 
-	b.head = (b.head + 1) % MaxBufferEntries
-	if b.full {
-		b.tail = b.head
-	}
-	if b.head == b.tail {
-		b.full = true
-	}
+	b.buf[b.pos%MaxBufferEntries] = rec
+	b.pos++
+
+	return dropped
 }
 
 // Drain returns all buffered records in reverse chronological order (newest first)
@@ -82,28 +57,18 @@ func (b *Buffer) Drain() []ViolationRecord {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 
-	n := b.len()
+	n := min(b.pos, MaxBufferEntries)
 	if n == 0 {
 		return nil
 	}
 
 	records := make([]ViolationRecord, 0, n)
 	for i := range n {
-		idx := (b.head - 1 - i + MaxBufferEntries) % MaxBufferEntries
+		idx := (b.pos - 1 - i) % MaxBufferEntries
 		records = append(records, b.buf[idx])
 	}
 
-	b.head = 0
-	b.tail = 0
-	b.full = false
+	b.pos = 0
 
 	return records
-}
-
-// len returns the number of entries in the ring buffer (caller must hold mtx).
-func (b *Buffer) len() int {
-	if b.full {
-		return MaxBufferEntries
-	}
-	return (b.head - b.tail + MaxBufferEntries) % MaxBufferEntries
 }
