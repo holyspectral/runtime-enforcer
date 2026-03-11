@@ -31,7 +31,12 @@ import (
 // deliver events to learning_controller.
 // This is a arbitrary number right now and can be fine-tuned or made configurable in the future.
 // On a simple kind cluster we saw more than 4200 process exec during the initial process cache dump, so this seems a reasonable default for now.
-const DefaultEventChannelBufferSize = 4096
+const (
+	DefaultEventChannelBufferSize = 4096
+	maxReconcileRetries           = 5
+	baseDelay                     = 1 * time.Second
+	maxDelay                      = 30 * time.Second
+)
 
 // GetWorkloadPolicyProposalName returns the name of WorkloadPolicyProposal
 // based on a high level resource and its name.
@@ -72,6 +77,8 @@ type LearningReconciler struct {
 	namespaceSelector labels.Selector
 	// OwnerRefEnricher can be overridden during testing
 	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
+
+	ratelimiter workqueue.TypedRateLimiter[eventscraper.KubeProcessInfo]
 }
 
 func NewLearningReconciler(
@@ -96,6 +103,10 @@ func NewLearningReconciler(
 				},
 			}
 		},
+		ratelimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[eventscraper.KubeProcessInfo](
+			baseDelay,
+			maxDelay,
+		),
 	}
 }
 
@@ -103,11 +114,36 @@ func NewLearningReconciler(
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals,verbs=create;get;list;watch;update;patch
 
-// Reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
+// Reconcile maintains a retry mechanism with exponential backoff when processing learning events.
 func (r *LearningReconciler) Reconcile(
 	ctx context.Context,
 	req eventscraper.KubeProcessInfo,
 ) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	ret, err := r.reconcile(ctx, req)
+	if err != nil {
+		if r.ratelimiter.NumRequeues(req) > maxReconcileRetries {
+			log.Error(err, "Failed to reconcile after max attempts; dropping event", "req", req)
+			r.ratelimiter.Forget(req)
+			return ctrl.Result{}, nil
+		}
+
+		//nolint:mnd // 3 is the verbosity level for detailed debug info
+		log.V(3).
+			Info("Reconciliation failed; will retry with backoff", "req", req, "error", err)
+
+		return ctrl.Result{RequeueAfter: r.ratelimiter.When(req)}, nil
+	}
+	r.ratelimiter.Forget(req)
+	return ret, nil
+}
+
+// reconcile receives learning events and creates/updates WorkloadPolicyProposal resources accordingly.
+func (r *LearningReconciler) reconcile(
+	ctx context.Context,
+	req eventscraper.KubeProcessInfo,
+) (ctrl.Result, error) { //nolint:unparam // we want to keep the signature consistent with controller-runtime
 	log := log.FromContext(ctx)
 
 	log.V(3).Info("Reconciling", "req", req) //nolint:mnd // 3 is the verbosity level for detailed debug info
@@ -180,7 +216,7 @@ func (r *LearningReconciler) Reconcile(
 		}
 
 		// if we don't populate a partial owner reference here the webhook won't be able to populate the owner reference because it doesn't know who is the owner.
-		r.OwnerRefEnricher(policyProposal, req.WorkloadKind, req.Workload)
+		r.OwnerRefEnricher(policyProposal, req.WorkloadKind, req.Workload+"asd")
 		return nil
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to run CreateOrUpdate: %w", err)
