@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
@@ -115,6 +116,7 @@ func (r *WorkloadPolicyHandler) SetupWithManager(mgr ctrl.Manager) error {
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.WorkloadPolicy{}).
 		Named("workloadpolicy").
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 	if err != nil {
 		return fmt.Errorf("unable to set up WorkloadPolicy handler: %w", err)
