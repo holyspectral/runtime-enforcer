@@ -112,6 +112,7 @@ func main() {
 
 	// Enable mTLS by default
 	config.agentPoolConf.MTLSEnabled = true
+	config.agentPoolConf.Logger = slog.New(slogHandler).With("component", "agent-pool")
 	var pool *grpcexporter.AgentClientPool
 	pool, err = grpcexporter.NewAgentClientPool(config.agentPoolConf)
 	if err != nil {

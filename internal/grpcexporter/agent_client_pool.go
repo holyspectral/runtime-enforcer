@@ -20,6 +20,7 @@ type AgentClientPoolConfig struct {
 
 	Namespace           string
 	LabelSelectorString string
+	Logger              *slog.Logger
 }
 
 // AgentClientPool offers APIs to call a GRPC query on each agent pod in the cluster.
@@ -29,7 +30,7 @@ type AgentClientPool struct {
 	namespace     string
 	labelSelector map[string]string
 	factory       *AgentClientFactory
-	logger        slog.Logger
+	logger        *slog.Logger
 }
 
 func convertLabelStringToSelector(labelString string) (map[string]string, error) {
@@ -86,6 +87,7 @@ func NewAgentClientPool(poolConf AgentClientPoolConfig) (*AgentClientPool, error
 		namespace:     poolConf.Namespace,
 		labelSelector: labelSelector,
 		factory:       factory,
+		logger:        poolConf.Logger,
 	}, nil
 }
 

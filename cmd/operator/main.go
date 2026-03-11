@@ -282,6 +282,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	config.wpStatusSyncConfig.AgentPoolConf.Logger = slog.New(slogHandler).With("component", "agent-pool")
 	if err = SetupControllers(
 		ctrlLogger, mgr, metricsCertWatcher, webhookCertWatcher, &config.wpStatusSyncConfig,
 	); err != nil {

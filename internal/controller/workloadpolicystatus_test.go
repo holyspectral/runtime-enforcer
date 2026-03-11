@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -19,6 +20,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+type testLogWriter struct {
+	t *testing.T
+}
+
+func (w *testLogWriter) Write(p []byte) (int, error) {
+	// use the formatted output to avoid the new line
+	w.t.Logf("%s", string(p))
+	return len(p), nil
+}
+
 func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 	scheme := runtime.NewScheme()
 	corev1.AddToScheme(scheme)
@@ -33,6 +44,9 @@ func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 			LabelSelectorString: "app=agent",
 			// We explicitly provide a namespace so that this is not computed at runtime.
 			Namespace: "test-namespace",
+			Logger: slog.New(slog.NewJSONHandler(&testLogWriter{t: t}, &slog.HandlerOptions{
+				Level: slog.LevelDebug,
+			})).With("component", "agent-pool"),
 		},
 		UpdateInterval: 1 * time.Second,
 	}
