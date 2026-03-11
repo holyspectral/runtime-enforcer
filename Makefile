@@ -158,7 +158,7 @@ kubectl-plugin-cross: ## Build kubectl plugin for all target platforms.
 	@echo "Cross-build complete. Artifacts in bin/kubectl-plugin/"
 
 .PHONY: debugger
-debugger: fmt ## Build debugger binary.
+debugger: generate-ebpf fmt ## Build debugger binary.
 	CGO_ENABLED=0 GOOS=linux go build -o bin/debugger ./cmd/debugger
 
 .PHONY: run
