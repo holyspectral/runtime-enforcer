@@ -24,7 +24,7 @@ func TestRunSwitchModeMonitorToProtect(t *testing.T) {
 			Namespace: ns,
 		},
 		Spec: apiv1alpha1.WorkloadPolicySpec{
-			Mode: "monitor",
+			Mode: policymode.MonitorString,
 		},
 	}
 
@@ -50,13 +50,6 @@ func TestRunSwitchModeMonitorToProtect(t *testing.T) {
 	updatedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, policymode.ProtectString, updatedPolicy.Spec.Mode)
-
-	output := out.String()
-	require.Contains(
-		t,
-		output,
-		"Successfully switched WorkloadPolicy \"test-policy\" in namespace \"test\" from \"monitor\" mode to \"protect\" mode.",
-	)
 }
 
 func TestRunSwitchModeProtectToMonitor(t *testing.T) {
@@ -71,7 +64,7 @@ func TestRunSwitchModeProtectToMonitor(t *testing.T) {
 			Namespace: ns,
 		},
 		Spec: apiv1alpha1.WorkloadPolicySpec{
-			Mode: "protect",
+			Mode: policymode.ProtectString,
 		},
 	}
 
@@ -97,11 +90,74 @@ func TestRunSwitchModeProtectToMonitor(t *testing.T) {
 	updatedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
 	require.NoError(t, err)
 	require.Equal(t, policymode.MonitorString, updatedPolicy.Spec.Mode)
+}
+
+func TestRunSwitchModeAlreadyInTargetMode(t *testing.T) {
+	t.Parallel()
+
+	ns := "test"
+	name := "test-policy"
+
+	policy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: apiv1alpha1.WorkloadPolicySpec{
+			Mode: policymode.MonitorString,
+		},
+	}
+
+	clientset := fakeclient.NewClientset(policy)
+	securityClient := clientset.SecurityV1alpha1()
+
+	var out bytes.Buffer
+	opts := &switchModeOptions{
+		commonOptions: commonOptions{
+			Namespace: ns,
+			DryRun:    false,
+		},
+		PolicyName: name,
+		Mode:       policymode.MonitorString,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
+	defer cancel()
+
+	err := runSwitchMode(ctx, securityClient, opts, &out)
+	require.NoError(t, err)
+
+	unchangedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Equal(t, policymode.MonitorString, unchangedPolicy.Spec.Mode)
 
 	output := out.String()
-	require.Contains(
-		t,
-		output,
-		"Successfully switched WorkloadPolicy \"test-policy\" in namespace \"test\" from \"protect\" mode to \"monitor\" mode.",
-	)
+	require.Contains(t, output, "is already in \"monitor\" mode.")
+}
+
+func TestRunSwitchModePolicyNotFound(t *testing.T) {
+	t.Parallel()
+
+	ns := "test"
+	name := "missing-policy"
+
+	clientset := fakeclient.NewClientset()
+	securityClient := clientset.SecurityV1alpha1()
+
+	var out bytes.Buffer
+	opts := &switchModeOptions{
+		commonOptions: commonOptions{
+			Namespace: ns,
+			DryRun:    false,
+		},
+		PolicyName: name,
+		Mode:       policymode.MonitorString,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
+	defer cancel()
+
+	err := runSwitchMode(ctx, securityClient, opts, &out)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
 }

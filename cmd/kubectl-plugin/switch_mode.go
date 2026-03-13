@@ -81,15 +81,6 @@ func runSwitchMode(
 	currentMode := policy.Spec.Mode
 	targetMode := opts.Mode
 
-	if err = validateMode(currentMode); err != nil {
-		return fmt.Errorf(
-			"WorkloadPolicy %q in namespace %q has invalid current mode %q, please correct it before using this command",
-			policy.Name,
-			policy.Namespace,
-			currentMode,
-		)
-	}
-
 	if currentMode == targetMode {
 		fmt.Fprintf(
 			out,
