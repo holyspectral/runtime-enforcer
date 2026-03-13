@@ -329,5 +329,6 @@ If you already have an OTEL collector deployed in your cluster, you can use the 
 helm upgrade runtime-enforcer runtime-enforcer/runtime-enforcer \
   --namespace runtime-enforcer \
   --set telemetry.collectorStrategy=external \
-  --set telemetry.externalCollector.endpoint=https://otel-collector.otel-collector.svc.cluster.local:4317 \
+  --set telemetry.externalCollector.protocol=grpc \
+  --set telemetry.externalCollector.endpoint=https://otel-collector.otel-collector.svc.cluster.local:4317
 ```

@@ -25,12 +25,9 @@ Finally, delete the namespace where Runtime-Enforcer was deployed:
 kubectl delete ns runtime-enforcer
 ```
 
-You can also delete the otel-collector and the cert-manager:
+You can also delete the cert-manager:
 
 ```bash
-helm uninstall otel-collector --namespace otel-collector
-kubectl delete ns otel-collector
-
 helm uninstall cert-manager --namespace cert-manager
 kubectl delete ns cert-manager
 ```
