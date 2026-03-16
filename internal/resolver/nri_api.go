@@ -88,7 +88,9 @@ func (r *Resolver) RemovePodContainerFromNri(podID PodID, containerID ContainerI
 	// remove the container from the pod
 	container, ok := state.containers[containerID]
 	if !ok {
-		r.logger.Warn("container not found", "containerID", containerID, "podID", podID)
+		// This can happen if during synchronize the container was in a not ready state and it was not sent,
+		// but then we receive the remove event for that container.
+		r.logger.Info("container not found", "containerID", containerID, "podID", podID)
 		return nil
 	}
 
