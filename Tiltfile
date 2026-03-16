@@ -138,6 +138,7 @@ local_resource(
         "internal",
         "proto",
     ],
+    ignore = exclusions,
 )
 
 entrypoint = ["/debugger"]
