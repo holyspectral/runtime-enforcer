@@ -556,8 +556,34 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	__u64 *policy_id = bpf_map_lookup_elem(&cg_to_policy_map, &cg_tracker_id);
 	if(!policy_id) {
-		// no policy associated with this cgroup.
-		// This is not an error, it means that the cgroup is not being monitored or enforced.
+		// No policy associated with this cgroup.
+		// Emit the event to the learning ringbuf so that the userspace can learn from it.
+		// This is critical because the LSM hook `security_bprm_creds_for_exec` is called
+		// for each binary in the binfmt chain (e.g., script AND interpreter), while the
+		// `sched_process_exec` tracepoint only fires once for the final binary. Without
+		// this, shebang scripts (e.g., docker-entrypoint.sh) would never be learned and
+		// would be blocked when the policy is enforced.
+		struct process_evt *levt = get_process_evt();
+		if(!levt) {
+			return 0;
+		}
+		levt->cgid = tg_get_current_cgroup_id();
+		levt->cg_tracker_id = cgrp_get_tracker_id(levt->cgid);
+		levt->mode = 0;
+
+		u32 loffset = populate_evt_with_path(levt, bprm);
+		if(loffset == 0) {
+			return 0;
+		}
+
+		long lerr = bpf_probe_read_kernel(levt->path,
+		                                  SAFE_PATH_LEN(levt->path_len + 1),
+		                                  &levt->path[SAFE_PATH_ACCESS(loffset)]);
+		if(lerr != 0) {
+			return 0;
+		}
+
+		bpf_ringbuf_output(&ringbuf_execve, levt, 19 + SAFE_PATH_LEN(levt->path_len), 0);
 		return 0;
 	}
 
