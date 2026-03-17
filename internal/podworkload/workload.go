@@ -1,11 +1,10 @@
-package nri
+package podworkload
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/containerd/nri/pkg/api"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 )
 
@@ -114,10 +113,7 @@ func parseStatefulSet(podName string) (string, workloadkind.Kind) {
 	return podName[:lastDashIndex], workloadkind.StatefulSet
 }
 
-func getWorkloadInfo(pod *api.PodSandbox) (string, workloadkind.Kind) {
-	podName := pod.GetName()
-	labels := pod.GetLabels()
-
+func getWorkloadInfo(podName string, labels map[string]string) (string, workloadkind.Kind) {
 	// DEPLOYMENT
 	// if a pod is created by a deployment it has the template hash label
 	if hash, ok := labels[podTemplateHashLabel]; ok {
@@ -149,4 +145,10 @@ func getWorkloadInfo(pod *api.PodSandbox) (string, workloadkind.Kind) {
 	// Everything that is not a known workload type is considered a regular pod.
 
 	return podName, workloadkind.Pod
+}
+
+// GetTruncatedWorkloadInfo returns the workload name, kind, and whether it was truncated.
+func GetTruncatedWorkloadInfo(podName string, labels map[string]string) (string, workloadkind.Kind, bool) {
+	workloadName, workloadKind := getWorkloadInfo(podName, labels)
+	return workloadName, workloadKind, strings.HasSuffix(workloadName, truncatedSuffix)
 }

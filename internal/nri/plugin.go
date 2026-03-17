@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	retry "github.com/avast/retry-go/v4"
 	"github.com/containerd/nri/pkg/api"
 	"github.com/containerd/nri/pkg/stub"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/podworkload"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 )
@@ -42,8 +42,8 @@ func (p *plugin) containerLogger(pod *api.PodSandbox, container *api.Container) 
 }
 
 func (p *plugin) getWorkloadInfoAndLog(ctx context.Context, pod *api.PodSandbox) (string, workloadkind.Kind) {
-	workloadName, workloadKind := getWorkloadInfo(pod)
-	if strings.HasSuffix(workloadName, truncatedSuffix) {
+	workloadName, workloadKind, truncated := podworkload.GetTruncatedWorkloadInfo(pod.GetName(), pod.GetLabels())
+	if truncated {
 		p.podLogger(pod).WarnContext(ctx, "Detected truncated workload name",
 			"workloadName", workloadName,
 			"workloadKind", workloadKind,
