@@ -496,7 +496,7 @@ static __always_inline int string_map_index(u16 padded_len) {
 	}
 }
 
-SEC("fmod_ret/security_bprm_creds_for_exec")
+SEC("fmod_ret/security_bprm_check")
 int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	__u64 cg_tracker_id = get_tracker_id_from_curr_task();
 	if(cg_tracker_id == 0) {

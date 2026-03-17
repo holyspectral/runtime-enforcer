@@ -88,7 +88,7 @@ func probeEbpfFeatures() error {
 		},
 		AttachType: ebpf.AttachModifyReturn,
 		License:    "MIT",
-		AttachTo:   "security_bprm_creds_for_exec",
+		AttachTo:   "security_bprm_check",
 	})
 	if err != nil {
 		return err
