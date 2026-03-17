@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestRunSwitchModeMonitorToProtect(t *testing.T) {
+func TestRunPolicyModeSetToProtect(t *testing.T) {
 	t.Parallel()
 
 	ns := "test"
@@ -32,7 +32,7 @@ func TestRunSwitchModeMonitorToProtect(t *testing.T) {
 	securityClient := clientset.SecurityV1alpha1()
 
 	var out bytes.Buffer
-	opts := &switchModeOptions{
+	opts := &policyModeOptions{
 		commonOptions: commonOptions{
 			Namespace: ns,
 			DryRun:    false,
@@ -44,7 +44,7 @@ func TestRunSwitchModeMonitorToProtect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
 	defer cancel()
 
-	err := runSwitchMode(ctx, securityClient, opts, &out)
+	err := runPolicyModeSet(ctx, securityClient, opts, &out)
 	require.NoError(t, err)
 
 	updatedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
@@ -52,7 +52,7 @@ func TestRunSwitchModeMonitorToProtect(t *testing.T) {
 	require.Equal(t, policymode.ProtectString, updatedPolicy.Spec.Mode)
 }
 
-func TestRunSwitchModeProtectToMonitor(t *testing.T) {
+func TestRunPolicyModeSetToMonitor(t *testing.T) {
 	t.Parallel()
 
 	ns := "test"
@@ -72,7 +72,7 @@ func TestRunSwitchModeProtectToMonitor(t *testing.T) {
 	securityClient := clientset.SecurityV1alpha1()
 
 	var out bytes.Buffer
-	opts := &switchModeOptions{
+	opts := &policyModeOptions{
 		commonOptions: commonOptions{
 			Namespace: ns,
 			DryRun:    false,
@@ -84,7 +84,7 @@ func TestRunSwitchModeProtectToMonitor(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
 	defer cancel()
 
-	err := runSwitchMode(ctx, securityClient, opts, &out)
+	err := runPolicyModeSet(ctx, securityClient, opts, &out)
 	require.NoError(t, err)
 
 	updatedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
@@ -92,7 +92,7 @@ func TestRunSwitchModeProtectToMonitor(t *testing.T) {
 	require.Equal(t, policymode.MonitorString, updatedPolicy.Spec.Mode)
 }
 
-func TestRunSwitchModeAlreadyInTargetMode(t *testing.T) {
+func TestRunPolicyModeAlreadyInTargetMode(t *testing.T) {
 	t.Parallel()
 
 	ns := "test"
@@ -112,7 +112,7 @@ func TestRunSwitchModeAlreadyInTargetMode(t *testing.T) {
 	securityClient := clientset.SecurityV1alpha1()
 
 	var out bytes.Buffer
-	opts := &switchModeOptions{
+	opts := &policyModeOptions{
 		commonOptions: commonOptions{
 			Namespace: ns,
 			DryRun:    false,
@@ -124,7 +124,7 @@ func TestRunSwitchModeAlreadyInTargetMode(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
 	defer cancel()
 
-	err := runSwitchMode(ctx, securityClient, opts, &out)
+	err := runPolicyModeSet(ctx, securityClient, opts, &out)
 	require.NoError(t, err)
 
 	unchangedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
@@ -135,7 +135,7 @@ func TestRunSwitchModeAlreadyInTargetMode(t *testing.T) {
 	require.Contains(t, output, "is already in \"monitor\" mode.")
 }
 
-func TestRunSwitchModePolicyNotFound(t *testing.T) {
+func TestRunPolicyModePolicyNotFound(t *testing.T) {
 	t.Parallel()
 
 	ns := "test"
@@ -145,7 +145,7 @@ func TestRunSwitchModePolicyNotFound(t *testing.T) {
 	securityClient := clientset.SecurityV1alpha1()
 
 	var out bytes.Buffer
-	opts := &switchModeOptions{
+	opts := &policyModeOptions{
 		commonOptions: commonOptions{
 			Namespace: ns,
 			DryRun:    false,
@@ -157,7 +157,7 @@ func TestRunSwitchModePolicyNotFound(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeout)
 	defer cancel()
 
-	err := runSwitchMode(ctx, securityClient, opts, &out)
+	err := runPolicyModeSet(ctx, securityClient, opts, &out)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not found")
 }

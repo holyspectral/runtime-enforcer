@@ -24,7 +24,7 @@ Flags:
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "kubectl runtime-enforcer",
+		Use:     "runtime-enforcer",
 		Long:    "Kubernetes plugin for SUSE Security Runtime Enforcer",
 		Version: version,
 		Args:    cobra.ArbitraryArgs,
@@ -35,8 +35,8 @@ func newRootCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(rootUsageTemplate)
 
-	cmd.AddCommand(newMarkReadyCmd())
-	cmd.AddCommand(newSwitchModeCmd())
+	cmd.AddCommand(newProposalCmd())
+	cmd.AddCommand(newPolicyCmd())
 
 	return cmd
 }

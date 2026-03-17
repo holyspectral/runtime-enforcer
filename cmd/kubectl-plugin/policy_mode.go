@@ -12,57 +12,64 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type switchModeOptions struct {
+type policyModeOptions struct {
 	commonOptions
 
 	PolicyName string
 	Mode       string
 }
 
-func newSwitchModeCmd() *cobra.Command {
-	opts := &switchModeOptions{}
+func newPolicyModeCmd(mode string) *cobra.Command {
+	use := fmt.Sprintf("%s POLICY_NAME", mode)
+	short := fmt.Sprintf("Set WorkloadPolicy mode to %s", mode)
+
+	opts := &policyModeOptions{
+		commonOptions: newCommonOptions(),
+		Mode:          mode,
+	}
 
 	cmd := &cobra.Command{
-		Use:   "switch-mode POLICY_NAME",
-		Short: "Switch WorkloadPolicy mode between monitor and protect",
-		Long:  "Switch WorkloadPolicy mode between monitor and protect without editing YAML manually.",
+		Use:   use,
+		Short: short,
 		Args:  cobra.ExactArgs(1),
-		RunE:  runSwitchModeCmd(opts),
+		RunE:  runPolicyModeSetCmd(opts),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
 
-	cmd.Flags().StringVarP(&opts.Namespace, "namespace", "n", "", "Namespace of the WorkloadPolicy")
+	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
+	opts.configFlags.AddFlags(cmd.Flags())
+
+	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
-	cmd.Flags().StringVarP(&opts.Mode, "mode", "m", "", "Target mode for the WorkloadPolicy")
-	_ = cmd.MarkFlagRequired("mode")
 
 	return cmd
 }
 
-func runSwitchModeCmd(opts *switchModeOptions) func(cmd *cobra.Command, args []string) error {
+func newPolicyModeProtectCmd() *cobra.Command {
+	return newPolicyModeCmd(policymode.ProtectString)
+}
+func newPolicyModeMonitorCmd() *cobra.Command {
+	return newPolicyModeCmd(policymode.MonitorString)
+}
+
+func runPolicyModeSetCmd(opts *policyModeOptions) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		opts.PolicyName = args[0]
 
-		if err := validateMode(opts.Mode); err != nil {
-			return err
-		}
-
-		return withRuntimeEnforcerClient(cmd, opts.Namespace, func(
+		return withRuntimeEnforcerClient(cmd, &opts.commonOptions, func(
 			ctx context.Context,
 			securityClient securityclient.SecurityV1alpha1Interface,
-			namespace string,
 		) error {
-			opts.Namespace = namespace
-			return runSwitchMode(ctx, securityClient, opts, cmd.OutOrStdout())
+			return runPolicyModeSet(ctx, securityClient, opts, opts.ioStreams.Out)
 		})
 	}
 }
 
-func runSwitchMode(
+func runPolicyModeSet(
 	ctx context.Context,
 	client securityclient.SecurityV1alpha1Interface,
-	opts *switchModeOptions,
+	opts *policyModeOptions,
 	out io.Writer,
 ) error {
 	policy, err := client.WorkloadPolicies(opts.Namespace).Get(ctx, opts.PolicyName, metav1.GetOptions{})
@@ -95,10 +102,9 @@ func runSwitchMode(
 	if opts.DryRun {
 		fmt.Fprintf(
 			out,
-			"Would switch WorkloadPolicy %q in namespace %q from %q mode to %q mode.\n",
+			"Would set WorkloadPolicy %q in namespace %q to %q mode.\n",
 			policy.Name,
 			policy.Namespace,
-			currentMode,
 			targetMode,
 		)
 		return nil
@@ -125,26 +131,11 @@ func runSwitchMode(
 
 	fmt.Fprintf(
 		out,
-		"Successfully switched WorkloadPolicy %q in namespace %q from %q mode to %q mode.\n",
+		"Successfully set WorkloadPolicy %q in namespace %q to %q mode.\n",
 		policy.Name,
 		policy.Namespace,
-		currentMode,
 		targetMode,
 	)
 
 	return nil
-}
-
-func validateMode(mode string) error {
-	switch mode {
-	case policymode.MonitorString, policymode.ProtectString:
-		return nil
-	default:
-		return fmt.Errorf(
-			"invalid mode %q, expected %q or %q",
-			mode,
-			policymode.MonitorString,
-			policymode.ProtectString,
-		)
-	}
 }

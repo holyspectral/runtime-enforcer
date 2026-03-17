@@ -13,50 +13,53 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type markReadyOptions struct {
+type proposalPromoteOptions struct {
 	commonOptions
 
 	ProposalName string
 }
 
-func newMarkReadyCmd() *cobra.Command {
-	opts := &markReadyOptions{}
+func newProposalPromoteCmd() *cobra.Command {
+	opts := &proposalPromoteOptions{
+		commonOptions: newCommonOptions(),
+	}
 
 	cmd := &cobra.Command{
-		Use:   "mark-ready PROPOSAL_NAME",
-		Short: "Mark WorkloadPolicyProposal as ready",
-		Long:  "Mark WorkloadPolicyProposal as ready. This will trigger the creation of a WorkloadPolicy.",
+		Use:   "promote PROPOSAL_NAME",
+		Short: "Promote WorkloadPolicyProposal to WorkloadPolicy",
+		Long:  "Promote WorkloadPolicyProposal to WorkloadPolicy. This will trigger the creation of a WorkloadPolicy.",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runMarkReadyCmd(opts),
+		RunE:  runProposalPromoteCmd(opts),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
 
-	cmd.Flags().StringVarP(&opts.Namespace, "namespace", "n", "", "Namespace of the WorkloadPolicyProposal")
+	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
+	opts.configFlags.AddFlags(cmd.Flags())
+
+	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
 
 	return cmd
 }
 
-func runMarkReadyCmd(opts *markReadyOptions) func(cmd *cobra.Command, args []string) error {
+func runProposalPromoteCmd(opts *proposalPromoteOptions) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		opts.ProposalName = args[0]
 
-		return withRuntimeEnforcerClient(cmd, opts.Namespace, func(
+		return withRuntimeEnforcerClient(cmd, &opts.commonOptions, func(
 			ctx context.Context,
-			securityClient securityclient.SecurityV1alpha1Interface,
-			namespace string,
+			client securityclient.SecurityV1alpha1Interface,
 		) error {
-			opts.Namespace = namespace
-			return runMarkReady(ctx, securityClient, opts, cmd.OutOrStdout())
+			return runProposalPromote(ctx, client, opts, opts.ioStreams.Out)
 		})
 	}
 }
 
-func runMarkReady(
+func runProposalPromote(
 	ctx context.Context,
 	client securityclient.SecurityV1alpha1Interface,
-	opts *markReadyOptions,
+	opts *proposalPromoteOptions,
 	out io.Writer,
 ) error {
 	proposal, err := client.WorkloadPolicyProposals(opts.Namespace).Get(ctx, opts.ProposalName, metav1.GetOptions{})
@@ -72,14 +75,6 @@ func runMarkReady(
 		)
 	}
 
-	if opts.DryRun {
-		fmt.Fprintf(out, "Would mark WorkloadPolicyProposal %q in namespace %q as ready by setting label %q: %q.\n",
-			proposal.Name, proposal.Namespace, apiv1alpha1.ApprovalLabelKey, "true")
-		fmt.Fprintf(out, "This will trigger the creation of a WorkloadPolicy %q in namespace %q.\n",
-			proposal.Name, proposal.Namespace)
-		return nil
-	}
-
 	labels := proposal.GetLabels()
 	if labels == nil {
 		labels = map[string]string{}
@@ -88,10 +83,24 @@ func runMarkReady(
 	if labels[apiv1alpha1.ApprovalLabelKey] == "true" {
 		fmt.Fprintf(
 			out,
-			"WorkloadPolicyProposal %q in namespace %q is already marked as ready.\n",
+			"WorkloadPolicyProposal %q in namespace %q is already promoted to WorkloadPolicy.\n",
 			proposal.Name,
 			proposal.Namespace,
 		)
+		return nil
+	}
+
+	if opts.DryRun {
+		fmt.Fprintf(
+			out,
+			"Would promote WorkloadPolicyProposal %q in namespace %q to WorkloadPolicy by setting label %q: %q.\n",
+			proposal.Name,
+			proposal.Namespace,
+			apiv1alpha1.ApprovalLabelKey,
+			"true",
+		)
+		fmt.Fprintf(out, "This will trigger the creation of a WorkloadPolicy %q in namespace %q.\n",
+			proposal.Name, proposal.Namespace)
 		return nil
 	}
 
@@ -117,7 +126,7 @@ func runMarkReady(
 
 	fmt.Fprintf(
 		out,
-		"Marked WorkloadPolicyProposal %q in namespace %q as ready.\n",
+		"Promoted WorkloadPolicyProposal %q in namespace %q to WorkloadPolicy.\n",
 		proposal.Name,
 		proposal.Namespace,
 	)

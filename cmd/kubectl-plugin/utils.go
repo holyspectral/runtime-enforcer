@@ -3,12 +3,24 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	securityclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/typed/api/v1alpha1"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
+
+// groupUsageTemplate is a custom usage template for group commands (e.g. "proposal", "policy").
+const groupUsageTemplate = `Usage:
+  {{.UseLine}}
+
+Available Commands:
+{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}  {{rpad .Name .NamePadding}} {{.Short}}
+{{end}}{{end}}
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+`
 
 // subcommandUsageTemplate is a custom usage template for subcommands:
 // it does not print the "Available Commands" section.
@@ -25,37 +37,40 @@ const (
 )
 
 type commonOptions struct {
+	configFlags *genericclioptions.ConfigFlags
+	ioStreams   genericclioptions.IOStreams
+
 	Namespace string
 	DryRun    bool
+}
+
+func newCommonOptions() commonOptions {
+	return commonOptions{
+		configFlags: genericclioptions.NewConfigFlags(true),
+		ioStreams:   genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr},
+	}
 }
 
 type subcommandFunc func(
 	ctx context.Context,
 	securityClient securityclient.SecurityV1alpha1Interface,
-	namespace string,
 ) error
 
 // withRuntimeEnforcerClient is a helper function to create a runtime-enforcer client and execute a subcommand.
 func withRuntimeEnforcerClient(
 	cmd *cobra.Command,
-	ns string,
+	opts *commonOptions,
 	subcommand subcommandFunc,
 ) error {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	overrides := &clientcmd.ConfigOverrides{}
-	if ns != "" {
-		overrides.Context.Namespace = ns
-	}
-
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
-	config, err := kubeConfig.ClientConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load Kubernetes configuration: %w", err)
-	}
-
-	namespace, _, err := kubeConfig.Namespace()
+	namespace, _, err := opts.configFlags.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to determine namespace: %w", err)
+	}
+	opts.Namespace = namespace
+
+	config, err := opts.configFlags.ToRESTConfig()
+	if err != nil {
+		return fmt.Errorf("failed to build Kubernetes configuration: %w", err)
 	}
 
 	securityClient, err := securityclient.NewForConfig(config)
@@ -66,5 +81,5 @@ func withRuntimeEnforcerClient(
 	ctx, cancel := context.WithTimeout(cmd.Context(), defaultOperationTimeout)
 	defer cancel()
 
-	return subcommand(ctx, securityClient, namespace)
+	return subcommand(ctx, securityClient)
 }
