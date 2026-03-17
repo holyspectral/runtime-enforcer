@@ -174,6 +174,52 @@ func TestMultiplePolicies(t *testing.T) {
 	require.NoError(t, err, "Failed to add policy 2 values")
 }
 
+func TestReplaceValuesNewSizeBucket(t *testing.T) {
+	runner, err := newCgroupRunner(t)
+	require.NoError(t, err, "Failed to create cgroup runner")
+	defer runner.close()
+
+	mockPolicyID := uint64(45)
+
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(
+		mockPolicyID,
+		[]string{"/usr/bin/true"},
+		AddValuesToPolicy,
+	)
+	require.NoError(t, err, "Failed to add initial policy values")
+
+	err = runner.manager.GetPolicyModeUpdateFunc()(mockPolicyID, policymode.Protect, UpdateMode)
+	require.NoError(t, err, "Failed to set policy mode")
+
+	err = runner.manager.GetCgroupPolicyUpdateFunc()(
+		mockPolicyID, []uint64{runner.cgInfo.id}, AddPolicyToCgroups,
+	)
+	require.NoError(t, err, "Failed to add policy to cgroup")
+
+	longPath := fmt.Sprintf("/usr/bin/%s", strings.Repeat("a", 20))
+	err = runner.manager.GetPolicyUpdateBinariesFunc()(
+		mockPolicyID,
+		[]string{"/usr/bin/true", longPath},
+		ReplaceValuesInPolicy,
+	)
+	require.NoError(t, err, "ReplaceValuesInPolicy must succeed when adding values in a new size bucket")
+
+	t.Log("Trying allowed binary after replace")
+	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
+		command:         "/usr/bin/true",
+		channel:         monitoringChannel,
+		shouldFindEvent: false,
+	}), "allowed binary must pass after policy replacement")
+
+	t.Log("Trying disallowed binary after replace")
+	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
+		command:         "/usr/bin/who",
+		channel:         monitoringChannel,
+		shouldFindEvent: true,
+		shouldEPERM:     true,
+	}), "disallowed binary must be blocked after policy replacement")
+}
+
 func TestManagerShutdown(t *testing.T) {
 	runner, err := newCgroupRunner(t)
 	require.NoError(t, err, "Failed to create cgroup runner")
