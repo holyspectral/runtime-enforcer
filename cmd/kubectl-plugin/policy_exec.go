@@ -18,6 +18,8 @@ type policyExecAction string
 const (
 	policyExecActionAllow policyExecAction = "allow"
 	policyExecActionDeny  policyExecAction = "deny"
+
+	minPolicyExecArgs = 2
 )
 
 type policyExecOptions struct {
@@ -27,8 +29,6 @@ type policyExecOptions struct {
 	Executables []string
 	Action      policyExecAction
 }
-
-const minPolicyExecArgs = 2
 
 func newPolicyExecCmd(action policyExecAction) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME <executables>", action)
