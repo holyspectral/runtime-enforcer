@@ -6,124 +6,153 @@ import (
 	"testing"
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	podTemplateHashLabel = "pod-template-hash"
+	policyName           = "test-policy"
+)
+
 func TestValidatePolicyShowProtectionOutput(t *testing.T) {
 	t.Parallel()
-
-	require.NoError(t, validatePolicyShowProtectionOutput(policyShowProtectionOutputTable))
-	require.NoError(t, validatePolicyShowProtectionOutput(policyShowProtectionOutputJSON))
-	require.Error(t, validatePolicyShowProtectionOutput("yaml"))
+	var out bytes.Buffer
+	require.NoError(t, renderPolicyProtection(policyShowProtectionOutputTable, &out, nil))
+	require.NoError(t, renderPolicyProtection(policyShowProtectionOutputJSON, &out, nil))
+	require.Error(t, renderPolicyProtection("yaml", &out, nil))
 }
 
-func TestBuildPolicyProtectionRows(t *testing.T) {
+func TestBuildWorkloadProtectionRows(t *testing.T) {
 	t.Parallel()
 
 	namespaceA := "ns-a"
 	namespaceB := "ns-b"
-	podA := "pod-a"
-	podB := "pod-b"
-	policyA := "policy-a"
 
 	tests := []struct {
 		name     string
 		pods     []corev1.Pod
 		policies []apiv1alpha1.WorkloadPolicy
-		expected []policyProtectionRow
+		expected []workloadProtectionRow
 	}{
 		{
-			name: "2 pods protected by the same policy",
+			name: "group deployment pods into one workload row",
 			pods: []corev1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      podA,
+						Name:      "ubuntu-deployment-6469c647b5-2ftx7",
 						Namespace: namespaceA,
 						Labels: map[string]string{
-							apiv1alpha1.PolicyLabelKey: policyA,
+							apiv1alpha1.PolicyLabelKey: policyName,
+							podTemplateHashLabel:       "6469c647b5",
 						},
 					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      podB,
+						Name:      "ubuntu-deployment-6469c647b5-tjssz",
 						Namespace: namespaceA,
 						Labels: map[string]string{
-							apiv1alpha1.PolicyLabelKey: policyA,
+							apiv1alpha1.PolicyLabelKey: policyName,
+							podTemplateHashLabel:       "6469c647b5",
 						},
 					},
 				},
 			},
 			policies: []apiv1alpha1.WorkloadPolicy{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      policyA,
-						Namespace: namespaceA,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespaceA},
+					Spec:       apiv1alpha1.WorkloadPolicySpec{Mode: policymode.ProtectString},
+					Status:     apiv1alpha1.WorkloadPolicyStatus{Phase: apiv1alpha1.Active},
 				},
 			},
-			expected: []policyProtectionRow{
-				{Pod: namespacedName(namespaceA, podA), Policy: policyA, PolicyExists: true},
-				{Pod: namespacedName(namespaceA, podB), Policy: policyA, PolicyExists: true},
+			expected: []workloadProtectionRow{
+				{
+					Workload: namespacedName(namespaceA, "ubuntu-deployment"),
+					Kind:     workloadkind.Deployment.String(),
+					Policy:   policyName,
+					Mode:     modeToUpper(policymode.ProtectString),
+					Status:   string(apiv1alpha1.Active),
+				},
 			},
 		},
 		{
-			name: "Missing policy",
+			name: "missing policy uses unknown mode and missing status",
 			pods: []corev1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      podA,
+						Name:      "ubuntu-deployment-6469c647b5-2ftx7",
 						Namespace: namespaceA,
 						Labels: map[string]string{
-							apiv1alpha1.PolicyLabelKey: policyA,
+							apiv1alpha1.PolicyLabelKey: policyName,
+							podTemplateHashLabel:       "6469c647b5",
 						},
-					},
-				},
-				{
-					// This pod has no policies so it should not be included in the output
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podB,
-						Namespace: namespaceA,
-						Labels:    map[string]string{},
 					},
 				},
 			},
 			policies: nil,
-			expected: []policyProtectionRow{
-				{Pod: namespacedName(namespaceA, podA), Policy: policyA, PolicyExists: false},
+			expected: []workloadProtectionRow{
+				{
+					Workload: namespacedName(namespaceA, "ubuntu-deployment"),
+					Kind:     workloadkind.Deployment.String(),
+					Policy:   policyName,
+					Mode:     unknownMode,
+					Status:   missingStatus,
+				},
 			},
 		},
 		{
-			name: "2 policies same name but different namespace",
+			name: "same policy name in different namespaces respects namespace",
 			pods: []corev1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      podA,
+						Name:      "pod-a",
 						Namespace: namespaceA,
 						Labels: map[string]string{
-							apiv1alpha1.PolicyLabelKey: policyA,
+							apiv1alpha1.PolicyLabelKey: policyName,
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "pod-b",
+						Namespace: namespaceB,
+						Labels: map[string]string{
+							apiv1alpha1.PolicyLabelKey: policyName,
 						},
 					},
 				},
 			},
 			policies: []apiv1alpha1.WorkloadPolicy{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      policyA,
-						Namespace: namespaceA,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespaceA},
+					Spec:       apiv1alpha1.WorkloadPolicySpec{Mode: policymode.MonitorString},
+					Status:     apiv1alpha1.WorkloadPolicyStatus{Phase: apiv1alpha1.Active},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      policyA,
-						Namespace: namespaceB,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespaceB},
+					Spec:       apiv1alpha1.WorkloadPolicySpec{Mode: policymode.ProtectString},
+					Status:     apiv1alpha1.WorkloadPolicyStatus{Phase: apiv1alpha1.Failed},
 				},
 			},
-			expected: []policyProtectionRow{
-				{Pod: namespacedName(namespaceA, podA), Policy: policyA, PolicyExists: true},
+			expected: []workloadProtectionRow{
+				{
+					Workload: namespacedName(namespaceA, "pod-a"),
+					Kind:     workloadkind.Pod.String(),
+					Policy:   policyName,
+					Mode:     modeToUpper(policymode.MonitorString),
+					Status:   string(apiv1alpha1.Active),
+				},
+				{
+					Workload: namespacedName(namespaceB, "pod-b"),
+					Kind:     workloadkind.Pod.String(),
+					Policy:   policyName,
+					Mode:     modeToUpper(policymode.ProtectString),
+					Status:   string(apiv1alpha1.Failed),
+				},
 			},
 		},
 	}
@@ -131,48 +160,56 @@ func TestBuildPolicyProtectionRows(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			rows := buildPolicyProtectionRows(tc.pods, tc.policies)
-			require.Len(t, rows, len(tc.expected))
-			for i := range rows {
-				// the slice is ordered so we can compare directly
-				require.Equal(t, tc.expected[i], rows[i])
-			}
+			rows := buildWorkloadProtectionRows(tc.pods, tc.policies)
+			require.Equal(t, tc.expected, rows)
 		})
 	}
 }
 
-func TestRenderPolicyProtectionJSONIncludesFields(t *testing.T) {
+func TestRenderPolicyProtection(t *testing.T) {
 	t.Parallel()
 
-	rows := []policyProtectionRow{{Pod: "ns-a/pod-a", Policy: "policy-a", PolicyExists: true}}
-	var out bytes.Buffer
+	workloadName := "ns-a/ubuntu-deployment"
+	rows := []workloadProtectionRow{{
+		Workload: workloadName,
+		Kind:     workloadkind.Deployment.String(),
+		Policy:   policyName,
+		Mode:     modeToUpper(policymode.ProtectString),
+		Status:   string(apiv1alpha1.Active),
+	}}
 
-	err := renderPolicyProtectionJSON(&out, rows)
-	require.NoError(t, err)
+	t.Run("validate json", func(t *testing.T) {
+		t.Parallel()
+		var out bytes.Buffer
+		err := renderPolicyProtectionJSON(&out, rows)
+		require.NoError(t, err)
 
-	var decoded []map[string]any
-	require.NoError(t, json.Unmarshal(out.Bytes(), &decoded))
-	require.Len(t, decoded, 1)
-	require.Equal(t, "ns-a/pod-a", decoded[0]["pod"])
-	require.Equal(t, "policy-a", decoded[0]["policy"])
-	require.Equal(t, true, decoded[0]["policyExists"])
-}
+		var decoded []map[string]any
+		require.NoError(t, json.Unmarshal(out.Bytes(), &decoded))
+		require.Len(t, decoded, 1)
+		require.Equal(t, workloadName, decoded[0]["workload"])
+		require.Equal(t, policyName, decoded[0]["policy"])
+		require.Equal(t, workloadkind.Deployment.String(), decoded[0]["kind"])
+		require.Equal(t, modeToUpper(policymode.ProtectString), decoded[0]["mode"])
+		require.Equal(t, string(apiv1alpha1.Active), decoded[0]["status"])
+	})
 
-func TestRenderPolicyProtectionTableIncludesMissingIndicator(t *testing.T) {
-	t.Parallel()
+	t.Run("validate table", func(t *testing.T) {
+		t.Parallel()
+		var out bytes.Buffer
+		err := renderPolicyProtectionTable(&out, rows)
+		require.NoError(t, err)
 
-	rows := []policyProtectionRow{
-		{Pod: "ns-a/pod-a", Policy: "policy-a", PolicyExists: true},
-		{Pod: "ns-a/pod-b", Policy: "policy-b", PolicyExists: false},
-	}
-
-	var out bytes.Buffer
-	err := renderPolicyProtectionTable(&out, rows)
-	require.NoError(t, err)
-
-	output := out.String()
-	require.Contains(t, output, "ns-a/pod-a")
-	require.Contains(t, output, "ns-a/pod-b")
-	require.Contains(t, output, missingPolicyIndicator)
-	require.Contains(t, output, missingPolicyMessage)
+		output := out.String()
+		require.Contains(t, output, "WORKLOAD")
+		require.Contains(t, output, "KIND")
+		require.Contains(t, output, "POLICY")
+		require.Contains(t, output, "MODE")
+		require.Contains(t, output, "STATUS")
+		require.Contains(t, output, workloadName)
+		require.Contains(t, output, policyName)
+		require.Contains(t, output, workloadkind.Deployment.String())
+		require.Contains(t, output, modeToUpper(policymode.ProtectString))
+		require.Contains(t, output, string(apiv1alpha1.Active))
+	})
 }

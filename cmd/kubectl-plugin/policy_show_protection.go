@@ -8,11 +8,12 @@ import (
 	"slices"
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/podworkload"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	securityclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/typed/api/v1alpha1"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/printers"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
@@ -21,8 +22,8 @@ const (
 	policyShowProtectionOutputTable = "table"
 	policyShowProtectionOutputJSON  = "json"
 
-	missingPolicyIndicator = "❌"
-	missingPolicyMessage   = "policy does not exist"
+	unknownMode   = "Unknown"
+	missingStatus = "Missing"
 )
 
 type policyShowProtectionOptions struct {
@@ -32,10 +33,12 @@ type policyShowProtectionOptions struct {
 	AllNamespaces bool
 }
 
-type policyProtectionRow struct {
-	Pod          string `json:"pod"`
-	Policy       string `json:"policy"`
-	PolicyExists bool   `json:"policyExists"`
+type workloadProtectionRow struct {
+	Workload string `json:"workload"`
+	Kind     string `json:"kind"`
+	Policy   string `json:"policy"`
+	Mode     string `json:"mode"`
+	Status   string `json:"status"`
 }
 
 func newPolicyShowProtectionCmd() *cobra.Command {
@@ -46,7 +49,7 @@ func newPolicyShowProtectionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "protection",
-		Short: "List pod to WorkloadPolicy protection mapping",
+		Short: "List workloads to WorkloadPolicy protection mapping",
 		Args:  cobra.NoArgs,
 		RunE:  runPolicyShowProtectionCmd(opts),
 	}
@@ -76,10 +79,6 @@ func newPolicyShowProtectionCmd() *cobra.Command {
 
 func runPolicyShowProtectionCmd(opts *policyShowProtectionOptions) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, _ []string) error {
-		if err := validatePolicyShowProtectionOutput(opts.Output); err != nil {
-			return err
-		}
-
 		return withRuntimeEnforcerAndCoreClient(cmd, &opts.commonOptions, func(
 			ctx context.Context,
 			securityClient securityclient.SecurityV1alpha1Interface,
@@ -101,17 +100,7 @@ func runPolicyShowProtection(
 	if err != nil {
 		return err
 	}
-
-	if len(rows) == 0 {
-		fmt.Fprintln(out, "No pods protected by a policy")
-		return nil
-	}
-
-	if opts.Output == policyShowProtectionOutputJSON {
-		return renderPolicyProtectionJSON(out, rows)
-	}
-
-	return renderPolicyProtectionTable(out, rows)
+	return renderPolicyProtection(opts.Output, out, rows)
 }
 
 func collectPolicyProtectionRows(
@@ -119,7 +108,7 @@ func collectPolicyProtectionRows(
 	securityClient securityclient.SecurityV1alpha1Interface,
 	coreClient corev1client.CoreV1Interface,
 	opts *policyShowProtectionOptions,
-) ([]policyProtectionRow, error) {
+) ([]workloadProtectionRow, error) {
 	// - If the user doesn't specify a namespace, use the current namespace taken from the kubeconfig
 	// - If the user specifies --namespace, use the specified namespace
 	// - If the user specifies --all-namespaces, use the wildcard namespace
@@ -138,35 +127,23 @@ func collectPolicyProtectionRows(
 		return nil, fmt.Errorf("failed to list WorkloadPolicies in namespace %q: %w", namespace, err)
 	}
 
-	return buildPolicyProtectionRows(pods.Items, workloadPolicies.Items), nil
+	return buildWorkloadProtectionRows(pods.Items, workloadPolicies.Items), nil
 }
 
-func validatePolicyShowProtectionOutput(output string) error {
-	switch output {
-	case policyShowProtectionOutputTable, policyShowProtectionOutputJSON:
-		return nil
-	default:
-		return fmt.Errorf("invalid output %q, expected %q or %q",
-			output,
-			policyShowProtectionOutputTable,
-			policyShowProtectionOutputJSON,
-		)
-	}
-}
+func namespacedName(namespace, name string) string { return fmt.Sprintf("%s/%s", namespace, name) }
 
-func namespacedName(namespace, name string) string {
-	return fmt.Sprintf("%s/%s", namespace, name)
-}
-
-func buildPolicyProtectionRows(pods []corev1.Pod, workloadPolicies []apiv1alpha1.WorkloadPolicy) []policyProtectionRow {
+func buildWorkloadProtectionRows(
+	pods []corev1.Pod,
+	workloadPolicies []apiv1alpha1.WorkloadPolicy,
+) []workloadProtectionRow {
 	type policyNamespacedName = string
-
-	activePolicies := sets.New[policyNamespacedName]()
+	// we need to use name+namespace to have a unique key.
+	policyByNamespacedName := make(map[policyNamespacedName]apiv1alpha1.WorkloadPolicy, len(workloadPolicies))
 	for _, policy := range workloadPolicies {
-		activePolicies.Insert(policy.NamespacedName())
+		policyByNamespacedName[policy.NamespacedName()] = policy
 	}
 
-	rows := make([]policyProtectionRow, 0)
+	rowsByKey := map[string]workloadProtectionRow{}
 	for _, pod := range pods {
 		policyName := pod.Labels[apiv1alpha1.PolicyLabelKey]
 		// if there is no policy label we don't consider the pod
@@ -174,22 +151,44 @@ func buildPolicyProtectionRows(pods []corev1.Pod, workloadPolicies []apiv1alpha1
 			continue
 		}
 
-		podKey := namespacedName(pod.Namespace, pod.Name)
-		rows = append(rows, policyProtectionRow{
-			Pod: podKey,
-			// this is not the namespaced name of the policy.
-			Policy: policyName,
-			// if the policy doesn't exist in the cluster, we mark it as missing
-			// the namespace of the policy is the same of the pod.
-			PolicyExists: activePolicies.Has(namespacedName(pod.Namespace, policyName)),
-		})
+		workloadName, workloadKind, _ := podworkload.GetTruncatedWorkloadInfo(pod.Name, pod.Labels)
+		workloadNamespacedName := namespacedName(pod.Namespace, workloadName)
+
+		// Deduplicate the workload name
+		if _, ok := rowsByKey[workloadNamespacedName]; ok {
+			continue
+		}
+
+		policyKey := namespacedName(pod.Namespace, policyName)
+		policy, exists := policyByNamespacedName[policyKey]
+
+		row := workloadProtectionRow{
+			Workload: workloadNamespacedName,
+			Kind:     workloadKind.String(),
+			Policy:   policyName,
+			Mode:     unknownMode,
+			Status:   missingStatus,
+		}
+
+		if exists {
+			row.Mode = modeToUpper(policy.Spec.Mode)
+			row.Status = string(policy.Status.Phase)
+		}
+
+		rowsByKey[workloadNamespacedName] = row
 	}
 
-	slices.SortFunc(rows, func(a, b policyProtectionRow) int {
-		if a.Pod < b.Pod {
+	// sort them to always print the output in the same order
+	rows := make([]workloadProtectionRow, 0, len(rowsByKey))
+	for _, row := range rowsByKey {
+		rows = append(rows, row)
+	}
+
+	slices.SortFunc(rows, func(a, b workloadProtectionRow) int {
+		if a.Workload < b.Workload {
 			return -1
 		}
-		if a.Pod > b.Pod {
+		if a.Workload > b.Workload {
 			return 1
 		}
 		return 0
@@ -198,24 +197,52 @@ func buildPolicyProtectionRows(pods []corev1.Pod, workloadPolicies []apiv1alpha1
 	return rows
 }
 
-func renderPolicyProtectionTable(out io.Writer, rows []policyProtectionRow) error {
+func modeToUpper(mode string) string {
+	switch mode {
+	case policymode.MonitorString:
+		return "Monitor"
+	case policymode.ProtectString:
+		return "Protect"
+	default:
+		panic(fmt.Sprintf("unknown mode %q", mode))
+	}
+}
+
+func renderPolicyProtection(outMode string, out io.Writer, rows []workloadProtectionRow) error {
+	switch outMode {
+	case policyShowProtectionOutputTable:
+		return renderPolicyProtectionTable(out, rows)
+	case policyShowProtectionOutputJSON:
+		return renderPolicyProtectionJSON(out, rows)
+	default:
+		return fmt.Errorf("invalid output %q, expected %q or %q",
+			outMode,
+			policyShowProtectionOutputTable,
+			policyShowProtectionOutputJSON,
+		)
+	}
+}
+
+func renderPolicyProtectionTable(out io.Writer, rows []workloadProtectionRow) error {
+	if len(rows) == 0 {
+		fmt.Fprintln(out, "No workloads protected by a policy")
+		return nil
+	}
 	printer := printers.NewTablePrinter(printers.PrintOptions{})
 	table := &metav1.Table{
 		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "POD", Type: "string", Format: "name", Description: "Pod name"},
-			{Name: "WORKLOAD POLICY", Type: "string", Description: "Associated WorkloadPolicy"},
+			{Name: "WORKLOAD", Type: "string", Format: "name", Description: "Workload name"},
+			{Name: "KIND", Type: "string", Description: "Workload kind"},
+			{Name: "POLICY", Type: "string", Description: "Associated WorkloadPolicy"},
+			{Name: "MODE", Type: "string", Description: "WorkloadPolicy mode"},
+			{Name: "STATUS", Type: "string", Description: "WorkloadPolicy status"},
 		},
 		Rows: make([]metav1.TableRow, 0, len(rows)),
 	}
 
 	for _, row := range rows {
-		policyText := row.Policy
-		if !row.PolicyExists {
-			policyText = fmt.Sprintf("%s (%s %s)", row.Policy, missingPolicyIndicator, missingPolicyMessage)
-		}
-
 		table.Rows = append(table.Rows, metav1.TableRow{
-			Cells: []any{row.Pod, policyText},
+			Cells: []any{row.Workload, row.Kind, row.Policy, row.Mode, row.Status},
 		})
 	}
 
@@ -226,7 +253,7 @@ func renderPolicyProtectionTable(out io.Writer, rows []policyProtectionRow) erro
 	return nil
 }
 
-func renderPolicyProtectionJSON(out io.Writer, rows []policyProtectionRow) error {
+func renderPolicyProtectionJSON(out io.Writer, rows []workloadProtectionRow) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 
