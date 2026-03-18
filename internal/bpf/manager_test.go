@@ -13,6 +13,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// generateScriptWithLen returns the path of the script and a cleanup function
+// The len of the path will 4 + length (4 because of the "/tmp" prefix)
+// The caller should call the cleanup function after use.
+func generateScriptWithLen(length int) (string, func(), error) {
+	// We cannot use `t.TempDir()` because it will generate a directory with
+	// a random len and here we care about the len of the final path.
+	tmpPath := filepath.Join("/tmp/", strings.Repeat("A", length))
+	err := os.WriteFile(tmpPath, []byte("#!/usr/bin/true\n"), 0755)
+	return tmpPath, func() {
+		// we want to close the file only in case of error.
+		if err != nil {
+			os.Remove(tmpPath)
+		}
+	}, err
+}
+
 func TestLearning(t *testing.T) {
 	runner, err := newCgroupRunner(t)
 	require.NoError(t, err, "Failed to create cgroup runner")
@@ -65,18 +81,9 @@ func TestMonitorProtectMode(t *testing.T) {
 	//////////////////////
 	mockPolicyID := uint64(42)
 
-	// populate policy values
 	// only `pol_str_maps_0` will be popoulated here, all the other maps won't be created.
-	err = runner.manager.GetPolicyUpdateBinariesFunc()(mockPolicyID, []string{"/usr/bin/true"}, AddValuesToPolicy)
-	require.NoError(t, err, "Failed to add policy values")
-
-	// populate policy mode to monitor
-	err = runner.manager.GetPolicyModeUpdateFunc()(mockPolicyID, policymode.Monitor, UpdateMode)
-	require.NoError(t, err, "Failed to set policy mode")
-
-	// populate cgroup to track
-	err = runner.manager.GetCgroupPolicyUpdateFunc()(mockPolicyID, []uint64{runner.cgInfo.id}, AddPolicyToCgroups)
-	require.NoError(t, err, "Failed to add policy to cgroup")
+	err = runner.populatePolicyForRunnerCgroup(mockPolicyID, policymode.Monitor, []string{"/usr/bin/true"})
+	require.NoError(t, err, "Failed to populate policy for runner cgroup")
 
 	//////////////////////
 	// Try a binary that is allowed
@@ -102,12 +109,11 @@ func TestMonitorProtectMode(t *testing.T) {
 	// Try a binary that is not allowed and that is not in `pol_str_maps_0`
 	//////////////////////
 	t.Log("Write temp binary")
-	tmpPath := filepath.Join(t.TempDir(), strings.Repeat("A", 128))
-	content := []byte("#!/bin/bash\n/usr/bin/true\n")
-	// we want this to be executable
-	err = os.WriteFile(tmpPath, content, 0755)
-	require.NoError(t, err, "Failed to write temporary file")
-	defer os.Remove(tmpPath)
+	// we want to test that a binary that falls in a policy map different from pol_str_maps_0
+	// will be blocked as well.
+	tmpPath, remove, err := generateScriptWithLen(128)
+	require.NoError(t, err, "Failed to generate temporary script")
+	defer remove()
 
 	// we didn't create a map for a path with this len so we expect this to be reported as not allowed
 	t.Log("Trying binary with path len > 128 in monitor mode")
@@ -181,39 +187,32 @@ func TestReplaceValuesNewSizeBucket(t *testing.T) {
 
 	mockPolicyID := uint64(45)
 
+	// We initially populate `pol_str_maps_0` with `/usr/bin/true`
+	err = runner.populatePolicyForRunnerCgroup(mockPolicyID, policymode.Protect, []string{"/usr/bin/true"})
+	require.NoError(t, err, "Failed to populate policy for runner cgroup")
+
+	// Now we replace pol_str_maps_0 with a new map that doesn't contain `/usr/bin/true` but contains the path to our script.
+	tmpPath, remove, err := generateScriptWithLen(1)
+	require.NoError(t, err, "Failed to generate temporary script")
+	defer remove()
+
 	err = runner.manager.GetPolicyUpdateBinariesFunc()(
 		mockPolicyID,
-		[]string{"/usr/bin/true"},
-		AddValuesToPolicy,
-	)
-	require.NoError(t, err, "Failed to add initial policy values")
-
-	err = runner.manager.GetPolicyModeUpdateFunc()(mockPolicyID, policymode.Protect, UpdateMode)
-	require.NoError(t, err, "Failed to set policy mode")
-
-	err = runner.manager.GetCgroupPolicyUpdateFunc()(
-		mockPolicyID, []uint64{runner.cgInfo.id}, AddPolicyToCgroups,
-	)
-	require.NoError(t, err, "Failed to add policy to cgroup")
-
-	longPath := fmt.Sprintf("/usr/bin/%s", strings.Repeat("a", 20))
-	err = runner.manager.GetPolicyUpdateBinariesFunc()(
-		mockPolicyID,
-		[]string{"/usr/bin/true", longPath},
+		[]string{tmpPath},
 		ReplaceValuesInPolicy,
 	)
 	require.NoError(t, err, "ReplaceValuesInPolicy must succeed when adding values in a new size bucket")
 
 	t.Log("Trying allowed binary after replace")
 	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
-		command:         "/usr/bin/true",
+		command:         tmpPath,
 		channel:         monitoringChannel,
 		shouldFindEvent: false,
 	}), "allowed binary must pass after policy replacement")
 
 	t.Log("Trying disallowed binary after replace")
 	require.NoError(t, runner.runAndFindCommand(&runCommandArgs{
-		command:         "/usr/bin/who",
+		command:         "/usr/bin/true",
 		channel:         monitoringChannel,
 		shouldFindEvent: true,
 		shouldEPERM:     true,
