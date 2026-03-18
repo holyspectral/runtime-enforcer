@@ -45,6 +45,9 @@ Operationally, if you want complete proposals, enable learning first and then *(
 ** the exec is *allowed*
 ** a *violation* event is emitted and exported via OpenTelemetry with `action=monitor`.
 
+NOTE: `WorkloadPolicy` rules are evaluated only for containers explicitly listed in `.spec.rulesByContainer`.
+If a protected pod gets an additional container that is not in the policy (for example an ephemeral debug container created with `kubectl debug`, or an init container without a matching rule), runtime-enforcer intentionally leaves that container unenforced so debug and initialization workflows can still run.
+
 === How to enter and leave the phase
 
 * *Enter*
@@ -76,6 +79,9 @@ WARNING: The `security.rancher.io/policy` label must be set at Pod creation time
 ** a *violation* event is emitted (same as monitor, but with `action=protect`)
 ** the exec fails, which typically appears as *“Permission denied”* in the container/process
 ** the process does not start; depending on what was blocked this can cause application errors, crash loops, or failed jobs.
+
+NOTE: The same container scoping rule applies in protect mode: only containers present in `.spec.rulesByContainer` are enforced.
+Containers added to an already protected pod without a matching per-container rule remain intentionally unenforced.
 
 === How to enter and leave the phase
 

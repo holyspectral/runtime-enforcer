@@ -216,6 +216,13 @@ The syntax is very similar to the proposal, but there is one important differenc
 `monitor` is a passive mode: violations of the executable list are reported but not blocked.
 This means that if a process other than `ls` or `sleep` is executed, it will be reported as an OTEL event, but it won't be blocked.
 
+[NOTE]
+====
+Container enforcement is scoped by container name in `.spec.rulesByContainer`.
+If an additional container is added to an already protected Pod, it is intentionally left unenforced.
+See xref:../phases.adoc#monitor-phase[Monitor phase] and xref:../phases.adoc#protect-phase[Protect phase] for details.
+====
+
 Converting a proposal into a policy isn't enough to apply it to a workload: the workload needs to bind itself to the policy.
 This is done by adding a label to the workload pods.
 Since we are using a Deployment, the correct approach is to add the label to the Deployment's pod template.
