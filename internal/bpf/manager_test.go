@@ -15,13 +15,18 @@ import (
 
 // generateScriptWithLen returns the path of the script and a cleanup function
 // The len of the path will 4 + length (4 because of the "/tmp" prefix)
-// The caller should cleanup the file after use.
-func generateScriptWithLen(length int) (string, error) {
+// The caller should call the cleanup function after use.
+func generateScriptWithLen(length int) (string, func(), error) {
 	// We cannot use `t.TempDir()` because it will generate a directory with
 	// a random len and here we care about the len of the final path.
 	tmpPath := filepath.Join("/tmp/", strings.Repeat("A", length))
 	err := os.WriteFile(tmpPath, []byte("#!/usr/bin/true\n"), 0755)
-	return tmpPath, err
+	return tmpPath, func() {
+		// we want to close the file only in case of error.
+		if err != nil {
+			os.Remove(tmpPath)
+		}
+	}, err
 }
 
 func TestLearning(t *testing.T) {
@@ -106,9 +111,9 @@ func TestMonitorProtectMode(t *testing.T) {
 	t.Log("Write temp binary")
 	// we want to test that a binary that falls in a policy map different from pol_str_maps_0
 	// will be blocked as well.
-	tmpPath, err := generateScriptWithLen(128)
+	tmpPath, remove, err := generateScriptWithLen(128)
 	require.NoError(t, err, "Failed to generate temporary script")
-	defer os.Remove(tmpPath)
+	defer remove()
 
 	// we didn't create a map for a path with this len so we expect this to be reported as not allowed
 	t.Log("Trying binary with path len > 128 in monitor mode")
@@ -187,9 +192,9 @@ func TestReplaceValuesNewSizeBucket(t *testing.T) {
 	require.NoError(t, err, "Failed to populate policy for runner cgroup")
 
 	// Now we replace pol_str_maps_0 with a new map that doesn't contain `/usr/bin/true` but contains the path to our script.
-	tmpPath, err := generateScriptWithLen(1)
+	tmpPath, remove, err := generateScriptWithLen(1)
 	require.NoError(t, err, "Failed to generate temporary script")
-	defer os.Remove(tmpPath)
+	defer remove()
 
 	err = runner.manager.GetPolicyUpdateBinariesFunc()(
 		mockPolicyID,
