@@ -196,7 +196,7 @@ func parseWebhookOptions(logger *slog.Logger, config *Config) (*certwatcher.Cert
 }
 
 func main() {
-	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	slogHandler := newServerErrorLogHandler(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slogger := slog.New(slogHandler).With("component", "operator")
 	slog.SetDefault(slogger)
 	ctrlLogger := logr.FromSlogHandler(slogger.Handler())
