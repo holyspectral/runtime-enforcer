@@ -174,7 +174,7 @@ func getMainTest() types.Feature {
 				)
 				require.NoError(t, err, "failed to apply test data")
 
-				err = wait.For(DeploymentUpToDate(r, &appsv1.Deployment{
+				err = wait.For(deploymentUpToDate(r, &appsv1.Deployment{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "ubuntu-deployment",
 						Namespace: workloadNamespace,
