@@ -300,10 +300,11 @@ func (m *Manager) replaceInnerBPFMap(policyID uint64,
 		}
 	}
 
-	// Use UpdateExist to atomically replace the old inner map
-	err = m.policyStringMaps[index].Update(policyID, inner, ebpf.UpdateExist)
+	// Use UpdateAny to replace the old inner map or create a new one
+	// if a policy update needs it.
+	err = m.policyStringMaps[index].Update(policyID, inner, ebpf.UpdateAny)
 	if err != nil {
-		return fmt.Errorf("failed to replace inner policy (id=%d) map: %w", policyID, err)
+		return fmt.Errorf("failed to update inner policy (id=%d) map: %w", policyID, err)
 	}
 	m.logger.Info("handler: replaced inner map inside policy str", "name", name)
 	return nil
