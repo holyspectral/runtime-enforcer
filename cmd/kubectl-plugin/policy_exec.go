@@ -98,19 +98,7 @@ func runPolicyExec(
 		)
 	}
 
-	if opts.DryRun {
-		fmt.Fprintf(
-			out,
-			"Would %s executables %v for WorkloadPolicy %q in namespace %q.\n",
-			opts.Action,
-			opts.Executables,
-			policy.Name,
-			policy.Namespace,
-		)
-		return nil
-	}
-
-	changed, err := applyExecutablesToPolicy(policy, opts)
+	changed, err := applyExecutablesToPolicy(policy.Spec.RulesByContainer, opts)
 	if err != nil {
 		return err
 	}
@@ -123,6 +111,24 @@ func runPolicyExec(
 			policy.Namespace,
 		)
 		return nil
+	}
+
+	if opts.DryRun {
+		fmt.Fprintf(
+			out,
+			"Would %s executables for WorkloadPolicy %q in namespace %q.\n",
+			opts.Action,
+			policy.Name,
+			policy.Namespace,
+		)
+		for containerName, rules := range policy.Spec.RulesByContainer {
+			fmt.Fprintf(
+				out,
+				"  Container %q final allowed executables: %v\n",
+				containerName,
+				rules.Executables.Allowed,
+			)
+		}
 	}
 
 	if err = updateWorkloadPolicy(ctx, client, opts, policy); err != nil {
@@ -140,19 +146,19 @@ func runPolicyExec(
 }
 
 func applyExecutablesToPolicy(
-	policy *apiv1alpha1.WorkloadPolicy,
+	rulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules,
 	opts *policyExecOptions,
 ) (bool, error) {
-	if policy.Spec.RulesByContainer == nil {
-		policy.Spec.RulesByContainer = make(map[string]*apiv1alpha1.WorkloadPolicyRules)
+	if rulesByContainer == nil {
+		rulesByContainer = make(map[string]*apiv1alpha1.WorkloadPolicyRules)
 	}
 
 	changed := false
 
-	for containerName, rules := range policy.Spec.RulesByContainer {
+	for containerName, rules := range rulesByContainer {
 		if rules == nil {
 			rules = &apiv1alpha1.WorkloadPolicyRules{}
-			policy.Spec.RulesByContainer[containerName] = rules
+			rulesByContainer[containerName] = rules
 		}
 
 		var updated []string
@@ -213,8 +219,13 @@ func updateWorkloadPolicy(
 	opts *policyExecOptions,
 	policy *apiv1alpha1.WorkloadPolicy,
 ) error {
+	updateOptions := metav1.UpdateOptions{}
+	if opts.DryRun {
+		updateOptions.DryRun = []string{metav1.DryRunAll}
+	}
+
 	if _, err := client.WorkloadPolicies(opts.Namespace).
-		Update(ctx, policy, metav1.UpdateOptions{}); err != nil {
+		Update(ctx, policy, updateOptions); err != nil {
 		if apierrors.IsConflict(err) {
 			return fmt.Errorf(
 				"WorkloadPolicy %q in namespace %q was modified concurrently",
