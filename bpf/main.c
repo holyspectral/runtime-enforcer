@@ -507,7 +507,7 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	}
 
 	__u64 *policy_id = bpf_map_lookup_elem(&cg_to_policy_map, &cg_tracker_id);
-	if(!policy_id) {
+	if(!policy_id && load_time_config.learning_enabled) {
 		// No policy associated with this cgroup.
 		// Emit the event to the learning ringbuf so that the userspace can learn from it.
 		// This is critical because the LSM hook `security_bprm_creds_for_exec` is called
@@ -594,7 +594,13 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	// We send the event
 	///////////////////////////////
 
-	// we move the data at the beginning of the buffer so that we can send them
+	// here we are copying the resolved path into the first segment of the buffer.
+	// please note: in the first segment of the path we will already have the path written by
+	// the previous program execution, what we are doing here is to overwrite the path with the new
+	// content. Example:
+	// - previous: `/usr/bin/nginx-controller\0`
+	// - new one:  `/usr/bin/cat\0x-controller\0`
+	// we need the +1 because we want to copy also the `\0` terminator
 	long err = bpf_probe_read_kernel(evt->path,
 	                                 SAFE_PATH_LEN(evt->path_len + 1),
 	                                 &evt->path[SAFE_PATH_ACCESS(current_offset)]);
