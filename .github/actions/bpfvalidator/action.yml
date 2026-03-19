@@ -65,8 +65,8 @@ runs:
       id: run-validator
       working-directory: ${{ github.action_path }}
       run: |
-        wget https://github.com/Andreagit97/bpfvalidator/releases/download/v0.3.0/bpfvalidator_0.3.0_linux_${{ inputs.arch }}.tar.gz
-        tar -xvf bpfvalidator_0.3.0_linux_${{ inputs.arch }}.tar.gz
+        wget https://github.com/Andreagit97/bpfvalidator/releases/download/v0.4.0/bpfvalidator_0.4.0_linux_${{ inputs.arch }}.tar.gz
+        tar -xvf bpfvalidator_0.4.0_linux_${{ inputs.arch }}.tar.gz
         ./bpfvalidator --out_path=/tmp/report.txt ${{ inputs.args }}
         outcome=$?
         echo "outcome=$outcome" >> $GITHUB_OUTPUT
