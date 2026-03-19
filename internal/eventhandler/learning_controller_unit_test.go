@@ -30,6 +30,25 @@ func TestHandleAdmissionError(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("returns original error for conflict errors", func(t *testing.T) {
+		conflictErr := apierrors.NewConflict(
+			schema.GroupResource{Group: "example.com", Resource: "Example"},
+			"example-name",
+			errors.New("conflict error"),
+		)
+		err := r.handleAdmissionError(logger, conflictErr)
+		assert.ErrorIs(t, err, conflictErr, "expected returned error to wrap original conflict error")
+	})
+
+	t.Run("returns original error for already exists errors", func(t *testing.T) {
+		alreadyExistsErr := apierrors.NewAlreadyExists(
+			schema.GroupResource{Group: "example.com", Resource: "Example"},
+			"example-name",
+		)
+		err := r.handleAdmissionError(logger, alreadyExistsErr)
+		assert.ErrorIs(t, err, alreadyExistsErr, "expected returned error to wrap original already exists error")
+	})
+
 	t.Run("returns original error for other APIStatus codes", func(t *testing.T) {
 		badReqErr := apierrors.NewBadRequest("bad request")
 		err := r.handleAdmissionError(logger, badReqErr)
