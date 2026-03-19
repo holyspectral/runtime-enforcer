@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/completion"
 )
 
 type policyExecAction string
@@ -32,7 +34,7 @@ type policyExecOptions struct {
 	Action         policyExecAction
 }
 
-func newPolicyExecCmd(action policyExecAction) *cobra.Command {
+func newPolicyExecCmd(f cmdutil.Factory, action policyExecAction) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME <executables>", action)
 	short := fmt.Sprintf("%s executables for a WorkloadPolicy", action)
 
@@ -46,6 +48,23 @@ func newPolicyExecCmd(action policyExecAction) *cobra.Command {
 		Short: short,
 		Args:  cobra.MinimumNArgs(minPolicyExecArgs),
 		RunE:  runPolicyExecCmd(opts),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			switch len(args) {
+			case 0:
+				return completion.CompGetResource(f, "workloadpolicies", toComplete), cobra.ShellCompDirectiveNoFileComp
+			case 1:
+				template := "{{ range $key, $value := .spec.rulesByContainer }}{{ $key }} {{end}}"
+				return completion.CompGetFromTemplate(
+					&template,
+					f,
+					"",
+					[]string{"workloadpolicies", args[0]},
+					toComplete,
+				), cobra.ShellCompDirectiveNoFileComp
+			default:
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		},
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
@@ -65,12 +84,12 @@ func newPolicyExecCmd(action policyExecAction) *cobra.Command {
 	return cmd
 }
 
-func newPolicyExecAllowCmd() *cobra.Command {
-	return newPolicyExecCmd(policyExecActionAllow)
+func newPolicyExecAllowCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyExecCmd(f, policyExecActionAllow)
 }
 
-func newPolicyExecDenyCmd() *cobra.Command {
-	return newPolicyExecCmd(policyExecActionDeny)
+func newPolicyExecDenyCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyExecCmd(f, policyExecActionDeny)
 }
 
 func runPolicyExecCmd(opts *policyExecOptions) func(cmd *cobra.Command, args []string) error {

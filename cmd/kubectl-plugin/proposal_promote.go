@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubectl/pkg/util/completion"
 )
 
 type proposalPromoteOptions struct {
@@ -19,7 +21,7 @@ type proposalPromoteOptions struct {
 	ProposalName string
 }
 
-func newProposalPromoteCmd() *cobra.Command {
+func newProposalPromoteCmd(f cmdutil.Factory) *cobra.Command {
 	opts := &proposalPromoteOptions{
 		commonOptions: newCommonOptions(),
 	}
@@ -29,7 +31,19 @@ func newProposalPromoteCmd() *cobra.Command {
 		Short: "Promote WorkloadPolicyProposal to WorkloadPolicy",
 		Long:  "Promote WorkloadPolicyProposal to WorkloadPolicy. This will trigger the creation of a WorkloadPolicy.",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runProposalPromoteCmd(opts),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			switch len(args) {
+			case 0:
+				return completion.CompGetResource(
+					f,
+					"workloadpolicyproposals",
+					toComplete,
+				), cobra.ShellCompDirectiveNoFileComp
+			default:
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		},
+		RunE: runProposalPromoteCmd(opts),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)

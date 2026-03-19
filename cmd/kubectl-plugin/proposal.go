@@ -1,6 +1,10 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+)
 
 func newProposalCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -10,7 +14,9 @@ func newProposalCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newProposalPromoteCmd())
+	f := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	cmd.AddCommand(newProposalPromoteCmd(f))
 
 	return cmd
 }
