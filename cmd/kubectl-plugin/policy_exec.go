@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	securityclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/typed/api/v1alpha1"
@@ -25,9 +26,10 @@ const (
 type policyExecOptions struct {
 	commonOptions
 
-	PolicyName  string
-	Executables []string
-	Action      policyExecAction
+	PolicyName     string
+	Executables    []string
+	ContainerNames []string
+	Action         policyExecAction
 }
 
 func newPolicyExecCmd(action policyExecAction) *cobra.Command {
@@ -53,6 +55,12 @@ func newPolicyExecCmd(action policyExecAction) *cobra.Command {
 
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
+	cmd.Flags().StringArrayVar(
+		&opts.ContainerNames,
+		"container",
+		nil,
+		"Limit updates to these containers (can be repeated or comma-separated)",
+	)
 
 	return cmd
 }
@@ -153,9 +161,20 @@ func applyExecutablesToPolicy(
 		rulesByContainer = make(map[string]*apiv1alpha1.WorkloadPolicyRules)
 	}
 
+	targetContainers, err := parseTargetContainers(rulesByContainer, opts)
+	if err != nil {
+		return false, err
+	}
+
 	changed := false
 
 	for containerName, rules := range rulesByContainer {
+		if len(targetContainers) > 0 {
+			if !slices.Contains(targetContainers, containerName) {
+				continue
+			}
+		}
+
 		if rules == nil {
 			rules = &apiv1alpha1.WorkloadPolicyRules{}
 			rulesByContainer[containerName] = rules
@@ -179,6 +198,38 @@ func applyExecutablesToPolicy(
 	}
 
 	return changed, nil
+}
+
+func parseTargetContainers(
+	rulesByContainer map[string]*apiv1alpha1.WorkloadPolicyRules,
+	opts *policyExecOptions,
+) ([]string, error) {
+	if len(opts.ContainerNames) == 0 {
+		return nil, nil
+	}
+
+	var targetContainers []string
+
+	for _, raw := range opts.ContainerNames {
+		for cn := range strings.SplitSeq(raw, ",") {
+			name := strings.TrimSpace(cn)
+			if name != "" {
+				targetContainers = append(targetContainers, name)
+			}
+		}
+	}
+
+	if len(targetContainers) > 0 {
+		for _, name := range targetContainers {
+			if _, ok := rulesByContainer[name]; !ok {
+				return nil, fmt.Errorf("container %q not found in policy", name)
+			}
+		}
+	} else {
+		return nil, nil
+	}
+
+	return targetContainers, nil
 }
 
 func allowExecutables(executables []string, allowed []string) ([]string, bool) {

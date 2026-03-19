@@ -55,6 +55,15 @@ func TestRunPolicyExec(t *testing.T) {
 			expectedList: []string{"/bin/ls", "/bin/mv", "/bin/cat"},
 			expectMsgSub: "Would allow executables for WorkloadPolicy",
 		},
+		{
+			name:         "deny_dry_run",
+			action:       policyExecActionDeny,
+			dryRun:       true,
+			initialList:  []string{"/bin/ls", "/bin/mv", "/bin/cat"},
+			executables:  []string{"/bin/mv"},
+			expectedList: []string{"/bin/ls", "/bin/cat"},
+			expectMsgSub: "Would deny executables for WorkloadPolicy",
+		},
 	}
 
 	for _, tt := range tests {
@@ -106,6 +115,120 @@ func TestRunPolicyExec(t *testing.T) {
 			rules := updatedPolicy.Spec.RulesByContainer["app"]
 			require.NotNil(t, rules)
 			require.ElementsMatch(t, tt.expectedList, rules.Executables.Allowed)
+		})
+	}
+}
+
+func TestApplyExecutablesToPolicy_WithContainerFilter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		action         policyExecAction
+		containerNames []string
+		executables    []string
+		initialByKey   map[string][]string
+		wantByKey      map[string][]string
+		wantChanged    bool
+		wantErr        bool
+	}{
+		{
+			name:           "allow_subset_two_containers",
+			action:         policyExecActionAllow,
+			containerNames: []string{"a,b"},
+			executables:    []string{"/bin/mv"},
+			initialByKey: map[string][]string{
+				"a": []string{"/bin/ls"},
+				"b": []string{"/bin/ls"},
+				"c": []string{"/bin/ls"},
+			},
+			wantByKey: map[string][]string{
+				"a": []string{"/bin/ls", "/bin/mv"},
+				"b": []string{"/bin/ls", "/bin/mv"},
+				"c": []string{"/bin/ls"},
+			},
+			wantChanged: true,
+		},
+		{
+			name:           "deny_subset_one_container",
+			action:         policyExecActionDeny,
+			containerNames: []string{"b"},
+			executables:    []string{"/bin/mv"},
+			initialByKey: map[string][]string{
+				"a": []string{"/bin/ls", "/bin/mv"},
+				"b": []string{"/bin/ls", "/bin/mv"},
+				"c": []string{"/bin/ls", "/bin/mv"},
+			},
+			wantByKey: map[string][]string{
+				"a": []string{"/bin/ls", "/bin/mv"},
+				"b": []string{"/bin/ls"},
+				"c": []string{"/bin/ls", "/bin/mv"},
+			},
+			wantChanged: true,
+		},
+		{
+			name:           "container_not_found_in_policy",
+			action:         policyExecActionAllow,
+			containerNames: []string{"missing"},
+			executables:    []string{"/bin/mv"},
+			initialByKey: map[string][]string{
+				"a": []string{"/bin/ls"},
+				"b": []string{"/bin/ls"},
+			},
+			wantErr:     true,
+			wantChanged: false,
+		},
+		{
+			name:           "no_container_flag_applies_all",
+			action:         policyExecActionDeny,
+			containerNames: nil,
+			executables:    []string{"/bin/mv"},
+			initialByKey: map[string][]string{
+				"a": []string{"/bin/ls", "/bin/mv"},
+				"b": []string{"/bin/ls", "/bin/mv"},
+				"c": []string{"/bin/ls"},
+			},
+			wantByKey: map[string][]string{
+				"a": []string{"/bin/ls"},
+				"b": []string{"/bin/ls"},
+				"c": []string{"/bin/ls"},
+			},
+			wantChanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rulesByContainer := map[string]*apiv1alpha1.WorkloadPolicyRules{}
+			for container, initialAllowed := range tt.initialByKey {
+				rulesByContainer[container] = &apiv1alpha1.WorkloadPolicyRules{
+					Executables: apiv1alpha1.WorkloadPolicyExecutables{
+						Allowed: append([]string(nil), initialAllowed...),
+					},
+				}
+			}
+
+			opts := &policyExecOptions{
+				Action:         tt.action,
+				Executables:    tt.executables,
+				ContainerNames: tt.containerNames,
+			}
+
+			changed, err := applyExecutablesToPolicy(rulesByContainer, opts)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantChanged, changed)
+
+			for containerName, wantAllowed := range tt.wantByKey {
+				rules := rulesByContainer[containerName]
+				require.NotNil(t, rules)
+				require.ElementsMatch(t, wantAllowed, rules.Executables.Allowed)
+			}
 		})
 	}
 }
