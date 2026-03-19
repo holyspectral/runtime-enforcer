@@ -6,7 +6,7 @@ import (
 	"time"
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
-	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler/utils"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler/proposalutils"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -117,7 +117,7 @@ func (r *LearningReconciler) Reconcile(
 		}
 	}
 
-	proposalName, err = utils.GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)
+	proposalName, err = proposalutils.GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get proposal name: %w", err)
 	}
