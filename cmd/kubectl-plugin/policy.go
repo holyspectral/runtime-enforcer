@@ -13,6 +13,8 @@ func newPolicyCmd() *cobra.Command {
 	cmd.AddCommand(newPolicyModeProtectCmd())
 	cmd.AddCommand(newPolicyModeMonitorCmd())
 	cmd.AddCommand(newPolicyShowCmd())
+	cmd.AddCommand(newPolicyExecAllowCmd())
+	cmd.AddCommand(newPolicyExecDenyCmd())
 
 	return cmd
 }
