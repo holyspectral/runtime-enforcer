@@ -1,8 +1,11 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+)
 
-func newPolicyCmd() *cobra.Command {
+func newPolicyCmd(f cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Manage WorkloadPolicy",
@@ -10,11 +13,11 @@ func newPolicyCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newPolicyModeProtectCmd())
-	cmd.AddCommand(newPolicyModeMonitorCmd())
+	cmd.AddCommand(newPolicyModeProtectCmd(f))
+	cmd.AddCommand(newPolicyModeMonitorCmd(f))
 	cmd.AddCommand(newPolicyShowCmd())
-	cmd.AddCommand(newPolicyExecAllowCmd())
-	cmd.AddCommand(newPolicyExecDenyCmd())
+	cmd.AddCommand(newPolicyExecAllowCmd(f))
+	cmd.AddCommand(newPolicyExecDenyCmd(f))
 
 	return cmd
 }

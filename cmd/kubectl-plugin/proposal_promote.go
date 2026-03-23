@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 type proposalPromoteOptions struct {
@@ -19,7 +20,7 @@ type proposalPromoteOptions struct {
 	ProposalName string
 }
 
-func newProposalPromoteCmd() *cobra.Command {
+func newProposalPromoteCmd(_ cmdutil.Factory) *cobra.Command {
 	opts := &proposalPromoteOptions{
 		commonOptions: newCommonOptions(),
 	}
@@ -33,9 +34,6 @@ func newProposalPromoteCmd() *cobra.Command {
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
-
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
 
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")

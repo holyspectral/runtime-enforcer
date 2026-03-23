@@ -1,8 +1,11 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+)
 
-func newProposalCmd() *cobra.Command {
+func newProposalCmd(f cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "proposal",
 		Short: "Manage WorkloadPolicyProposal",
@@ -10,7 +13,7 @@ func newProposalCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newProposalPromoteCmd())
+	cmd.AddCommand(newProposalPromoteCmd(f))
 
 	return cmd
 }

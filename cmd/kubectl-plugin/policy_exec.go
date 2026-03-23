@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 type policyExecAction string
@@ -31,7 +32,7 @@ type policyExecOptions struct {
 	Action        policyExecAction
 }
 
-func newPolicyExecCmd(action policyExecAction) *cobra.Command {
+func newPolicyExecCmd(_ cmdutil.Factory, action policyExecAction) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME <container-name> <executable-name> [<executable-name>...]", action)
 	short := fmt.Sprintf("%s executables for a WorkloadPolicy container", action)
 
@@ -49,21 +50,18 @@ func newPolicyExecCmd(action policyExecAction) *cobra.Command {
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
 
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
-
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
 
 	return cmd
 }
 
-func newPolicyExecAllowCmd() *cobra.Command {
-	return newPolicyExecCmd(policyExecActionAllow)
+func newPolicyExecAllowCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyExecCmd(f, policyExecActionAllow)
 }
 
-func newPolicyExecDenyCmd() *cobra.Command {
-	return newPolicyExecCmd(policyExecActionDeny)
+func newPolicyExecDenyCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyExecCmd(f, policyExecActionDeny)
 }
 
 func runPolicyExecCmd(opts *policyExecOptions) func(cmd *cobra.Command, args []string) error {

@@ -4,7 +4,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	utilcomp "k8s.io/kubectl/pkg/util/completion"
 )
 
 var version = "dev"
@@ -35,8 +38,17 @@ func newRootCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(rootUsageTemplate)
 
-	cmd.AddCommand(newProposalCmd())
-	cmd.AddCommand(newPolicyCmd())
+	opts := newCommonOptions()
+
+	configFlags := genericclioptions.NewConfigFlags(true).WithWarningPrinter(opts.ioStreams)
+	configFlags.AddFlags(cmd.PersistentFlags())
+
+	f := cmdutil.NewFactory(configFlags)
+
+	utilcomp.SetFactoryForCompletion(f)
+
+	cmd.AddCommand(newProposalCmd(f))
+	cmd.AddCommand(newPolicyCmd(f))
 
 	return cmd
 }

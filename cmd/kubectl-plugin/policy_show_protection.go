@@ -58,9 +58,6 @@ func newPolicyShowProtectionCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
 
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
-
 	cmd.Flags().StringVarP(
 		&opts.Output,
 		"output",

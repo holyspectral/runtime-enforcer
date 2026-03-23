@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 type policyModeOptions struct {
@@ -19,7 +20,7 @@ type policyModeOptions struct {
 	Mode       string
 }
 
-func newPolicyModeCmd(mode string) *cobra.Command {
+func newPolicyModeCmd(_ cmdutil.Factory, mode string) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME", mode)
 	short := fmt.Sprintf("Set WorkloadPolicy mode to %s", mode)
 
@@ -37,20 +38,17 @@ func newPolicyModeCmd(mode string) *cobra.Command {
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
 
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
-
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
 
 	return cmd
 }
 
-func newPolicyModeProtectCmd() *cobra.Command {
-	return newPolicyModeCmd(policymode.ProtectString)
+func newPolicyModeProtectCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyModeCmd(f, policymode.ProtectString)
 }
-func newPolicyModeMonitorCmd() *cobra.Command {
-	return newPolicyModeCmd(policymode.MonitorString)
+func newPolicyModeMonitorCmd(f cmdutil.Factory) *cobra.Command {
+	return newPolicyModeCmd(f, policymode.MonitorString)
 }
 
 func runPolicyModeSetCmd(opts *policyModeOptions) func(cmd *cobra.Command, args []string) error {
