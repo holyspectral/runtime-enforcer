@@ -27,13 +27,14 @@ func updateCgTrackerMap(logger *slog.Logger, cgTrackerMap *ebpf.Map, cgID uint64
 		return fmt.Errorf("failed to update cgroup tracker map for id %d: %w", cgID, err)
 	}
 
-	// according to the the NRI api we are using, we don't need to walk the cgroup path
-	// because the container is not yet running so it's impossible to have nested cgroup.
+	// If the container is not yet started it is impossible to have nested cgroups.
+	// In this case, we provide an empty cgroup path since we don't need to walk it.
 	if cgroupPath == "" {
 		return nil
 	}
 
-	// We now walk the cgroup path to find all the child cgroups and map them to the same tracker id. This is useful is the container is already running and has already created child cgroups
+	// We now walk the cgroup path to find all the child cgroups and map them to the same tracker id.
+	// This is useful if the container is already running and has already created child cgroups.
 	var walkErr error
 	err := filepath.WalkDir(cgroupPath, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -76,7 +77,7 @@ func updateCgTrackerMap(logger *slog.Logger, cgTrackerMap *ebpf.Map, cgID uint64
 
 	// we just log the error here, as the main update operation could be successful even if some child cgroups failed
 	if walkErr != nil {
-		logger.Warn("failed to retrieve some the cgroup id for some paths", "cgtracker", true, "error", walkErr)
+		logger.Warn("failed to retrieve some of the cgroup ids for some paths", "cgtracker", true, "error", walkErr)
 	}
 	return nil
 }
