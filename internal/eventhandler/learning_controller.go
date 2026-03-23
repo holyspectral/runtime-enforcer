@@ -11,9 +11,6 @@ import (
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler/proposalutils"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +46,6 @@ type LearningReconciler struct {
 
 	Scheme            *runtime.Scheme
 	eventChan         chan event.TypedGenericEvent[eventscraper.KubeProcessInfo]
-	tracer            trace.Tracer
 	namespaceSelector labels.Selector
 	// OwnerRefEnricher can be overridden during testing
 	OwnerRefEnricher func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string)
@@ -65,9 +61,6 @@ func NewLearningReconciler(
 		eventChan: make(
 			chan event.TypedGenericEvent[eventscraper.KubeProcessInfo],
 			DefaultEventChannelBufferSize,
-		),
-		tracer: otel.Tracer(
-			"runtime-enforcer-learner",
 		),
 		namespaceSelector: selector,
 		OwnerRefEnricher: func(wp *securityv1alpha1.WorkloadPolicyProposal, workloadKind string, workload string) {
@@ -226,9 +219,7 @@ func (r *LearningReconciler) reconcile(
 		},
 	}
 
-	var result controllerutil.OperationResult
-
-	if result, err = controllerutil.CreateOrUpdate(ctx, r.Client, policyProposal, func() error {
+	if _, err = controllerutil.CreateOrUpdate(ctx, r.Client, policyProposal, func() error {
 		// We don't learn any new process if the policy proposal was promoted
 		// to an actual policy
 		labels := policyProposal.GetLabels()
@@ -253,24 +244,6 @@ func (r *LearningReconciler) reconcile(
 	}); err != nil {
 		return ctrl.Result{}, r.handleAdmissionError(logger, err)
 	}
-
-	// Emit trace when a new process is learned.
-	if result != controllerutil.OperationResultNone {
-		var span trace.Span
-		now := time.Now()
-		_, span = r.tracer.Start(ctx, "process learned")
-		span.SetAttributes(
-			attribute.String("evt.time", now.Format(time.RFC3339)),
-			attribute.Int64("evt.rawtime", now.UnixNano()),
-			attribute.String("k8s.ns.name", req.Namespace),
-			attribute.String("k8s.workload.kind", req.WorkloadKind),
-			attribute.String("k8s.workload.name", req.Workload),
-			attribute.String("container.name", req.ContainerName),
-			attribute.String("proc.exepath", req.ExecutablePath),
-		)
-		span.End()
-	}
-
 	return ctrl.Result{}, nil
 }
 
