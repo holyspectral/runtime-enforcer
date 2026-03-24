@@ -3,17 +3,13 @@ package e2e_test
 import (
 	"bytes"
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
@@ -22,28 +18,6 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 	"sigs.k8s.io/e2e-framework/pkg/types"
 )
-
-// findPod is a utility function that calls k8s List API to find a pod with
-// a specific prefix in a given namespace.
-func findPod(ctx context.Context, namespace string, prefix string) (string, error) {
-	var err error
-	var pods corev1.PodList
-
-	r := ctx.Value(key("client")).(*resources.Resources)
-
-	err = r.WithNamespace(namespace).List(ctx, &pods)
-	if err != nil {
-		return "", err
-	}
-
-	for _, v := range pods.Items {
-		if strings.HasPrefix(v.Name, prefix) {
-			return v.Name, nil
-		}
-	}
-
-	return "", errors.New("pod is not found")
-}
 
 func getMonitoringTest() types.Feature {
 	return features.New("Monitoring").
@@ -81,36 +55,11 @@ func getMonitoringTest() types.Feature {
 			return context.WithValue(ctx, key("policy"), policy.DeepCopy())
 		}).
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("installing test Ubuntu deployment")
-
-			r := ctx.Value(key("client")).(*resources.Resources)
 			namespace := ctx.Value(key("namespace")).(string)
-
-			err := decoder.ApplyWithManifestDir(
-				ctx,
-				r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.CreateOption{},
-				getDeploymentPolicyMutateOption(namespace, "test-policy"),
-			)
-			require.NoError(t, err, "failed to apply test data")
-
-			err = wait.For(
-				conditions.New(r).DeploymentAvailable(
-					"ubuntu-deployment",
-					namespace,
-				),
-				wait.WithTimeout(DefaultOperationTimeout),
-			)
-			require.NoError(t, err)
-
-			var ubuntuPodName string
-
-			ubuntuPodName, err = findPod(ctx, namespace, "ubuntu-deployment")
+			createAndWaitUbuntuDeployment(ctx, t, namespace, withPolicy("test-policy"))
+			ubuntuPodName, err := findPodByPrefix(ctx, namespace, "ubuntu-deployment")
 			require.NoError(t, err)
 			require.NotEmpty(t, ubuntuPodName)
-
 			return context.WithValue(ctx, key("targetPodName"), ubuntuPodName)
 		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
@@ -177,18 +126,8 @@ func getMonitoringTest() types.Feature {
 				return ctx
 			}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("uninstalling test resources")
 			namespace := ctx.Value(key("namespace")).(string)
-			r := ctx.Value(key("client")).(*resources.Resources)
-			err := decoder.DeleteWithManifestDir(
-				ctx,
-				r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.DeleteOption{},
-				decoder.MutateNamespace(namespace),
-			)
-			require.NoError(t, err, "failed to delete test data")
+			deleteUbuntuDeployment(ctx, t, namespace)
 
 			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
 			deleteAndWaitWP(ctx, t, policy)

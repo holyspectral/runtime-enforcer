@@ -3,17 +3,12 @@ package e2e_test
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
-	"sigs.k8s.io/e2e-framework/klient/wait"
-	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 	"sigs.k8s.io/e2e-framework/pkg/types"
@@ -57,35 +52,11 @@ func getEnforcementOnNewPodsTest() types.Feature {
 				// 1. Create the resource and wait for it to be deployed.
 				createAndWaitWP(ctx, t, policy.DeepCopy())
 				// 2. Deploy test pods
-				err := decoder.ApplyWithManifestDir(
-					ctx,
-					r,
-					"./testdata",
-					"ubuntu-deployment.yaml",
-					[]resources.CreateOption{},
-					getDeploymentPolicyMutateOption(workloadNamespace, "test-policy"),
-				)
-				require.NoError(t, err, "failed to apply test data")
-
-				err = wait.For(
-					conditions.New(r).DeploymentAvailable("ubuntu-deployment", workloadNamespace),
-					wait.WithTimeout(DefaultOperationTimeout),
-				)
-
-				require.NoError(t, err, "failed to run the target payload")
+				createAndWaitUbuntuDeployment(ctx, t, workloadNamespace, withPolicy("test-policy"))
 
 				// 3. Run command in the pod and verify the result.
-				var podName string
-				var pods corev1.PodList
-				err = r.WithNamespace(workloadNamespace).List(ctx, &pods)
+				podName, err := findPodByPrefix(ctx, workloadNamespace, "ubuntu-deployment")
 				require.NoError(t, err)
-
-				for _, v := range pods.Items {
-					if strings.HasPrefix(v.Name, "ubuntu-deployment") {
-						podName = v.Name
-						break
-					}
-				}
 
 				expectedResults := []struct {
 					Commands []string
@@ -125,15 +96,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 				}
 
 				// 4. Delete test Deployment
-				err = decoder.DeleteWithManifestDir(
-					ctx,
-					r,
-					"./testdata",
-					"ubuntu-deployment.yaml",
-					[]resources.DeleteOption{},
-					decoder.MutateNamespace(workloadNamespace),
-				)
-				require.NoError(t, err, "failed to delete test data")
+				deleteUbuntuDeployment(ctx, t, workloadNamespace)
 
 				// 5. Delete WorkloadPolicy and wait for it to be gone.
 				deleteAndWaitWP(ctx, t, &policy)

@@ -21,7 +21,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
-	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
@@ -67,36 +66,11 @@ func getOtelCollectorTest() types.Feature {
 			return context.WithValue(ctx, key("policy"), policy.DeepCopy())
 		}).
 		Setup(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("installing test Ubuntu deployment")
-
-			r := ctx.Value(key("client")).(*resources.Resources)
 			namespace := ctx.Value(key("namespace")).(string)
-
-			err := decoder.ApplyWithManifestDir(
-				ctx,
-				r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.CreateOption{},
-				getDeploymentPolicyMutateOption(namespace, "test-policy"),
-			)
-			require.NoError(t, err, "failed to apply test data")
-
-			err = wait.For(
-				conditions.New(r).DeploymentAvailable(
-					"ubuntu-deployment",
-					namespace,
-				),
-				wait.WithTimeout(DefaultOperationTimeout),
-			)
-			require.NoError(t, err)
-
-			var ubuntuPodName string
-
-			ubuntuPodName, err = findPod(ctx, namespace, "ubuntu-deployment")
+			createAndWaitUbuntuDeployment(ctx, t, namespace, withPolicy("test-policy"))
+			ubuntuPodName, err := findPodByPrefix(ctx, namespace, "ubuntu-deployment")
 			require.NoError(t, err)
 			require.NotEmpty(t, ubuntuPodName)
-
 			return context.WithValue(ctx, key("targetPodName"), ubuntuPodName)
 		}).
 		Assess("required resources become available", IfRequiredResourcesAreCreated).
@@ -158,7 +132,7 @@ func getOtelCollectorTest() types.Feature {
 				// runtime_enforcer_violations_total metric.
 				t.Log("querying OTEL collector Prometheus endpoint for violation metrics")
 
-				collectorPodName, err := findPod(ctx, runtimeEnforcerNamespace, otelCollectorDeploymentName)
+				collectorPodName, err := findPodByPrefix(ctx, runtimeEnforcerNamespace, otelCollectorDeploymentName)
 				require.NoError(t, err, "should find OTEL collector pod")
 
 				localPort, stopCh, err := portForwardPod(
@@ -200,18 +174,8 @@ func getOtelCollectorTest() types.Feature {
 				return ctx
 			}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
-			t.Log("uninstalling test resources")
 			namespace := ctx.Value(key("namespace")).(string)
-			r := ctx.Value(key("client")).(*resources.Resources)
-			err := decoder.DeleteWithManifestDir(
-				ctx, r,
-				"./testdata",
-				"ubuntu-deployment.yaml",
-				[]resources.DeleteOption{},
-				decoder.MutateNamespace(namespace),
-			)
-			assert.NoError(t, err, "failed to delete test data")
-
+			deleteUbuntuDeployment(ctx, t, namespace)
 			return ctx
 		}).Feature()
 }
