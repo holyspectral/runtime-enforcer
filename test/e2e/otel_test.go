@@ -168,14 +168,14 @@ func getOtelCollectorTest() types.Feature {
 				assertMetricHasLabel(t, metricsBody, "runtime_enforcer_violations", "action", policymode.MonitorString)
 				// node_name is set dynamically; just verify the label is present.
 				assertMetricHasLabelKey(t, metricsBody, "runtime_enforcer_violations", "node_name")
-
-				policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
-				deleteAndWaitWP(ctx, t, policy)
 				return ctx
 			}).
 		Teardown(func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			namespace := ctx.Value(key("namespace")).(string)
 			deleteUbuntuDeployment(ctx, t, namespace)
+
+			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
+			deleteAndWaitWP(ctx, t, policy)
 			return ctx
 		}).Feature()
 }
