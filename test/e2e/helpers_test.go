@@ -9,6 +9,8 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apimachinerywait "k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
@@ -16,6 +18,17 @@ import (
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 )
+
+func getResources(ctx context.Context) *resources.Resources {
+	return ctx.Value(key("client")).(*resources.Resources)
+}
+
+func createTestNamespace(ctx context.Context, t *testing.T, namespace string) {
+	t.Helper()
+	t.Logf("creating test namespace: %q", namespace)
+	err := getResources(ctx).Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
+	require.NoError(t, err, "failed to create test namespace %q", namespace)
+}
 
 func waitForWorkloadPolicyStatusToBeUpdated(
 	ctx context.Context,
