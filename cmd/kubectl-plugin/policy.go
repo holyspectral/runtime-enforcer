@@ -2,11 +2,9 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func newPolicyCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
+func newPolicyCmd(deps commonCmdDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Manage WorkloadPolicy",
@@ -14,11 +12,11 @@ func newPolicyCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newPolicyModeProtectCmd(f, streams))
-	cmd.AddCommand(newPolicyModeMonitorCmd(f, streams))
-	cmd.AddCommand(newPolicyShowCmd(f, streams))
-	cmd.AddCommand(newPolicyExecAllowCmd(f, streams))
-	cmd.AddCommand(newPolicyExecDenyCmd(f, streams))
+	cmd.AddCommand(newPolicyModeProtectCmd(deps))
+	cmd.AddCommand(newPolicyModeMonitorCmd(deps))
+	cmd.AddCommand(newPolicyShowCmd(deps))
+	cmd.AddCommand(newPolicyExecAllowCmd(deps))
+	cmd.AddCommand(newPolicyExecDenyCmd(deps))
 
 	return cmd
 }

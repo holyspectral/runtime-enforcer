@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 )
 
@@ -34,13 +32,14 @@ type policyExecOptions struct {
 	Action        policyExecAction
 }
 
-func newPolicyExecCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, action policyExecAction) *cobra.Command {
+func newPolicyExecCmd(deps commonCmdDeps, action policyExecAction) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME <container-name> <executable-name> [<executable-name>...]", action)
 	short := fmt.Sprintf("%s executables for a WorkloadPolicy container", action)
 
 	opts := &policyExecOptions{
-		commonOptions: newCommonOptions(f, streams),
-		Action:        action,
+		commonOptions: newCommonOptions(deps),
+
+		Action: action,
 	}
 
 	cmd := &cobra.Command{
@@ -51,12 +50,16 @@ func newPolicyExecCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, act
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 			switch len(args) {
 			case 0:
-				return completion.CompGetResource(f, "workloadpolicies", toComplete), cobra.ShellCompDirectiveNoFileComp
+				return completion.CompGetResource(
+					deps.f,
+					"workloadpolicies",
+					toComplete,
+				), cobra.ShellCompDirectiveNoFileComp
 			case 1:
 				template := "{{ range $key, $value := .spec.rulesByContainer }}{{ $key }} {{end}}"
 				return completion.CompGetFromTemplate(
 					&template,
-					f,
+					deps.f,
 					"",
 					[]string{"workloadpolicies", args[0]},
 					toComplete,
@@ -75,12 +78,12 @@ func newPolicyExecCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, act
 	return cmd
 }
 
-func newPolicyExecAllowCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
-	return newPolicyExecCmd(f, streams, policyExecActionAllow)
+func newPolicyExecAllowCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyExecCmd(deps, policyExecActionAllow)
 }
 
-func newPolicyExecDenyCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
-	return newPolicyExecCmd(f, streams, policyExecActionDeny)
+func newPolicyExecDenyCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyExecCmd(deps, policyExecActionDeny)
 }
 
 func runPolicyExecCmd(opts *policyExecOptions) func(cmd *cobra.Command, args []string) error {

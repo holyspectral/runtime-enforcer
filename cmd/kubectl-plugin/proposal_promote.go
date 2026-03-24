@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 )
 
@@ -22,9 +20,9 @@ type proposalPromoteOptions struct {
 	ProposalName string
 }
 
-func newProposalPromoteCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
+func newProposalPromoteCmd(deps commonCmdDeps) *cobra.Command {
 	opts := &proposalPromoteOptions{
-		commonOptions: newCommonOptions(f, streams),
+		commonOptions: newCommonOptions(deps),
 	}
 
 	cmd := &cobra.Command{
@@ -36,7 +34,7 @@ func newProposalPromoteCmd(f cmdutil.Factory, streams genericiooptions.IOStreams
 			switch len(args) {
 			case 0:
 				return completion.CompGetResource(
-					f,
+					deps.f,
 					"workloadpolicyproposals",
 					toComplete,
 				), cobra.ShellCompDirectiveNoFileComp

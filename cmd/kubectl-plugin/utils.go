@@ -13,6 +13,12 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+type commonCmdDeps struct {
+	f cmdutil.Factory
+
+	ioStreams genericiooptions.IOStreams
+}
+
 // groupUsageTemplate is a custom usage template for group commands (e.g. "proposal", "policy").
 const groupUsageTemplate = `Usage:
   {{.UseLine}}
@@ -47,10 +53,10 @@ type commonOptions struct {
 	DryRun    bool
 }
 
-func newCommonOptions(f cmdutil.Factory, streams genericiooptions.IOStreams) commonOptions {
+func newCommonOptions(deps commonCmdDeps) commonOptions {
 	return commonOptions{
-		Factory:   f,
-		ioStreams: streams,
+		Factory:   deps.f,
+		ioStreams: deps.ioStreams,
 	}
 }
 

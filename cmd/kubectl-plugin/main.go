@@ -27,26 +27,20 @@ Flags:
 )
 
 func registerCompletionFuncForGlobalFlags(cmd *cobra.Command, f cmdutil.Factory) {
-	cmdutil.CheckErr(cmd.RegisterFlagCompletionFunc(
-		"namespace",
-		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return utilcomp.CompGetResource(f, "namespace", toComplete), cobra.ShellCompDirectiveNoFileComp
-		}))
-	cmdutil.CheckErr(cmd.RegisterFlagCompletionFunc(
-		"context",
-		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return utilcomp.ListContextsInConfig(toComplete), cobra.ShellCompDirectiveNoFileComp
-		}))
-	cmdutil.CheckErr(cmd.RegisterFlagCompletionFunc(
-		"cluster",
-		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return utilcomp.ListClustersInConfig(toComplete), cobra.ShellCompDirectiveNoFileComp
-		}))
-	cmdutil.CheckErr(cmd.RegisterFlagCompletionFunc(
-		"user",
-		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return utilcomp.ListUsersInConfig(toComplete), cobra.ShellCompDirectiveNoFileComp
-		}))
+	registerFlagCompletion := func(flagName string, completionFunc func(string) []string) {
+		cmdutil.CheckErr(cmd.RegisterFlagCompletionFunc(
+			flagName,
+			func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				return completionFunc(toComplete), cobra.ShellCompDirectiveNoFileComp
+			}))
+	}
+
+	registerFlagCompletion("namespace", func(toComplete string) []string {
+		return utilcomp.CompGetResource(f, "namespace", toComplete)
+	})
+	registerFlagCompletion("context", utilcomp.ListContextsInConfig)
+	registerFlagCompletion("cluster", utilcomp.ListClustersInConfig)
+	registerFlagCompletion("user", utilcomp.ListUsersInConfig)
 }
 
 func newRootCmd() *cobra.Command {
@@ -76,8 +70,8 @@ func newRootCmd() *cobra.Command {
 	// Register completion functions, so we can auto-complete global flags like --namespace, --context, etc.
 	registerCompletionFuncForGlobalFlags(cmd, f)
 
-	cmd.AddCommand(newProposalCmd(f, streams))
-	cmd.AddCommand(newPolicyCmd(f, streams))
+	cmd.AddCommand(newProposalCmd(commonCmdDeps{f: f, ioStreams: streams}))
+	cmd.AddCommand(newPolicyCmd(commonCmdDeps{f: f, ioStreams: streams}))
 
 	return cmd
 }

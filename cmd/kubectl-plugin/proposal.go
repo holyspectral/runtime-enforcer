@@ -2,11 +2,9 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func newProposalCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
+func newProposalCmd(deps commonCmdDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "proposal",
 		Short: "Manage WorkloadPolicyProposal",
@@ -14,7 +12,7 @@ func newProposalCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobr
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newProposalPromoteCmd(f, streams))
+	cmd.AddCommand(newProposalPromoteCmd(deps))
 
 	return cmd
 }

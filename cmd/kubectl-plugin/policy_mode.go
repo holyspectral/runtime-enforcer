@@ -10,8 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 )
 
@@ -22,12 +20,12 @@ type policyModeOptions struct {
 	Mode       string
 }
 
-func newPolicyModeCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, mode string) *cobra.Command {
+func newPolicyModeCmd(deps commonCmdDeps, mode string) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME", mode)
 	short := fmt.Sprintf("Set WorkloadPolicy mode to %s", mode)
 
 	opts := &policyModeOptions{
-		commonOptions: newCommonOptions(f, streams),
+		commonOptions: newCommonOptions(deps),
 		Mode:          mode,
 	}
 
@@ -40,7 +38,7 @@ func newPolicyModeCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, mod
 			switch len(args) {
 			case 0:
 				return completion.CompGetResource(
-					f,
+					deps.f,
 					"workloadpolicies",
 					toComplete,
 				), cobra.ShellCompDirectiveNoFileComp
@@ -58,11 +56,11 @@ func newPolicyModeCmd(f cmdutil.Factory, streams genericiooptions.IOStreams, mod
 	return cmd
 }
 
-func newPolicyModeProtectCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
-	return newPolicyModeCmd(f, streams, policymode.ProtectString)
+func newPolicyModeProtectCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyModeCmd(deps, policymode.ProtectString)
 }
-func newPolicyModeMonitorCmd(f cmdutil.Factory, streams genericiooptions.IOStreams) *cobra.Command {
-	return newPolicyModeCmd(f, streams, policymode.MonitorString)
+func newPolicyModeMonitorCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyModeCmd(deps, policymode.MonitorString)
 }
 
 func runPolicyModeSetCmd(opts *policyModeOptions) func(cmd *cobra.Command, args []string) error {
