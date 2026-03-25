@@ -1,8 +1,10 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+)
 
-func newProposalCmd() *cobra.Command {
+func newProposalCmd(deps commonCmdDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "proposal",
 		Short: "Manage WorkloadPolicyProposal",
@@ -10,7 +12,7 @@ func newProposalCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newProposalPromoteCmd())
+	cmd.AddCommand(newProposalPromoteCmd(deps))
 
 	return cmd
 }

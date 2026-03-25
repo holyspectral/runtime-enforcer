@@ -3,15 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	securityclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/typed/api/v1alpha1"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
+
+type commonCmdDeps struct {
+	f cmdutil.Factory
+
+	ioStreams genericiooptions.IOStreams
+}
 
 // groupUsageTemplate is a custom usage template for group commands (e.g. "proposal", "policy").
 const groupUsageTemplate = `Usage:
@@ -39,17 +45,18 @@ const (
 )
 
 type commonOptions struct {
-	configFlags *genericclioptions.ConfigFlags
-	ioStreams   genericclioptions.IOStreams
+	cmdutil.Factory
+
+	ioStreams genericiooptions.IOStreams
 
 	Namespace string
 	DryRun    bool
 }
 
-func newCommonOptions() commonOptions {
+func newCommonOptions(deps commonCmdDeps) commonOptions {
 	return commonOptions{
-		configFlags: genericclioptions.NewConfigFlags(true),
-		ioStreams:   genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr},
+		Factory:   deps.f,
+		ioStreams: deps.ioStreams,
 	}
 }
 
@@ -67,13 +74,13 @@ type subcommandWithCoreFunc func(
 // buildSecurityClient resolves the namespace, builds the REST config and creates the runtime-enforcer security client.
 // It also populates opts.Namespace as a side effect.
 func buildSecurityClient(opts *commonOptions) (securityclient.SecurityV1alpha1Interface, error) {
-	namespace, _, err := opts.configFlags.ToRawKubeConfigLoader().Namespace()
+	namespace, _, err := opts.Factory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine namespace: %w", err)
 	}
 	opts.Namespace = namespace
 
-	config, err := opts.configFlags.ToRESTConfig()
+	config, err := opts.Factory.ToRESTConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build Kubernetes configuration: %w", err)
 	}
@@ -114,7 +121,7 @@ func withRuntimeEnforcerAndCoreClient(
 		return err
 	}
 
-	config, err := opts.configFlags.ToRESTConfig()
+	config, err := opts.Factory.ToRESTConfig()
 	if err != nil {
 		return fmt.Errorf("failed to build Kubernetes configuration: %w", err)
 	}

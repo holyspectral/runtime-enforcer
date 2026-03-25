@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubectl/pkg/util/completion"
 )
 
 type policyModeOptions struct {
@@ -19,12 +20,12 @@ type policyModeOptions struct {
 	Mode       string
 }
 
-func newPolicyModeCmd(mode string) *cobra.Command {
+func newPolicyModeCmd(deps commonCmdDeps, mode string) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME", mode)
 	short := fmt.Sprintf("Set WorkloadPolicy mode to %s", mode)
 
 	opts := &policyModeOptions{
-		commonOptions: newCommonOptions(),
+		commonOptions: newCommonOptions(deps),
 		Mode:          mode,
 	}
 
@@ -33,12 +34,21 @@ func newPolicyModeCmd(mode string) *cobra.Command {
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE:  runPolicyModeSetCmd(opts),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			switch len(args) {
+			case 0:
+				return completion.CompGetResource(
+					deps.f,
+					"workloadpolicies",
+					toComplete,
+				), cobra.ShellCompDirectiveNoFileComp
+			default:
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		},
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
-
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
 
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
@@ -46,11 +56,11 @@ func newPolicyModeCmd(mode string) *cobra.Command {
 	return cmd
 }
 
-func newPolicyModeProtectCmd() *cobra.Command {
-	return newPolicyModeCmd(policymode.ProtectString)
+func newPolicyModeProtectCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyModeCmd(deps, policymode.ProtectString)
 }
-func newPolicyModeMonitorCmd() *cobra.Command {
-	return newPolicyModeCmd(policymode.MonitorString)
+func newPolicyModeMonitorCmd(deps commonCmdDeps) *cobra.Command {
+	return newPolicyModeCmd(deps, policymode.MonitorString)
 }
 
 func runPolicyModeSetCmd(opts *policyModeOptions) func(cmd *cobra.Command, args []string) error {

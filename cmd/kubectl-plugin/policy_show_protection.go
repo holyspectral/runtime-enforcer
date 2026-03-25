@@ -43,9 +43,9 @@ type workloadProtectionRow struct {
 	Status   string `json:"status"`
 }
 
-func newPolicyShowProtectionCmd() *cobra.Command {
+func newPolicyShowProtectionCmd(deps commonCmdDeps) *cobra.Command {
 	opts := &policyShowProtectionOptions{
-		commonOptions: newCommonOptions(),
+		commonOptions: newCommonOptions(deps),
 		Output:        policyShowProtectionOutputTable,
 	}
 
@@ -57,9 +57,6 @@ func newPolicyShowProtectionCmd() *cobra.Command {
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
-
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
 
 	cmd.Flags().StringVarP(
 		&opts.Output,

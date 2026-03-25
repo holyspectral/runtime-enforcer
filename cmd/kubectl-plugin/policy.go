@@ -1,8 +1,10 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+)
 
-func newPolicyCmd() *cobra.Command {
+func newPolicyCmd(deps commonCmdDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Manage WorkloadPolicy",
@@ -10,11 +12,11 @@ func newPolicyCmd() *cobra.Command {
 
 	cmd.SetUsageTemplate(groupUsageTemplate)
 
-	cmd.AddCommand(newPolicyModeProtectCmd())
-	cmd.AddCommand(newPolicyModeMonitorCmd())
-	cmd.AddCommand(newPolicyShowCmd())
-	cmd.AddCommand(newPolicyExecAllowCmd())
-	cmd.AddCommand(newPolicyExecDenyCmd())
+	cmd.AddCommand(newPolicyModeProtectCmd(deps))
+	cmd.AddCommand(newPolicyModeMonitorCmd(deps))
+	cmd.AddCommand(newPolicyShowCmd(deps))
+	cmd.AddCommand(newPolicyExecAllowCmd(deps))
+	cmd.AddCommand(newPolicyExecDenyCmd(deps))
 
 	return cmd
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubectl/pkg/util/completion"
 )
 
 type proposalPromoteOptions struct {
@@ -19,9 +20,9 @@ type proposalPromoteOptions struct {
 	ProposalName string
 }
 
-func newProposalPromoteCmd() *cobra.Command {
+func newProposalPromoteCmd(deps commonCmdDeps) *cobra.Command {
 	opts := &proposalPromoteOptions{
-		commonOptions: newCommonOptions(),
+		commonOptions: newCommonOptions(deps),
 	}
 
 	cmd := &cobra.Command{
@@ -29,13 +30,22 @@ func newProposalPromoteCmd() *cobra.Command {
 		Short: "Promote WorkloadPolicyProposal to WorkloadPolicy",
 		Long:  "Promote WorkloadPolicyProposal to WorkloadPolicy. This will trigger the creation of a WorkloadPolicy.",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runProposalPromoteCmd(opts),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			switch len(args) {
+			case 0:
+				return completion.CompGetResource(
+					deps.f,
+					"workloadpolicyproposals",
+					toComplete,
+				), cobra.ShellCompDirectiveNoFileComp
+			default:
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		},
+		RunE: runProposalPromoteCmd(opts),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)
-
-	// Standard kube flags (adds --namespace, --kubeconfig, --context, etc.)
-	opts.configFlags.AddFlags(cmd.Flags())
 
 	// Plugin-specific flags
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "Show what would happen without making any changes")
