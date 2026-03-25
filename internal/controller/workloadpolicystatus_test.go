@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -344,8 +343,8 @@ func TestGetViolationsByPolicy(t *testing.T) {
 
 		got := r.getViolationsByPolicy(context.Background(), clients)
 
-		nnA := types.NamespacedName{Namespace: "default", Name: "policy-a"}
-		nnB := types.NamespacedName{Namespace: "default", Name: "policy-b"}
+		nnA := "default/policy-a"
+		nnB := "default/policy-b"
 
 		require.Len(t, got[nnA], 2)
 		require.Contains(t, got[nnA], apiRec("pod-1", "node1"))
@@ -381,46 +380,4 @@ func TestGetViolationsByPolicy(t *testing.T) {
 		got := r.getViolationsByPolicy(context.Background(), nil)
 		require.Empty(t, got)
 	})
-}
-
-func TestParsePolicyNamespacedName(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    types.NamespacedName
-		wantErr bool
-	}{
-		{
-			name:  "valid namespace/name",
-			input: "default/my-policy",
-			want:  types.NamespacedName{Namespace: "default", Name: "my-policy"},
-		},
-		{
-			name:  "name with extra slashes",
-			input: "ns/name/with/slashes",
-			want:  types.NamespacedName{Namespace: "ns", Name: "name/with/slashes"},
-		},
-		{
-			name:    "no namespace",
-			input:   "just-a-name",
-			wantErr: true,
-		},
-		{
-			name:    "empty string",
-			input:   "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parsePolicyNamespacedName(tt.input)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
-		})
-	}
 }

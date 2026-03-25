@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -14,7 +13,6 @@ import (
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -151,8 +149,7 @@ func (r *WorkloadPolicyStatusSync) sync(
 
 	// Now we iterate over all WSPs and update their status based on the collected policies status from the agents
 	for _, wp := range wpList.Items {
-		namespacedName := types.NamespacedName{Namespace: wp.Namespace, Name: wp.Name}
-		if err = r.processWorkloadPolicy(ctx, &wp, nodesInfo, violationsByPolicy[namespacedName]); err != nil {
+		if err = r.processWorkloadPolicy(ctx, &wp, nodesInfo, violationsByPolicy[wp.NamespacedName()]); err != nil {
 			r.logger.Error(
 				err,
 				"failed to process workload policy",
@@ -168,8 +165,8 @@ func (r *WorkloadPolicyStatusSync) sync(
 func (r *WorkloadPolicyStatusSync) getViolationsByPolicy(
 	ctx context.Context,
 	clients map[string]grpcexporter.AgentClientAPI,
-) map[types.NamespacedName][]v1alpha1.ViolationRecord {
-	violationsByPolicy := make(map[types.NamespacedName][]v1alpha1.ViolationRecord)
+) map[string][]v1alpha1.ViolationRecord {
+	violationsByPolicy := make(map[string][]v1alpha1.ViolationRecord)
 	for nodeName, client := range clients {
 		if client == nil {
 			r.logger.Info("cannot get a agent client for the node", "node", nodeName)
@@ -182,11 +179,7 @@ func (r *WorkloadPolicyStatusSync) getViolationsByPolicy(
 			continue
 		}
 		for _, v := range pbViolations {
-			namespacedName, parseErr := parsePolicyNamespacedName(v.GetPolicyName())
-			if parseErr != nil {
-				r.logger.Error(parseErr, "skipping violation record", "node", nodeName)
-				continue
-			}
+			namespacedName := v.GetPolicyName()
 			rec := v1alpha1.ViolationRecord{
 				Timestamp:      metav1.NewTime(v.GetTimestamp().AsTime()),
 				PodName:        v.GetPodName(),
@@ -200,15 +193,4 @@ func (r *WorkloadPolicyStatusSync) getViolationsByPolicy(
 	}
 
 	return violationsByPolicy
-}
-
-// parsePolicyNamespacedName parses a "namespace/name" string into a NamespacedName.
-// It returns an error if the string is not in the expected format, since all
-// policies are namespaced resources.
-func parsePolicyNamespacedName(s string) (types.NamespacedName, error) {
-	parts := strings.SplitN(s, "/", 2) //nolint:mnd // namespace/name pair
-	if len(parts) != 2 {               //nolint:mnd // namespace/name pair
-		return types.NamespacedName{}, fmt.Errorf("invalid policy name %q: expected namespace/name format", s)
-	}
-	return types.NamespacedName{Namespace: parts[0], Name: parts[1]}, nil
 }
