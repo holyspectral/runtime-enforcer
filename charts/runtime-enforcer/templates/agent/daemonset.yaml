@@ -35,13 +35,8 @@ spec:
       {{- end }}
       containers:
       - args:
-        {{- if .Values.learning.enabled }}
-        - --enable-learning
-        {{- end }}
         {{- if .Values.learning.namespaceSelector }}
-        - --learning-namespace-selector={{ .Values.learning.namespaceSelector }}
-        {{- else if .Values.learning.namespaceSelectorObject }}
-        - --learning-namespace-selector={{ .Values.learning.namespaceSelectorObject | toJson }}
+        - --learning-namespace-selector={{ .Values.learning.namespaceSelector | toJson }}
         {{- end }}
         - --grpc-port={{ .Values.agent.grpcExporterPort }}
         - --grpc-mtls-cert-dir={{ include "runtime-enforcer.grpc.certDir" . }}

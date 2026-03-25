@@ -23,7 +23,7 @@ Operationally, if you want complete proposals, enable learning first and then *(
 === How to enter and leave the `Learn` phase
 
 * *Enter*
-** Ensure learning is enabled on inside of the helm chart values: `values.learning.enabled: true`
+** Ensure learning is enabled on some namespaces: `values.learning.namespaceSelector`
 ** No per-workload configuration is required to start generating proposals (proposals are created as exec events are observed).
 * *Leave*
 ** Mark the corresponding proposal as ready by setting the label: `security.rancher.io/policy-ready=true`

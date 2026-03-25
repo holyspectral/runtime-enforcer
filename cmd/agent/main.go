@@ -40,7 +40,6 @@ import (
 )
 
 type Config struct {
-	enableLearning            bool
 	learningNamespaceSelector string
 	nriSocketPath             string
 	nriPluginIdx              string
@@ -54,6 +53,10 @@ type Config struct {
 	otlpClientKey             string
 	nodeName                  string
 	violationLogger           otellog.Logger
+}
+
+func (c Config) learningEnabled() bool {
+	return strings.TrimSpace(c.learningNamespaceSelector) != ""
 }
 
 func newControllerManager(config Config) (manager.Manager, error) {
@@ -165,7 +168,7 @@ func setupLearningReconciler(
 	config Config,
 	ctrlMgr manager.Manager,
 ) (func(eventscraper.KubeProcessInfo), error) {
-	if !config.enableLearning {
+	if !config.learningEnabled() {
 		logger.InfoContext(ctx, "learning mode is disabled")
 		return func(_ eventscraper.KubeProcessInfo) {
 			panic("enqueue function should be never called when learning is disabled")
@@ -173,23 +176,19 @@ func setupLearningReconciler(
 	}
 
 	var nsSelector labels.Selector
-	// If the learning namespace selector is empty, the learning will apply to all namespaces.
-	// Otherwise, we parse the learning namespace selector.
-	if config.learningNamespaceSelector != "" {
-		selector, err := parseLearningNamespaceSelector(config.learningNamespaceSelector)
-		if err != nil {
-			return nil, fmt.Errorf("invalid learning-namespace-selector %q: %w", config.learningNamespaceSelector, err)
-		}
-		nsSelector = selector
+	selector, err := parseLearningNamespaceSelector(config.learningNamespaceSelector)
+	if err != nil {
+		return nil, fmt.Errorf("invalid learning-namespace-selector %q: %w", config.learningNamespaceSelector, err)
 	}
+	nsSelector = selector
 
 	// Wait until mutating admission webhook is ready.
-	if err := waitForMutatingAdmissionWebhook(ctx); err != nil {
+	if err = waitForMutatingAdmissionWebhook(ctx); err != nil {
 		return nil, err
 	}
 
 	learningReconciler := eventhandler.NewLearningReconciler(ctrlMgr.GetClient(), nsSelector)
-	if err := learningReconciler.SetupWithManager(ctrlMgr); err != nil {
+	if err = learningReconciler.SetupWithManager(ctrlMgr); err != nil {
 		return nil, fmt.Errorf("unable to create learning reconciler: %w", err)
 	}
 	logger.InfoContext(ctx, "learning mode is enabled", "namespaceSelector", config.learningNamespaceSelector)
@@ -210,7 +209,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	//////////////////////
 	// Create BPF manager
 	//////////////////////
-	bpfManager, err := bpf.NewManager(logger, config.enableLearning)
+	bpfManager, err := bpf.NewManager(logger, config.learningEnabled())
 	if err != nil {
 		return fmt.Errorf("cannot create BPF manager: %w", err)
 	}
@@ -320,29 +319,28 @@ func parseLogLevel(level string) slog.Level {
 	}
 }
 
-// parseLearningNamespaceSelector parses the learning namespace selector from either:
-// - A JSON object (e.g. {"matchLabels":{"env":"prod"}}.
-// - A string in Kubernetes label selector format (e.g. "env=prod").
+// parseLearningNamespaceSelector parses the learning namespace selector from a JSON object (e.g. {"matchLabels":{"env":"prod"}}).
 func parseLearningNamespaceSelector(s string) (labels.Selector, error) {
 	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "{") {
-		var ls metav1.LabelSelector
-		if err := json.Unmarshal([]byte(s), &ls); err != nil {
-			return nil, fmt.Errorf("invalid JSON label selector %q: %w", s, err)
-		}
-		return metav1.LabelSelectorAsSelector(&ls)
+	if !strings.HasPrefix(s, "{") {
+		return nil, fmt.Errorf("invalid JSON label selector %q: must be a JSON object", s)
 	}
-	return labels.Parse(s)
+
+	var ls metav1.LabelSelector
+	if err := json.Unmarshal([]byte(s), &ls); err != nil {
+		return nil, fmt.Errorf("invalid JSON label selector %q: %w", s, err)
+	}
+	return metav1.LabelSelectorAsSelector(&ls)
 }
 
 func parseFlags() Config {
 	var config Config
-	flag.BoolVar(&config.enableLearning, "enable-learning", false, "Enable learning mode")
+	// If we receive something different from "", it should be a valid json
 	flag.StringVar(
 		&config.learningNamespaceSelector,
 		"learning-namespace-selector",
 		"",
-		"Label selector for namespaces to include in learning (empty = all)",
+		"Namespace selector for learning. Accepts a JSON LabelSelector",
 	)
 	flag.StringVar(&config.nriSocketPath, "nri-socket-path", "/var/run/nri/nri.sock", "NRI socket path")
 	flag.StringVar(&config.nriPluginIdx, "nri-plugin-index", "00", "NRI plugin index")

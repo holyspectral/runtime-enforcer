@@ -9,8 +9,10 @@ By default, Runtime-Enforcer starts in *learning* mode for **all namespaces**:
 
 ```yaml
 learning:
-  enabled: true
-  namespaceSelector: ""
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: Exists
 ```
 
 You can adjust this behaviour at install/upgrade time:
@@ -20,16 +22,13 @@ You can adjust this behaviour at install/upgrade time:
 ```bash
 helm upgrade --install runtime-enforcer runtime-enforcer/runtime-enforcer \
   --namespace runtime-enforcer \
-  --set learning.enabled=false
+  --set-json 'learning.namespaceSelector={}'
 ```
 
-- Restrict learning to specific namespaces using a label selector:
+- Restrict learning to specific namespaces using a namespaceSelector:
 +
 ```bash
 helm upgrade --install runtime-enforcer runtime-enforcer/runtime-enforcer \
   --namespace runtime-enforcer \
-  --set learning.namespaceSelector="env=prod"
+  --set-json 'learning.namespaceSelector={"matchLabels":{"env":"prod"}}'
 ```
-
-When `learning.enabled=true`, Runtime-Enforcer will create or update `WorkloadPolicyProposal`
-objects only for workloads in namespaces matching `learning.namespaceSelector`.

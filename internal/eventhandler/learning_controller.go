@@ -248,22 +248,18 @@ func (r *LearningReconciler) reconcile(
 		return ctrl.Result{}, nil
 	}
 
-	if r.namespaceSelector != nil {
-		var ns corev1.Namespace
-		if err = r.Client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &ns); err != nil {
-			if apierrors.IsNotFound(err) {
-				logger.V(loglevel.VerbosityDebug).Info(
-					"Namespace not found while evaluating learning namespace selector",
-				)
-				return ctrl.Result{}, nil
-			}
-			return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", req.Namespace, err)
-		}
-		if !r.namespaceSelector.Matches(labels.Set(ns.GetLabels())) {
-			logger.V(loglevel.VerbosityDebug).
-				Info("Namespace does not match learning namespace selector; skipping event", "namespace", req.Namespace)
+	var ns corev1.Namespace
+	if err = r.Client.Get(ctx, types.NamespacedName{Name: req.Namespace}, &ns); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(loglevel.VerbosityDebug).Info(
+				"Namespace not found while evaluating learning namespace selector",
+			)
 			return ctrl.Result{}, nil
 		}
+		return ctrl.Result{}, fmt.Errorf("failed to get namespace %s: %w", req.Namespace, err)
+	}
+	if !r.namespaceSelector.Matches(labels.Set(ns.GetLabels())) {
+		return ctrl.Result{}, nil
 	}
 
 	proposalName, err = proposalutils.GetWorkloadPolicyProposalName(req.WorkloadKind, req.Workload)

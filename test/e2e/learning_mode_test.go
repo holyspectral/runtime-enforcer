@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler/proposalutils"
@@ -170,6 +171,8 @@ func getLearningModeTest() types.Feature {
 func getLearningModeNamespaceSelectorTest() types.Feature {
 	enabledNS := envconf.RandomName("learning-enabled-ns", 32)
 	disabledNS := envconf.RandomName("learning-disabled-ns", 32)
+	const defaultLearningSelector = `'learning.namespaceSelector={"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"Exists"}],"matchLabels":{}}'`
+	const e2eLearningSelector = `'learning.namespaceSelector={"matchExpressions":[],"matchLabels":{"env":"e2e-test"}}'`
 
 	return features.New("LearningModeNamespaceSelector").
 		Setup(SetupSharedK8sClient).
@@ -182,7 +185,7 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 				helm.WithNamespace(runtimeEnforcerNamespace),
 				helm.WithChart("../../charts/runtime-enforcer/"),
 				helm.WithArgs("--reuse-values"),
-				helm.WithArgs("--set", "learning.namespaceSelector=env=e2e-test"),
+				helm.WithArgs("--set-json", e2eLearningSelector),
 				helm.WithWait(),
 				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
@@ -234,14 +237,14 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 			require.NoError(t, err)
 
 			t.Log("verifying proposal is created and learns in the learning-enabled namespace")
-			proposalInEnabled := v1alpha1.WorkloadPolicyProposal{
+			proposal := v1alpha1.WorkloadPolicyProposal{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      proposalName,
 					Namespace: enabledNS,
 				},
 			}
 			err = wait.For(conditions.New(r).ResourceMatch(
-				&proposalInEnabled,
+				&proposal,
 				func(obj k8s.Object) bool {
 					p, ok := obj.(*v1alpha1.WorkloadPolicyProposal)
 					if !ok || p.Spec.RulesByContainer == nil {
@@ -260,12 +263,29 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 			)
 
 			t.Log("verifying no managed WorkloadPolicyProposal exists in the learning-disabled namespace")
-			var list v1alpha1.WorkloadPolicyProposalList
-			err = r.WithNamespace(disabledNS).List(ctx, &list)
-			require.NoError(t, err)
-			require.Empty(
-				t, list.Items,
-				"expected no WorkloadPolicyProposals in namespace %s (selector should exclude it)",
+			proposal = v1alpha1.WorkloadPolicyProposal{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      proposalName,
+					Namespace: disabledNS,
+				},
+			}
+
+			// we want to be sure the proposal is not created so we need to try several times.
+			err = wait.For(conditions.New(r).ResourceMatch(
+				&proposal,
+				func(obj k8s.Object) bool {
+					p, ok := obj.(*v1alpha1.WorkloadPolicyProposal)
+					if !ok || p == nil {
+						return false
+					}
+					return true
+				}),
+				wait.WithTimeout(15*time.Second),
+			)
+			require.Error(
+				t,
+				err,
+				"WorkloadPolicyProposal should not be created in namespace %s",
 				disabledNS,
 			)
 
@@ -280,18 +300,18 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 				require.NoError(t, err, "failed to delete namespace %s", ns)
 			}
 
-			t.Log("disabling learning namespace selector after test")
+			t.Log("restoring default learning namespace selector after test")
 			manager := helm.New(cfg.KubeconfigFile())
 			err := manager.RunUpgrade(
 				helm.WithName("runtime-enforcer"),
 				helm.WithNamespace(runtimeEnforcerNamespace),
 				helm.WithChart("../../charts/runtime-enforcer/"),
 				helm.WithArgs("--reuse-values"),
-				helm.WithArgs("--set", "learning.namespaceSelector="),
+				helm.WithArgs("--set-json", defaultLearningSelector),
 				helm.WithWait(),
 				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
-			require.NoError(t, err, "failed to disable learning namespace selector after test")
+			require.NoError(t, err, "failed to restore default learning namespace selector after test")
 
 			return ctx
 		}).Feature()

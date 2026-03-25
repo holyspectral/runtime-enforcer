@@ -43,23 +43,10 @@ questions:
   ###############################################################################
   # Learning
   ###############################################################################
-  - variable: learning.enabled
-    type: boolean
-    default: true
-    label: Enable Cluster-wide Learning Mode
-    description: |
-      Enable cluster-wide learning mode. If disabled, no process learning occurs.
-      Process enforcer remains unaffected.
-    group: Learning
 
-  - variable: learning.namespaceSelector
-    type: string
-    default: ""
-    label: Namespace Selector
-    description: |
-      Label selector for namespaces to include in learning (empty = all).
-    group: Learning
-    show_if: learning.enabled=true
+  # learning.namespaceSelector is a complex object (Kubernetes LabelSelector) that
+  # cannot be represented as a simple Rancher UI field. Configure it directly in
+  # values.yaml. Set it to null to disable learning entirely.
 
   ###############################################################################
   # Telemetry
@@ -106,4 +93,3 @@ questions:
       The secret should contain the keys `tls.crt` and `tls.key`.
     group: Telemetry
     show_if: telemetry.collectorStrategy=external
-

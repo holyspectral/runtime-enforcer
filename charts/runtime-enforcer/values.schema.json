@@ -412,14 +412,25 @@
         "learning": {
             "type": "object",
             "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
                 "namespaceSelector": {
-                    "type": "string"
-                },
-                "namespaceSelectorObject": {
                     "type": "object",
+                    "properties": {
+                        "matchExpressions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {
+                                        "type": "string"
+                                    },
+                                    "operator": {
+                                        "type": "string"
+                                    }
+                                },
+                                "additionalProperties": false
+                            }
+                        }
+                    },
                     "additionalProperties": true
                 }
             },

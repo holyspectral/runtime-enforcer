@@ -21,23 +21,38 @@ tests:
           path: "spec.template.spec.priorityClassName"
           value: "runtime-enforcer-priorityclass"
 
-  - it: "should include --enable-learning flag when learning is enabled"
+  - it: "should not include learning flag when there is no selector"
     set:
       learning:
-        enabled: true
-    asserts:
-      - contains:
-          path: "spec.template.spec.containers[0].args"
-          content: "--enable-learning"
-
-  - it: "should not include --enable-learning flag when learning is disabled"
-    set:
-      learning:
-        enabled: false
+        # this `null` overwrites the default in our values.yaml while with {}
+        # we will have a merge
+        namespaceSelector: null
     asserts:
       - notContains:
           path: "spec.template.spec.containers[0].args"
-          content: "--enable-learning"
+          content: '--learning-namespace-selector={"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"Exists"}]}'
+
+  - it: "should include default selector"
+    set:
+      learning:
+        # with {} we have a merge with the default in our values.yaml
+        namespaceSelector: {}
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: '--learning-namespace-selector={"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"Exists"}]}'
+
+  - it: "should render a custom learning namespace selector"
+    set:
+      learning:
+        namespaceSelector:
+          matchExpressions: null
+          matchLabels:
+            env: prod
+    asserts:
+      - contains:
+          path: "spec.template.spec.containers[0].args"
+          content: '--learning-namespace-selector={"matchLabels":{"env":"prod"}}'
 
   - it: "should include grpc port argument"
     set:

@@ -161,20 +161,15 @@ debugger:
 
 # Learning mode configuration
 learning:
-  # learning.enabled controls whether learning mode is enabled for the entire cluster.
-  # When disabled, no process learning occurs. Process enforcer remains unaffected.
-  enabled: true
-  # Label selector for namespaces to include in learning.
-  #   namespaceSelector: ""         # learn from all namespaces
-  #   namespaceSelector: "env=prod" # namespaces with label env=prod
-  namespaceSelector: ""
-  # Label selector for namespaces to include in learning.
-  #   namespaceSelectorObject: {}   # learn from all namespaces
-  #   namespaceSelectorObject:      # namespaces with label env=prod
-  #     matchLabels:
-  #       env: prod
+  # The default value enables learning inside all namespaces of the cluster.
+  # Override namespaceSelector to limit the learning scope.
+  # Set namespaceSelector to {} to disable learning entirely.
+  # namespaceSelector: {}   # learn disabled for all namespaces
   # @schema additionalProperties:true
-  namespaceSelectorObject: {}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: Exists
 
 telemetry:
   collectorStrategy: "default" # @schema enum: [none, default, external]

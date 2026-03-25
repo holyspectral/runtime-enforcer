@@ -47,6 +47,10 @@ var _ = Describe("Learning", func() {
 			Spec: securityv1alpha1.WorkloadPolicyProposalSpec{},
 		}
 
+		defaultNamespaceSelector := labels.SelectorFromSet(labels.Set{
+			"kubernetes.io/metadata.name": "default",
+		})
+
 		deployment := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      typeNamespacedName.Name,
@@ -135,6 +139,10 @@ var _ = Describe("Learning", func() {
 						if err != nil {
 							return fmt.Errorf("failed to add scheme: %w", err)
 						}
+						err = corev1.AddToScheme(scheme)
+						if err != nil {
+							return fmt.Errorf("failed to add scheme: %w", err)
+						}
 
 						perWorkerClient, err = client.New(cfg, client.Options{
 							Scheme: scheme,
@@ -143,7 +151,7 @@ var _ = Describe("Learning", func() {
 							return fmt.Errorf("failed to create client: %w", err)
 						}
 
-						reconciler := newTestLearningReconciler(perWorkerClient, nil)
+						reconciler := newTestLearningReconciler(perWorkerClient, defaultNamespaceSelector)
 						for _, learningEvent := range eventsToProcess {
 							for {
 								// with the internal ratelimiter, the learning controller would return RequeueAfter instead of a conflict error.
@@ -256,7 +264,7 @@ var _ = Describe("Learning", func() {
 					},
 				}
 
-				reconciler := newTestLearningReconciler(k8sClient, nil)
+				reconciler := newTestLearningReconciler(k8sClient, defaultNamespaceSelector)
 
 				for _, tc := range tcs {
 					// Create an empty policy proposal
@@ -321,7 +329,7 @@ var _ = Describe("Learning", func() {
 					},
 				}
 
-				reconciler := eventhandler.NewLearningReconciler(k8sClient, nil)
+				reconciler := eventhandler.NewLearningReconciler(k8sClient, defaultNamespaceSelector)
 
 				testProposal := proposal.DeepCopy()
 				testProposal.Namespace = testNamespace
