@@ -505,7 +505,12 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 	}
 
 	__u64 *policy_id = bpf_map_lookup_elem(&cg_to_policy_map, &cg_tracker_id);
-	if(!policy_id && load_time_config.learning_enabled) {
+	if(!policy_id) {
+		// if learning is disabled, nothing to do, we can return
+		if(!load_time_config.learning_enabled) {
+			return 0;
+		}
+
 		// No policy associated with this cgroup.
 		// Emit the event to the learning ringbuf so that the userspace can learn from it.
 		// This is critical because the LSM hook `security_bprm_creds_for_exec` is called
