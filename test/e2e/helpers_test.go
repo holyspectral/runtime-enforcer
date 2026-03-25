@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	DefaultHelmTimeout       = time.Minute * 5
-	DefaultOperationTimeout  = time.Minute
+	defaultHelmTimeout       = time.Minute * 5
+	defaultOperationTimeout  = time.Minute
 	testFolder               = "./testdata"
 	ubuntuDeploymentManifest = "ubuntu-deployment.yaml"
 	ubuntuDeploymentName     = "ubuntu-deployment"
@@ -57,7 +57,7 @@ func IfRequiredResourcesAreCreated(ctx context.Context, t *testing.T, _ *envconf
 			"runtime-enforcer-controller-manager",
 			runtimeEnforcerNamespace,
 		),
-		wait.WithTimeout(DefaultOperationTimeout),
+		wait.WithTimeout(defaultOperationTimeout),
 	)
 	require.NoError(t, err)
 
@@ -68,7 +68,7 @@ func IfRequiredResourcesAreCreated(ctx context.Context, t *testing.T, _ *envconf
 				Namespace: runtimeEnforcerNamespace,
 			},
 		}),
-		wait.WithTimeout(DefaultOperationTimeout),
+		wait.WithTimeout(defaultOperationTimeout),
 	)
 	require.NoError(t, err)
 	return ctx
@@ -110,7 +110,7 @@ func deleteAndWaitWP(ctx context.Context, t *testing.T, policy *v1alpha1.Workloa
 	require.NoError(t, err, "failed to delete workload policy %q", policy.NamespacedName())
 	err = wait.For(
 		conditions.New(getClient(ctx)).ResourceDeleted(policy),
-		wait.WithTimeout(DefaultOperationTimeout),
+		wait.WithTimeout(defaultOperationTimeout),
 	)
 	require.NoError(t, err, "workload policy %q cannot be deleted", policy.NamespacedName())
 }
@@ -179,7 +179,7 @@ func createAndWaitUbuntuDeployment(
 	// Wait for ubuntu deployment to become available
 	err = wait.For(
 		conditions.New(getClient(ctx)).DeploymentAvailable(ubuntuDeploymentName, namespace),
-		wait.WithTimeout(DefaultOperationTimeout),
+		wait.WithTimeout(defaultOperationTimeout),
 	)
 	require.NoError(t, err, "ubuntu deployment should become available")
 }

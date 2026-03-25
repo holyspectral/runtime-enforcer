@@ -45,7 +45,7 @@ func getPromotionTest() types.Feature {
 						}
 						return false
 					}),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err)
 
@@ -81,7 +81,7 @@ func getPromotionTest() types.Feature {
 
 						return verifyUbuntuLearnedProcesses(rules.Executables.Allowed)
 					}),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err)
 
@@ -128,7 +128,7 @@ func getPromotionTest() types.Feature {
 
 				err = wait.For(conditions.New(r).ResourceMatch(&policy, func(_ k8s.Object) bool {
 					return true
-				}), wait.WithTimeout(DefaultOperationTimeout))
+				}), wait.WithTimeout(defaultOperationTimeout))
 				require.NoError(t, err)
 
 				return context.WithValue(ctx, key("policy"), &policy)

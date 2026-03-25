@@ -115,7 +115,7 @@ func getLearningModeTest() types.Feature {
 						func(_ k8s.Object) bool {
 							return true
 						}),
-						wait.WithTimeout(DefaultOperationTimeout),
+						wait.WithTimeout(defaultOperationTimeout),
 					)
 					require.NoError(t, err)
 					require.Len(t, proposal.OwnerReferences, 1)
@@ -139,7 +139,7 @@ func getLearningModeTest() types.Feature {
 
 							return verifyUbuntuLearnedProcesses(rules.Executables.Allowed)
 						}),
-						wait.WithTimeout(DefaultOperationTimeout),
+						wait.WithTimeout(defaultOperationTimeout),
 					)
 					require.NoError(t, err)
 				}
@@ -185,7 +185,7 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 				helm.WithArgs("--reuse-values"),
 				helm.WithArgs("--set", "learning.namespaceSelector=env=e2e-test"),
 				helm.WithWait(),
-				helm.WithTimeout(DefaultHelmTimeout.String()),
+				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
 			require.NoError(t, err, "failed to enable learning namespace selector for test")
 
@@ -251,7 +251,7 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 					rules, ok := p.Spec.RulesByContainer["ubuntu"]
 					return ok && verifyUbuntuLearnedProcesses(rules.Executables.Allowed)
 				}),
-				wait.WithTimeout(DefaultOperationTimeout),
+				wait.WithTimeout(defaultOperationTimeout),
 			)
 			require.NoError(
 				t,
@@ -290,7 +290,7 @@ func getLearningModeNamespaceSelectorTest() types.Feature {
 				helm.WithArgs("--reuse-values"),
 				helm.WithArgs("--set", "learning.namespaceSelector="),
 				helm.WithWait(),
-				helm.WithTimeout(DefaultHelmTimeout.String()),
+				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
 			require.NoError(t, err, "failed to disable learning namespace selector after test")
 

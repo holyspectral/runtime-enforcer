@@ -171,7 +171,7 @@ func uninstallHelmRepos(charts []helmChart) env.Func {
 			err := manager.RunUninstall(
 				helm.WithName(chart.name),
 				helm.WithNamespace(chart.namespace),
-				helm.WithTimeout(DefaultHelmTimeout.String()),
+				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
 			if err != nil && !strings.Contains(err.Error(), helmRepoReleaseNotFound) {
 				logger.Warn("failed to uninstall helm chart release",
@@ -231,7 +231,7 @@ func installHelmRepos(charts []helmChart) env.Func {
 				helm.WithArgs("--create-namespace"),
 				helm.WithChart(chartPath),
 				helm.WithWait(),
-				helm.WithTimeout(DefaultHelmTimeout.String()),
+				helm.WithTimeout(defaultHelmTimeout.String()),
 			}
 			opts = append(opts, chart.helmOptions...)
 			logger.Info("installing helm release",

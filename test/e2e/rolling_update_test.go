@@ -100,7 +100,7 @@ func getRollingUpdateTest() types.Feature {
 					Namespace: runtimeEnforcerNamespace,
 				},
 			}),
-				wait.WithTimeout(DefaultOperationTimeout),
+				wait.WithTimeout(defaultOperationTimeout),
 			)
 			require.NoError(t, err)
 			return ctx

@@ -48,7 +48,7 @@ func getMainTest() types.Feature {
 						}
 						return false
 					}),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err)
 
@@ -80,7 +80,7 @@ func getMainTest() types.Feature {
 
 						return verifyUbuntuLearnedProcesses(rules.Executables.Allowed)
 					}),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err)
 
@@ -144,7 +144,7 @@ func getMainTest() types.Feature {
 							return slices.Contains(wp.Finalizers, v1alpha1.WorkloadPolicyFinalizer)
 						},
 					),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "WorkloadPolicy finalizer is not set")
 

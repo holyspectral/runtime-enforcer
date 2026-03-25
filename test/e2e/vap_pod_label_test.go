@@ -53,7 +53,7 @@ func getValidatingAdmissionPolicyPodPolicyLabelTest() types.Feature {
 				// Wait for pod to be running to reduce status update conflicts
 				err = wait.For(
 					conditions.New(r).PodRunning(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod failed to reach running state")
 				var createdPod corev1.Pod
@@ -111,7 +111,7 @@ func getValidatingAdmissionPolicyPodPolicyLabelTest() types.Feature {
 				// Wait for pod to be running to reduce status update conflicts
 				err = wait.For(
 					conditions.New(r).PodRunning(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod failed to reach running state")
 				var createdPod corev1.Pod
@@ -170,7 +170,7 @@ func getValidatingAdmissionPolicyPodPolicyLabelTest() types.Feature {
 				// Wait for pod to be running to reduce status update conflicts
 				err = wait.For(
 					conditions.New(r).PodRunning(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod failed to reach running state")
 				var createdPod corev1.Pod
@@ -229,7 +229,7 @@ func getValidatingAdmissionPolicyPodPolicyLabelTest() types.Feature {
 				// Wait for pod to be running to reduce status update conflicts
 				err = wait.For(
 					conditions.New(r).PodRunning(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod failed to reach running state")
 				var createdPod corev1.Pod
@@ -301,7 +301,7 @@ func getValidatingAdmissionPolicyPodPolicyLabelTest() types.Feature {
 				// Wait for pod to be running to reduce status update conflicts
 				err = wait.For(
 					conditions.New(r).PodRunning(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod failed to reach running state")
 				var createdPod corev1.Pod

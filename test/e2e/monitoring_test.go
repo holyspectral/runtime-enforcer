@@ -95,7 +95,7 @@ func getMonitoringTest() types.Feature {
 						}
 					}
 					return false
-				}), wait.WithTimeout(DefaultOperationTimeout))
+				}), wait.WithTimeout(defaultOperationTimeout))
 				require.NoError(t, err, "violation for /usr/bin/apt should appear in WorkloadPolicy status")
 
 				t.Log("verifying violation record details")

@@ -75,7 +75,7 @@ func getOtelCollectorTest() types.Feature {
 						otelCollectorDeploymentName,
 						runtimeEnforcerNamespace,
 					),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "OTEL collector deployment should be available")
 
@@ -119,7 +119,7 @@ func getOtelCollectorTest() types.Feature {
 						}
 					}
 					return false
-				}), wait.WithTimeout(DefaultOperationTimeout))
+				}), wait.WithTimeout(defaultOperationTimeout))
 				require.NoError(t, err, "violation should appear in WorkloadPolicy status")
 
 				// Now query the OTEL collector Prometheus endpoint for the
@@ -150,7 +150,7 @@ func getOtelCollectorTest() types.Feature {
 					}
 					metricsBody = body
 					return strings.Contains(body, "runtime_enforcer_violations")
-				}, DefaultOperationTimeout, 2*time.Second,
+				}, defaultOperationTimeout, 2*time.Second,
 					"runtime_enforcer_violations metric should appear on the collector Prometheus endpoint",
 				)
 

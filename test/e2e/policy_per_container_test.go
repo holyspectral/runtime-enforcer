@@ -95,7 +95,7 @@ func getPolicyPerContainerTest() types.Feature {
 
 				err = wait.For(
 					conditions.New(r).PodReady(&pod),
-					wait.WithTimeout(DefaultOperationTimeout),
+					wait.WithTimeout(defaultOperationTimeout),
 				)
 				require.NoError(t, err, "pod did not become ready")
 
@@ -230,7 +230,7 @@ func getPolicyPerContainerTest() types.Feature {
 
 			err = wait.For(
 				conditions.New(r).ResourceDeleted(&pod),
-				wait.WithTimeout(DefaultOperationTimeout),
+				wait.WithTimeout(defaultOperationTimeout),
 			)
 			require.NoError(t, err, "pod was not deleted within timeout")
 

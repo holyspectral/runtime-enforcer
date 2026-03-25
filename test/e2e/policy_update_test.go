@@ -84,7 +84,7 @@ func getPolicyUpdateTest() types.Feature {
 
 			err := r.Create(ctx, &pod)
 			require.NoError(t, err, "failed to create policy-update pod")
-			err = wait.For(conditions.New(r).PodReady(&pod), wait.WithTimeout(DefaultOperationTimeout))
+			err = wait.For(conditions.New(r).PodReady(&pod), wait.WithTimeout(defaultOperationTimeout))
 			require.NoError(t, err, "pod did not become ready")
 
 			return ctx
