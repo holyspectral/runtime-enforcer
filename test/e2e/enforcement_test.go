@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -25,7 +26,7 @@ func getEnforcementOnNewPodsTest() types.Feature {
 						Namespace: getNamespace(ctx),
 					},
 					Spec: v1alpha1.WorkloadPolicySpec{
-						Mode: "protect",
+						Mode: policymode.ProtectString,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{

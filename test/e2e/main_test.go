@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,7 +95,7 @@ func getMainTest() types.Feature {
 						Namespace: proposal.ObjectMeta.Namespace,
 					},
 					Spec: v1alpha1.WorkloadPolicySpec{
-						Mode: "protect",
+						Mode: policymode.ProtectString,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
@@ -162,7 +163,7 @@ func getMainTest() types.Feature {
 						Namespace: getNamespace(ctx),
 					},
 					Spec: v1alpha1.WorkloadPolicySpec{
-						Mode: "monitor",
+						Mode: policymode.MonitorString,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{
@@ -209,7 +210,7 @@ func getMainTest() types.Feature {
 						Namespace: getNamespace(ctx),
 					},
 					Spec: v1alpha1.WorkloadPolicySpec{
-						Mode: "monitor",
+						Mode: policymode.MonitorString,
 						RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 							"ubuntu": {
 								Executables: v1alpha1.WorkloadPolicyExecutables{

@@ -39,7 +39,7 @@ func getOtelCollectorTest() types.Feature {
 					Namespace: getNamespace(ctx),
 				},
 				Spec: v1alpha1.WorkloadPolicySpec{
-					Mode: "monitor",
+					Mode: policymode.MonitorString,
 					RulesByContainer: map[string]*v1alpha1.WorkloadPolicyRules{
 						"ubuntu": {
 							Executables: v1alpha1.WorkloadPolicyExecutables{
