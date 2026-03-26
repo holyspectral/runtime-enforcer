@@ -134,12 +134,18 @@ func newProposalPromoteTestClient(
 
 func TestCompleteProposalPromoteArgs(t *testing.T) {
 	t.Parallel()
+	proposalName := "test-proposal"
+	testWorkloadPolicyProposal := &securityv1alpha1.WorkloadPolicyProposal{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: proposalName,
+		},
+	}
 
 	tf, streams := setupTestFactory(t, testWorkloadPolicyProposal.DeepCopy())
 	defer tf.Cleanup()
 
 	cmd := newProposalPromoteCmd(commonCmdDeps{f: tf, ioStreams: streams})
 	completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
-	assert.Equal(t, []string{"test-proposal"}, completes)
+	assert.Equal(t, []string{proposalName}, completes)
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 }

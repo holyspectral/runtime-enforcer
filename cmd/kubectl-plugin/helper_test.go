@@ -7,66 +7,12 @@ import (
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/rest/fake"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	"k8s.io/kubectl/pkg/scheme"
-)
-
-var (
-	//nolint:gochecknoglobals // we want to share this across tests.
-	testWorkloadPolicy = &securityv1alpha1.WorkloadPolicy{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "WorkloadPolicy",
-			APIVersion: "security.rancher.io/v1alpha1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-policy",
-			Namespace: "test",
-		},
-		Spec: securityv1alpha1.WorkloadPolicySpec{
-			RulesByContainer: map[string]*securityv1alpha1.WorkloadPolicyRules{
-				"app": {
-					Executables: securityv1alpha1.WorkloadPolicyExecutables{
-						Allowed: []string{"/bin/ls", "/bin/cat"},
-					},
-				},
-				"db": {
-					Executables: securityv1alpha1.WorkloadPolicyExecutables{
-						Allowed: []string{"/bin/ps", "/bin/top"},
-					},
-				},
-			},
-		},
-		Status: securityv1alpha1.WorkloadPolicyStatus{
-			ObservedGeneration: 1,
-			Violations: []securityv1alpha1.ViolationRecord{
-				{
-					ContainerName:  "app",
-					ExecutablePath: "/bin/mv",
-				},
-				{
-					ContainerName:  "app",
-					ExecutablePath: "/bin/ls",
-				},
-			},
-		},
-	}
-
-	//nolint:gochecknoglobals // we want to share this across tests.
-	testWorkloadPolicyProposal = &securityv1alpha1.WorkloadPolicyProposal{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "WorkloadPolicyProposal",
-			APIVersion: "security.rancher.io/v1alpha1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-proposal",
-			Namespace: "test",
-		},
-	}
 )
 
 var schemeOnce sync.Once //nolint:gochecknoglobals // we want to share the scheme across tests.

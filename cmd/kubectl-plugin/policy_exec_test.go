@@ -123,80 +123,103 @@ func TestRunPolicyExec(t *testing.T) {
 	}
 }
 
-func TestCompletePolicyExecArgs(t *testing.T) {
+func TestCompletePolicyExecValidArgs(t *testing.T) {
 	t.Parallel()
 
-	// This auto completes policy name in `kubectl runtime-enforcer policy allow|deny [TAB]`
-	testAutoCompletePolicyName := func(mode policyExecAction) func(*testing.T) {
-		return func(t *testing.T) {
+	testWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "test",
+		},
+		Spec: apiv1alpha1.WorkloadPolicySpec{
+			RulesByContainer: map[string]*apiv1alpha1.WorkloadPolicyRules{
+				"app": {
+					Executables: apiv1alpha1.WorkloadPolicyExecutables{
+						Allowed: []string{"/bin/ls", "/bin/cat"},
+					},
+				},
+				"db": {
+					Executables: apiv1alpha1.WorkloadPolicyExecutables{
+						Allowed: []string{"/bin/ps", "/bin/top"},
+					},
+				},
+			},
+		},
+		Status: apiv1alpha1.WorkloadPolicyStatus{
+			ObservedGeneration: 1,
+			Violations: []apiv1alpha1.ViolationRecord{
+				{
+					ContainerName:  "app",
+					ExecutablePath: "/bin/mv",
+				},
+				{
+					ContainerName:  "app",
+					ExecutablePath: "/bin/ls",
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name              string
+		action            policyExecAction
+		args              []string
+		expectedCompletes []string
+	}{
+		// policy name completion: `kubectl runtime-enforcer policy allow|deny [TAB]`
+		{
+			name:              "policy names for allow action",
+			action:            policyExecActionAllow,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		{
+			name:              "policy names for deny action",
+			action:            policyExecActionDeny,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		// container name completion: `kubectl runtime-enforcer policy allow|deny test-policy [TAB]`
+		{
+			name:              "container names for allow action",
+			action:            policyExecActionAllow,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"app", "db"},
+		},
+		{
+			name:              "container names for deny action",
+			action:            policyExecActionDeny,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"app", "db"},
+		},
+		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
+		// allow: options come from the policy status (observed violations)
+		// deny:  options come from the existing allow rules
+		{
+			name:              "executable paths for allow action",
+			action:            policyExecActionAllow,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: []string{"/bin/mv", "/bin/ls"},
+		},
+		{
+			name:              "executable paths for deny action",
+			action:            policyExecActionDeny,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: []string{"/bin/ls", "/bin/cat"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
 			defer tf.Cleanup()
 
-			// verify policy mode protect
-			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, mode)
-			completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
-			assert.Equal(t, []string{"test-policy"}, completes)
+			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.action)
+			completes, directive := cmd.ValidArgsFunction(cmd, tt.args, "")
+			assert.Equal(t, tt.expectedCompletes, completes)
 			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
-		}
+		})
 	}
-
-	t.Run("auto-complete policy names for allow action", testAutoCompletePolicyName(policyExecActionAllow))
-	t.Run("auto-complete policy names for deny action", testAutoCompletePolicyName(policyExecActionDeny))
-}
-
-func TestCompletePolicyExecContainerArgs(t *testing.T) {
-	t.Parallel()
-
-	// This auto-completes container name in `kubectl runtime-enforcer policy allow test-policy [TAB]`
-	testAutoCompleteContainerName := func(mode policyExecAction) func(*testing.T) {
-		return func(t *testing.T) {
-			t.Parallel()
-
-			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
-			defer tf.Cleanup()
-
-			// verify policy mode protect
-			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, mode)
-			completes, directive := cmd.ValidArgsFunction(cmd, []string{"test-policy"}, "")
-			assert.Equal(t, []string{"app", "db"}, completes)
-			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
-		}
-	}
-
-	t.Run("auto-complete container names for allow action", testAutoCompleteContainerName(policyExecActionAllow))
-	t.Run("auto-complete container names for deny action", testAutoCompleteContainerName(policyExecActionDeny))
-}
-
-func TestCompletePolicyExecPathArgs(t *testing.T) {
-	t.Parallel()
-
-	// This auto-completes executable paths.
-	// kubectl runtime-enforcer policy allow test-policy app [TAB].  The options come from the policy status.
-	// kubectl runtime-enforcer policy deny test-policy app [TAB].  The options come from the existing allow rules.
-	testAutoCompleteExecPath := func(mode policyExecAction) func(*testing.T) {
-		return func(t *testing.T) {
-			t.Parallel()
-
-			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
-			defer tf.Cleanup()
-
-			// verify policy mode protect
-			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, mode)
-			completes, directive := cmd.ValidArgsFunction(cmd, []string{"test-policy", "app"}, "")
-			switch mode {
-			case policyExecActionAllow:
-				assert.Equal(t, []string{"/bin/mv", "/bin/ls"}, completes)
-			case policyExecActionDeny:
-				assert.Equal(t, []string{"/bin/ls", "/bin/cat"}, completes)
-			default:
-				t.Fatalf("unexpected action: %s", mode)
-			}
-			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
-		}
-	}
-
-	t.Run("auto-complete executable paths for allow action", testAutoCompleteExecPath(policyExecActionAllow))
-	t.Run("auto-complete executable paths for deny action", testAutoCompleteExecPath(policyExecActionDeny))
 }

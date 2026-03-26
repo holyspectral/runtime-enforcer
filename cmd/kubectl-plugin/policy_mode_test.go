@@ -105,22 +105,38 @@ func TestRunPolicyModeSet(t *testing.T) {
 func TestCompletePolicyModeArgs(t *testing.T) {
 	t.Parallel()
 
-	// This auto completes kubectl runtime-enforcer policy protect|monitor [TAB]
-	testAutoCompletePolicyName := func(mode string) func(*testing.T) {
-		return func(t *testing.T) {
-			t.Parallel()
-
-			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
-			defer tf.Cleanup()
-
-			// verify policy mode protect
-			cmd := newPolicyModeCmd(commonCmdDeps{f: tf, ioStreams: streams}, mode)
-			completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
-			assert.Equal(t, []string{"test-policy"}, completes)
-			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
-		}
+	policyName := "test-policy"
+	testPolicy := &securityv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
 	}
 
-	t.Run("auto-complete policy names for protect mode", testAutoCompletePolicyName("protect"))
-	t.Run("auto-complete policy names for monitor mode", testAutoCompletePolicyName("monitor"))
+	// This auto-completes policy name in `kubectl runtime-enforcer policy protect|monitor [TAB]`
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{
+			name: "policy names for protect mode",
+			mode: policymode.ProtectString,
+		},
+		{
+			name: "policy names for monitor mode",
+			mode: policymode.MonitorString,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tf, streams := setupTestFactory(t, testPolicy.DeepCopy())
+			defer tf.Cleanup()
+
+			cmd := newPolicyModeCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.mode)
+			completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
+			assert.Equal(t, []string{policyName}, completes)
+			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		})
+	}
 }
