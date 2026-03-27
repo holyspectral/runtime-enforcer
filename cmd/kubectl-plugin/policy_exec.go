@@ -75,7 +75,7 @@ func newPolicyExecCmd(deps commonCmdDeps, action policyExecAction) *cobra.Comman
 				switch action {
 				case policyExecActionAllow:
 					template := fmt.Sprintf(
-						"{{ range $key, $value := index .status.violations }}{{ if eq $value.containerName \"%s\" }}{{ $value.executablePath }} {{end}}{{end}}",
+						"{{ with .status.violations }}{{ range . }}{{ if eq .containerName \"%s\" }}{{ .executablePath }} {{end}}{{end}}{{end}}",
 						args[1],
 					)
 					execs := completion.CompGetFromTemplate(
@@ -89,7 +89,7 @@ func newPolicyExecCmd(deps commonCmdDeps, action policyExecAction) *cobra.Comman
 					return execs, cobra.ShellCompDirectiveNoFileComp
 				case policyExecActionDeny:
 					template := fmt.Sprintf(
-						"{{ $ruleByContainer := index .spec.rulesByContainer \"%s\" }}{{ range $key, $value := $ruleByContainer.executables.allowed }}{{ $value }} {{end}}",
+						"{{ with .spec.rulesByContainer }}{{ with index . \"%s\" }}{{ range $key, $value := .executables.allowed }}{{ $value }} {{end}}{{end}}{{end}}",
 						args[1],
 					)
 					execs := completion.CompGetFromTemplate(
