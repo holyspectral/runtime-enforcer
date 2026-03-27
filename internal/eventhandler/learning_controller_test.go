@@ -8,6 +8,7 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventscraper"
 	"golang.org/x/sync/errgroup"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -351,6 +352,68 @@ var _ = Describe("Learning", func() {
 						Namespace: testProposal.Namespace,
 					},
 				})).To(Succeed())
+			})
+
+			It("should not learn process behavior when a WorkloadPolicy already exists", func() {
+				const testNamespace = "default"
+				const testResourceName = "ubuntu-deployment-4"
+				const testProposalName = "deploy-ubuntu-deployment-4"
+
+				processEvents := []eventscraper.KubeProcessInfo{
+					{
+						Namespace:      testNamespace,
+						Workload:       testResourceName,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/sleep",
+					},
+					{
+						Namespace:      testNamespace,
+						Workload:       testResourceName,
+						WorkloadKind:   "Deployment",
+						ContainerName:  "ubuntu",
+						ExecutablePath: "/usr/bin/ls",
+					},
+				}
+
+				reconciler := eventhandler.NewLearningReconciler(k8sClient, nil)
+
+				workloadPolicy := &securityv1alpha1.WorkloadPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testProposalName,
+						Namespace: testNamespace,
+						Labels: map[string]string{
+							securityv1alpha1.PromotedFromLabelKey: testProposalName,
+						},
+					},
+					Spec: securityv1alpha1.WorkloadPolicySpec{
+						Mode: "monitor",
+					},
+				}
+				Expect(k8sClient.Create(ctx, workloadPolicy)).To(Succeed())
+
+				for _, learningEvent := range processEvents {
+					var result ctrl.Result
+					var err error
+					result, err = reconciler.Reconcile(ctx, learningEvent)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(result).To(Equal(ctrl.Result{}))
+				}
+
+				// The learning reconciler should not recreate the proposal while the policy exists.
+				proposalResult := &securityv1alpha1.WorkloadPolicyProposal{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testProposalName,
+						Namespace: testNamespace,
+					},
+				}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Namespace: testNamespace,
+					Name:      testProposalName,
+				}, proposalResult)
+				Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+				Expect(k8sClient.Delete(ctx, workloadPolicy)).To(Succeed())
 			})
 		})
 

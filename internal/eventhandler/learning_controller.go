@@ -126,6 +126,65 @@ func (r *LearningReconciler) handleAdmissionError(logger logr.Logger, err error)
 // kubebuilder annotations for accessing policy proposals and namespaces.
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicyproposals,verbs=create;get;list;watch;update;patch
+// +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=list;watch
+
+// skipOrLearn decides whether to skip learning.
+//
+// Skip (true, nil) when:
+//   - req.PolicyName is set (pod already has security.rancher.io/policy).
+//   - the proposal does not exist but a WorkloadPolicy with workloadpolicy.security.rancher.io/promoted-from=<proposalName> exists.
+//
+// Learn (false, nil) when:
+//   - the proposal exists (no security.rancher.io/policy label set on the proposal).
+//   - the proposal does not exist but no WorkloadPolicy with workloadpolicy.security.rancher.io/promoted-from=<proposalName> exists.
+func (r *LearningReconciler) skipOrLearn(
+	ctx context.Context,
+	req eventscraper.KubeProcessInfo,
+	proposalName string,
+	policyProposal *securityv1alpha1.WorkloadPolicyProposal,
+) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	if req.PolicyName != "" {
+		logger.V(3).Info( //nolint:mnd // 3 is the verbosity level for detailed debug info
+			"Ignoring learning event because pod is already bound to a WorkloadPolicy",
+			"workload", req.Workload,
+			"workload_kind", req.WorkloadKind,
+			"policy", req.PolicyName,
+		)
+		return true, nil
+	}
+
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      proposalName,
+	}, policyProposal)
+	if err == nil {
+		return false, nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return false, fmt.Errorf("failed to get WorkloadPolicyProposal before learning update: %w", err)
+	}
+
+	alreadyPromoted, err := proposalutils.HasProposalBeenPromoted(
+		ctx, r.Client, req.Namespace, proposalName,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	if alreadyPromoted {
+		logger.V(3).Info( //nolint:mnd // 3 is the verbosity level for detailed debug info
+			"Ignoring learning event because workload already has a promoted WorkloadPolicy",
+			"workload", req.Workload,
+			"workload_kind", req.WorkloadKind,
+			"proposal", proposalName,
+		)
+		return true, nil
+	}
+
+	return false, nil
+}
 
 // Reconcile maintains a retry mechanism with exponential backoff when processing learning events.
 func (r *LearningReconciler) Reconcile(
@@ -217,6 +276,11 @@ func (r *LearningReconciler) reconcile(
 			Name:      proposalName,
 			Namespace: req.Namespace,
 		},
+	}
+
+	skip, err := r.skipOrLearn(ctx, req, proposalName, policyProposal)
+	if err != nil || skip {
+		return ctrl.Result{}, err
 	}
 
 	if _, err = controllerutil.CreateOrUpdate(ctx, r.Client, policyProposal, func() error {

@@ -131,6 +131,13 @@ func getPromotionTest() types.Feature {
 				}), wait.WithTimeout(defaultOperationTimeout))
 				require.NoError(t, err)
 
+				t.Log("waiting for the WorkloadPolicyProposal to be deleted: ", proposal.Name)
+				err = wait.For(
+					conditions.New(r).ResourceDeleted(proposal),
+					wait.WithTimeout(defaultOperationTimeout),
+				)
+				require.NoError(t, err)
+
 				return context.WithValue(ctx, key("policy"), &policy)
 			}).
 		Assess("pod exec will not be blocked since the policy is in monitoring mode",
@@ -144,12 +151,8 @@ func getPromotionTest() types.Feature {
 		Assess("delete policy", func(ctx context.Context, t *testing.T, _ *envconf.Config) context.Context {
 			r := getClient(ctx)
 			policy := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
-			proposal := ctx.Value(key("proposal")).(*v1alpha1.WorkloadPolicyProposal)
 
-			err := r.Delete(ctx, proposal)
-			require.NoError(t, err)
-
-			err = r.Delete(ctx, policy)
+			err := r.Delete(ctx, policy)
 			require.NoError(t, err)
 
 			return ctx

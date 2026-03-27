@@ -11,6 +11,12 @@ const (
 	// they are not deleted while still in use by Pods.
 	WorkloadPolicyFinalizer = "workloadpolicy.security.rancher.io/finalizer"
 
+	// PromotedFromLabelKey is set on a WorkloadPolicy when it is created by
+	// promoting a WorkloadPolicyProposal.
+	// The learning controller uses it to avoid recreating proposals for
+	// workloads that are already protected by an existing policy.
+	PromotedFromLabelKey = "workloadpolicy.security.rancher.io/promoted-from"
+
 	// MaxNodesWithIssues is the maximum number of nodes with issues to report.
 	// we don't want to overwhelm the user with too much information.
 	MaxNodesWithIssues = 20

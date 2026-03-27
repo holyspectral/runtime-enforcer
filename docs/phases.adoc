@@ -27,8 +27,10 @@ Operationally, if you want complete proposals, enable learning first and then *(
 ** No per-workload configuration is required to start generating proposals (proposals are created as exec events are observed).
 * *Leave*
 ** Mark the corresponding proposal as ready by setting the label: `security.rancher.io/policy-ready=true`
-** This triggers creation of a `WorkloadPolicy` (defaulting to `mode: monitor`).
-** The `WorkloadPolicyProposal` is *not* automatically removed; instead, it is no longer updated with newly observed processes.
+** This triggers creation of a `WorkloadPolicy` (defaulting to `mode: monitor`), with the `workloadpolicy.security.rancher.io/promoted-from` label set so the promotion relationship is explicit.
+** The `WorkloadPolicyProposal` object will be deleted after the promotion. Under rare conditions, caches might not be immediately updated, causing the `WorkloadPolicyProposal` to be created again. In those cases, a periodic cleanup will remove the leftover proposals.
+
+NOTE: If you create a `WorkloadPolicy` manually without that promotion relationship (no `security.rancher.io/policy-ready` label created in `WorkloadPolicyProposal`), the proposal is *not* removed by that flow. You must delete the `WorkloadPolicyProposal` manually.
 
 === CRDs created/updated during this phase
 

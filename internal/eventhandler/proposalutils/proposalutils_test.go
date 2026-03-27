@@ -1,11 +1,16 @@
 package proposalutils_test
 
 import (
+	"context"
 	"testing"
 
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/eventhandler/proposalutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestGetWorkloadPolicyProposalName(t *testing.T) {
@@ -62,6 +67,65 @@ func TestGetWorkloadPolicyProposalName(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestHasProposalBeenPromoted(t *testing.T) {
+	const (
+		defaultNamespace = "default"
+		proposalName     = "ubuntu-deployment"
+	)
+
+	tests := []struct {
+		name           string
+		existingPolicy *securityv1alpha1.WorkloadPolicy
+		namespace      string
+		proposalName   string
+		wantPromoted   bool
+	}{
+		{
+			name:         "returns false when no promoted WorkloadPolicy exists",
+			namespace:    defaultNamespace,
+			proposalName: proposalName,
+			wantPromoted: false,
+		},
+		{
+			name:         "returns true when promoted WorkloadPolicy exists",
+			namespace:    defaultNamespace,
+			proposalName: proposalName,
+			existingPolicy: &securityv1alpha1.WorkloadPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: defaultNamespace,
+					Name:      proposalName,
+					Labels: map[string]string{
+						securityv1alpha1.PromotedFromLabelKey: proposalName,
+					},
+				},
+			},
+			wantPromoted: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, securityv1alpha1.AddToScheme(scheme))
+
+			builder := fake.NewClientBuilder().WithScheme(scheme)
+			if tt.existingPolicy != nil {
+				builder = builder.WithObjects(tt.existingPolicy)
+			}
+			cl := builder.Build()
+
+			promoted, err := proposalutils.HasProposalBeenPromoted(
+				context.Background(),
+				cl,
+				tt.namespace,
+				tt.proposalName,
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantPromoted, promoted)
 		})
 	}
 }

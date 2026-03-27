@@ -1,10 +1,13 @@
 package proposalutils
 
 import (
+	"context"
 	"fmt"
 
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func getKindShortName(kind string) (string, error) {
@@ -48,4 +51,26 @@ func GetWorkloadPolicyProposalName(kind string, resourceName string) (string, er
 	}
 
 	return shortname + "-" + resourceName, nil
+}
+
+func HasProposalBeenPromoted(
+	ctx context.Context,
+	c client.Client,
+	namespace, proposalName string,
+) (bool, error) {
+	var workloadPolicies securityv1alpha1.WorkloadPolicyList
+	if err := c.List(ctx, &workloadPolicies,
+		client.InNamespace(namespace),
+		client.MatchingLabels{
+			securityv1alpha1.PromotedFromLabelKey: proposalName,
+		},
+	); err != nil {
+		return false, fmt.Errorf("failed to list WorkloadPolicies with promoted-from label: %w", err)
+	}
+
+	if len(workloadPolicies.Items) > 0 {
+		return true, nil
+	}
+
+	return false, nil
 }
