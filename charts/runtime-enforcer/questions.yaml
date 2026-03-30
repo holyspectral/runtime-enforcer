@@ -46,7 +46,7 @@ questions:
 
   # learning.namespaceSelector is a complex object (Kubernetes LabelSelector) that
   # cannot be represented as a simple Rancher UI field. Configure it directly in
-  # values.yaml. Set it to null to disable learning entirely.
+  # values.yaml. Set it to {} to disable learning for all namespaces.
 
   ###############################################################################
   # Telemetry

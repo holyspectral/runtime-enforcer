@@ -163,8 +163,7 @@ debugger:
 learning:
   # The default value enables learning inside all namespaces of the cluster.
   # Override namespaceSelector to limit the learning scope.
-  # Set namespaceSelector to {} to disable learning entirely.
-  # namespaceSelector: {}   # learn disabled for all namespaces
+  # Set namespaceSelector to {} to disable learning for all namespaces.
   # @schema additionalProperties:true
   namespaceSelector:
     matchExpressions:
