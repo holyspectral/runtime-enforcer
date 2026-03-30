@@ -23,7 +23,6 @@ Runtime enforcer supports Tilt to run development environment in your local.
 5. Create `tilt-settings.yaml` based on `tilt-settings.yaml.example`.
 6. Run `tilt up`.  Related resources should be built and deployed.
 
-
 You can use this command to list the policy proposals:
 
 ```sh
@@ -35,8 +34,9 @@ kubectl get workloadpolicyproposals.security.rancher.io -A
 ### golangci-lint
 
 You may want to install a pre-commit hook for golangci-lint, so you can fix linter issues at your local.
+
 1. Install golangci-lint, e.g., `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.0`
-2. Install pre-commit hooks. You can also use tools like [husky](https://typicode.github.io/husky/) or [pre-commit](https://pre-commit.com/). 
+2. Install pre-commit hooks. You can also use tools like [husky](https://typicode.github.io/husky/) or [pre-commit](https://pre-commit.com/).
 
 ```sh
 cat << EOF > .git/hooks/pre-commit
@@ -58,3 +58,16 @@ pre-commit uninstall --hook-type pre-commit
 
 - [Kind](https://kind.sigs.k8s.io/) v1.32.2
 - Ubuntu 22.04.5 LTS with 6.8.0-52-generic kernel.
+
+## Run bpfvalidator on our ebpf instrumentation
+
+As a first thing, install bpfvalidator on you machine downloading it from <https://github.com/Andreagit97/bpfvalidator/releases>, or build it from source.
+
+From the root of the repo
+
+```sh
+# generate a binary with bpf tests called `tester`
+go test -c ./internal/bpf/... -o tester
+# install bpfvalidator on you machine https://github.com/Andreagit97/bpfvalidator/releases
+bpfvalidator --config ./bpfvalidator-amd64-config.yaml --cmd="./tester -test.v"
+```
