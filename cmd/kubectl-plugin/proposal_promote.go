@@ -20,29 +20,35 @@ type proposalPromoteOptions struct {
 	ProposalName string
 }
 
+func newProposalPromoteCmdValidArgsFunction(
+	deps commonCmdDeps,
+) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		switch len(args) {
+		case 0:
+			return completion.CompGetResource(
+				deps.f,
+				"workloadpolicyproposals",
+				toComplete,
+			), cobra.ShellCompDirectiveNoFileComp
+		default:
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+	}
+}
+
 func newProposalPromoteCmd(deps commonCmdDeps) *cobra.Command {
 	opts := &proposalPromoteOptions{
 		commonOptions: newCommonOptions(deps),
 	}
 
 	cmd := &cobra.Command{
-		Use:   "promote PROPOSAL_NAME",
-		Short: "Promote WorkloadPolicyProposal to WorkloadPolicy",
-		Long:  "Promote WorkloadPolicyProposal to WorkloadPolicy. This will trigger the creation of a WorkloadPolicy.",
-		Args:  cobra.ExactArgs(1),
-		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
-			switch len(args) {
-			case 0:
-				return completion.CompGetResource(
-					deps.f,
-					"workloadpolicyproposals",
-					toComplete,
-				), cobra.ShellCompDirectiveNoFileComp
-			default:
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-		},
-		RunE: runProposalPromoteCmd(opts),
+		Use:               "promote PROPOSAL_NAME",
+		Short:             "Promote WorkloadPolicyProposal to WorkloadPolicy",
+		Long:              "Promote WorkloadPolicyProposal to WorkloadPolicy. This will trigger the creation of a WorkloadPolicy.",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: newProposalPromoteCmdValidArgsFunction(deps),
+		RunE:              runProposalPromoteCmd(opts),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)

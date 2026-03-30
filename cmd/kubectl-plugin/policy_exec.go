@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"slices"
+	"strconv"
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	securityclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/typed/api/v1alpha1"
@@ -33,6 +35,84 @@ type policyExecOptions struct {
 	Action        policyExecAction
 }
 
+func newPolicyExecValidArgsFunction(
+	deps commonCmdDeps,
+	action policyExecAction,
+) func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	const (
+		positionPolicyName      = 0
+		positionContainerName   = 1
+		positionFirstExecutable = 2
+	)
+
+	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		switch {
+		case len(args) == positionPolicyName:
+			return completion.CompGetResource(
+				deps.f,
+				"workloadpolicies",
+				toComplete,
+			), cobra.ShellCompDirectiveNoFileComp
+		case len(args) == positionContainerName:
+			templateStr := "{{ range $key, $value := .spec.rulesByContainer }}{{ $key }} {{end}}"
+			if _, err := template.New("").Parse(templateStr); err != nil {
+				// nothing we can do because the output here will become part of auto-completion.
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			return completion.CompGetFromTemplate(
+				&templateStr,
+				deps.f,
+				"",
+				[]string{"workloadpolicies", args[0]},
+				toComplete,
+			), cobra.ShellCompDirectiveNoFileComp
+		case len(args) >= positionFirstExecutable:
+			switch action {
+			case policyExecActionAllow:
+				templateStr := fmt.Sprintf(
+					"{{ with .status.violations }}{{ range . }}{{ if eq .containerName %s }}{{ .executablePath }} {{end}}{{end}}{{end}}",
+					strconv.Quote(args[1]),
+				)
+				if _, err := template.New("").Parse(templateStr); err != nil {
+					// nothing we can do because the output here will become part of auto-completion.
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+				execs := completion.CompGetFromTemplate(
+					&templateStr,
+					deps.f,
+					"",
+					[]string{"workloadpolicies", args[0]},
+					toComplete,
+				)
+				execs = cmdutil.Difference(execs, args[2:])
+				return execs, cobra.ShellCompDirectiveNoFileComp
+			case policyExecActionDeny:
+				templateStr := fmt.Sprintf(
+					"{{ with .spec.rulesByContainer }}{{ with index . %s }}{{ range $key, $value := .executables.allowed }}{{ $value }} {{end}}{{end}}{{end}}",
+					strconv.Quote(args[1]),
+				)
+				if _, err := template.New("").Parse(templateStr); err != nil {
+					// nothing we can do because the output here will become part of auto-completion.
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+				execs := completion.CompGetFromTemplate(
+					&templateStr,
+					deps.f,
+					"",
+					[]string{"workloadpolicies", args[0]},
+					toComplete,
+				)
+				execs = cmdutil.Difference(execs, args[2:])
+				return execs, cobra.ShellCompDirectiveNoFileComp
+			default:
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		default:
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+	}
+}
+
 func newPolicyExecCmd(deps commonCmdDeps, action policyExecAction) *cobra.Command {
 	use := fmt.Sprintf("%s POLICY_NAME <container-name> <executable-name> [<executable-name>...]", action)
 	short := fmt.Sprintf("%s executables for a WorkloadPolicy container", action)
@@ -43,71 +123,12 @@ func newPolicyExecCmd(deps commonCmdDeps, action policyExecAction) *cobra.Comman
 		Action: action,
 	}
 
-	const (
-		positionPolicyName      = 0
-		positionContainerName   = 1
-		positionFirstExecutable = 2
-	)
-
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: short,
-		Args:  cobra.MinimumNArgs(minPolicyExecArgs),
-		RunE:  runPolicyExecCmd(opts),
-		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
-			switch {
-			case len(args) == positionPolicyName:
-				return completion.CompGetResource(
-					deps.f,
-					"workloadpolicies",
-					toComplete,
-				), cobra.ShellCompDirectiveNoFileComp
-			case len(args) == positionContainerName:
-				template := "{{ range $key, $value := .spec.rulesByContainer }}{{ $key }} {{end}}"
-				return completion.CompGetFromTemplate(
-					&template,
-					deps.f,
-					"",
-					[]string{"workloadpolicies", args[0]},
-					toComplete,
-				), cobra.ShellCompDirectiveNoFileComp
-			case len(args) >= positionFirstExecutable:
-				switch action {
-				case policyExecActionAllow:
-					template := fmt.Sprintf(
-						"{{ with .status.violations }}{{ range . }}{{ if eq .containerName \"%s\" }}{{ .executablePath }} {{end}}{{end}}{{end}}",
-						args[1],
-					)
-					execs := completion.CompGetFromTemplate(
-						&template,
-						deps.f,
-						"",
-						[]string{"workloadpolicies", args[0]},
-						toComplete,
-					)
-					execs = cmdutil.Difference(execs, args[2:])
-					return execs, cobra.ShellCompDirectiveNoFileComp
-				case policyExecActionDeny:
-					template := fmt.Sprintf(
-						"{{ with .spec.rulesByContainer }}{{ with index . \"%s\" }}{{ range $key, $value := .executables.allowed }}{{ $value }} {{end}}{{end}}{{end}}",
-						args[1],
-					)
-					execs := completion.CompGetFromTemplate(
-						&template,
-						deps.f,
-						"",
-						[]string{"workloadpolicies", args[0]},
-						toComplete,
-					)
-					execs = cmdutil.Difference(execs, args[2:])
-					return execs, cobra.ShellCompDirectiveNoFileComp
-				default:
-					return nil, cobra.ShellCompDirectiveNoFileComp
-				}
-			default:
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-		},
+		Use:               use,
+		Short:             short,
+		Args:              cobra.MinimumNArgs(minPolicyExecArgs),
+		RunE:              runPolicyExecCmd(opts),
+		ValidArgsFunction: newPolicyExecValidArgsFunction(deps, action),
 	}
 
 	cmd.SetUsageTemplate(subcommandUsageTemplate)

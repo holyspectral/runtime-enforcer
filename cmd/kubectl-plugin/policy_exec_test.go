@@ -160,75 +160,7 @@ func TestCompletePolicyExecValidArgs(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
-		name              string
-		action            policyExecAction
-		args              []string
-		expectedCompletes []string
-	}{
-		// policy name completion: `kubectl runtime-enforcer policy allow|deny [TAB]`
-		{
-			name:              "policy names for allow action",
-			action:            policyExecActionAllow,
-			args:              []string{},
-			expectedCompletes: []string{"test-policy"},
-		},
-		{
-			name:              "policy names for deny action",
-			action:            policyExecActionDeny,
-			args:              []string{},
-			expectedCompletes: []string{"test-policy"},
-		},
-		// container name completion: `kubectl runtime-enforcer policy allow|deny test-policy [TAB]`
-		{
-			name:              "container names for allow action",
-			action:            policyExecActionAllow,
-			args:              []string{"test-policy"},
-			expectedCompletes: []string{"app", "db"},
-		},
-		{
-			name:              "container names for deny action",
-			action:            policyExecActionDeny,
-			args:              []string{"test-policy"},
-			expectedCompletes: []string{"app", "db"},
-		},
-		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
-		// allow: options come from the policy status (observed violations)
-		// deny:  options come from the existing allow rules
-		{
-			name:              "executable paths for allow action",
-			action:            policyExecActionAllow,
-			args:              []string{"test-policy", "app"},
-			expectedCompletes: []string{"/bin/mv", "/bin/ls"},
-		},
-		{
-			name:              "executable paths for deny action",
-			action:            policyExecActionDeny,
-			args:              []string{"test-policy", "app"},
-			expectedCompletes: []string{"/bin/ls", "/bin/cat"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
-			defer tf.Cleanup()
-
-			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.action)
-			completes, directive := cmd.ValidArgsFunction(cmd, tt.args, "")
-			assert.Equal(t, tt.expectedCompletes, completes)
-			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
-		})
-	}
-}
-
-// TestInvalidPolicies tests that no completions are returned when the policy is missing or has invalid structure (e.g. missing container rules).
-func TestInvalidPolicy(t *testing.T) {
-	t.Parallel()
-
-	testWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+	emptyWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-policy",
 			Namespace: "test",
@@ -240,15 +172,39 @@ func TestInvalidPolicy(t *testing.T) {
 	tests := []struct {
 		name              string
 		action            policyExecAction
+		policy            *apiv1alpha1.WorkloadPolicy
 		args              []string
 		expectedCompletes []string
 	}{
+		// policy name completion: `kubectl runtime-enforcer policy allow|deny [TAB]`
+		{
+			name:              "policy names for allow action",
+			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		{
+			name:              "policy names for deny action",
+			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
 		// container name completion: `kubectl runtime-enforcer policy allow|deny test-policy [TAB]`
 		{
 			name:              "container names for allow action",
 			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
 			args:              []string{"test-policy"},
-			expectedCompletes: nil,
+			expectedCompletes: []string{"app", "db"},
+		},
+		{
+			name:              "container names for deny action",
+			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"app", "db"},
 		},
 		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
 		// allow: options come from the policy status (observed violations)
@@ -256,12 +212,47 @@ func TestInvalidPolicy(t *testing.T) {
 		{
 			name:              "executable paths for allow action",
 			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
 			args:              []string{"test-policy", "app"},
-			expectedCompletes: nil,
+			expectedCompletes: []string{"/bin/mv", "/bin/ls"},
 		},
 		{
 			name:              "executable paths for deny action",
 			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: []string{"/bin/ls", "/bin/cat"},
+		},
+
+		// Forced errors from empty policy
+		{
+			name:              "forced error: container names for allow action from empty policy",
+			action:            policyExecActionAllow,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: nil,
+		},
+		{
+			name:              "forced error: container names for deny action from empty policy",
+			action:            policyExecActionDeny,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: nil,
+		},
+		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
+		// allow: options come from the policy status (observed violations)
+		// deny:  options come from the existing allow rules
+		{
+			name:              "forced error: executable paths for allow action from empty policy",
+			action:            policyExecActionAllow,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: nil,
+		},
+		{
+			name:              "forced error: executable paths for deny action from empty policy",
+			action:            policyExecActionDeny,
+			policy:            emptyWorkloadPolicy,
 			args:              []string{"test-policy", "app"},
 			expectedCompletes: nil,
 		},
@@ -271,7 +262,7 @@ func TestInvalidPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			tf, streams := setupTestFactory(t, testWorkloadPolicy.DeepCopy())
+			tf, streams := setupTestFactory(t, tt.policy.DeepCopy())
 			defer tf.Cleanup()
 
 			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.action)
