@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"testing"
 
-	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	fakeclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/fake"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,19 +26,19 @@ func TestRunProposalPromote(t *testing.T) {
 	tests := []struct {
 		name         string
 		dryRun       bool
-		proposal     *apiv1alpha1.WorkloadPolicyProposal
-		policy       *apiv1alpha1.WorkloadPolicy
+		proposal     *securityv1alpha1.WorkloadPolicyProposal
+		policy       *securityv1alpha1.WorkloadPolicy
 		expectOutput string
 	}{
 		{
 			name: "promotes proposal and waits for policy",
-			proposal: &apiv1alpha1.WorkloadPolicyProposal{
+			proposal: &securityv1alpha1.WorkloadPolicyProposal{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
 				},
 			},
-			policy: &apiv1alpha1.WorkloadPolicy{
+			policy: &securityv1alpha1.WorkloadPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
@@ -51,7 +53,7 @@ func TestRunProposalPromote(t *testing.T) {
 		{
 			name:   "dry-run when not yet promoted",
 			dryRun: true,
-			proposal: &apiv1alpha1.WorkloadPolicyProposal{
+			proposal: &securityv1alpha1.WorkloadPolicyProposal{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
@@ -68,12 +70,12 @@ func TestRunProposalPromote(t *testing.T) {
 		{
 			name:   "dry-run when already promoted",
 			dryRun: true,
-			proposal: &apiv1alpha1.WorkloadPolicyProposal{
+			proposal: &securityv1alpha1.WorkloadPolicyProposal{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,
 					Namespace: ns,
 					Labels: map[string]string{
-						apiv1alpha1.ApprovalLabelKey: "true",
+						securityv1alpha1.ApprovalLabelKey: "true",
 					},
 				},
 			},
@@ -112,15 +114,15 @@ func TestRunProposalPromote(t *testing.T) {
 			// still assert the updated label even in dry-run mode.
 			labels := wpProposal.GetLabels()
 			require.NotNil(t, labels)
-			require.Equal(t, "true", labels[apiv1alpha1.ApprovalLabelKey])
+			require.Equal(t, "true", labels[securityv1alpha1.ApprovalLabelKey])
 			require.Contains(t, out.String(), tt.expectOutput)
 		})
 	}
 }
 
 func newProposalPromoteTestClient(
-	proposal *apiv1alpha1.WorkloadPolicyProposal,
-	policy *apiv1alpha1.WorkloadPolicy,
+	proposal *securityv1alpha1.WorkloadPolicyProposal,
+	policy *securityv1alpha1.WorkloadPolicy,
 ) *fakeclient.Clientset {
 	objects := []runtime.Object{proposal}
 	if policy != nil {
@@ -128,4 +130,22 @@ func newProposalPromoteTestClient(
 	}
 
 	return fakeclient.NewClientset(objects...)
+}
+
+func TestCompleteProposalPromoteArgs(t *testing.T) {
+	t.Parallel()
+	proposalName := "test-proposal"
+	testWorkloadPolicyProposal := &securityv1alpha1.WorkloadPolicyProposal{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: proposalName,
+		},
+	}
+
+	tf, streams := setupTestFactory(t, testWorkloadPolicyProposal.DeepCopy())
+	defer tf.Cleanup()
+
+	cmd := newProposalPromoteCmd(commonCmdDeps{f: tf, ioStreams: streams})
+	completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
+	assert.Equal(t, []string{proposalName}, completes)
+	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 }

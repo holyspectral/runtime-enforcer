@@ -7,6 +7,8 @@ import (
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	fakeclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/fake"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -117,6 +119,156 @@ func TestRunPolicyExec(t *testing.T) {
 			rules := updatedPolicy.Spec.RulesByContainer[containerName]
 			require.NotNil(t, rules)
 			require.ElementsMatch(t, tt.expectedList, rules.Executables.Allowed)
+		})
+	}
+}
+
+func TestCompletePolicyExecValidArgs(t *testing.T) {
+	t.Parallel()
+
+	testWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "test",
+		},
+		Spec: apiv1alpha1.WorkloadPolicySpec{
+			RulesByContainer: map[string]*apiv1alpha1.WorkloadPolicyRules{
+				"app": {
+					Executables: apiv1alpha1.WorkloadPolicyExecutables{
+						Allowed: []string{"/bin/ls", "/bin/cat"},
+					},
+				},
+				"db": {
+					Executables: apiv1alpha1.WorkloadPolicyExecutables{
+						Allowed: []string{"/bin/ps", "/bin/top"},
+					},
+				},
+			},
+		},
+		Status: apiv1alpha1.WorkloadPolicyStatus{
+			ObservedGeneration: 1,
+			Violations: []apiv1alpha1.ViolationRecord{
+				{
+					ContainerName:  "app",
+					ExecutablePath: "/bin/mv",
+				},
+				{
+					ContainerName:  "app",
+					ExecutablePath: "/bin/ls",
+				},
+			},
+		},
+	}
+
+	emptyWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "test",
+		},
+		Spec:   apiv1alpha1.WorkloadPolicySpec{},
+		Status: apiv1alpha1.WorkloadPolicyStatus{},
+	}
+
+	tests := []struct {
+		name              string
+		action            policyExecAction
+		policy            *apiv1alpha1.WorkloadPolicy
+		args              []string
+		expectedCompletes []string
+	}{
+		// policy name completion: `kubectl runtime-enforcer policy allow|deny [TAB]`
+		{
+			name:              "policy names for allow action",
+			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		{
+			name:              "policy names for deny action",
+			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		// container name completion: `kubectl runtime-enforcer policy allow|deny test-policy [TAB]`
+		{
+			name:              "container names for allow action",
+			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"app", "db"},
+		},
+		{
+			name:              "container names for deny action",
+			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"app", "db"},
+		},
+		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
+		// allow: options come from the policy status (observed violations)
+		// deny:  options come from the existing allow rules
+		{
+			name:              "executable paths for allow action",
+			action:            policyExecActionAllow,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: []string{"/bin/mv", "/bin/ls"},
+		},
+		{
+			name:              "executable paths for deny action",
+			action:            policyExecActionDeny,
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: []string{"/bin/ls", "/bin/cat"},
+		},
+
+		// Forced errors from empty policy
+		{
+			name:              "forced error: container names for allow action from empty policy",
+			action:            policyExecActionAllow,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: nil,
+		},
+		{
+			name:              "forced error: container names for deny action from empty policy",
+			action:            policyExecActionDeny,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: nil,
+		},
+		// executable path completion: `kubectl runtime-enforcer policy allow test-policy app [TAB]`
+		// allow: options come from the policy status (observed violations)
+		// deny:  options come from the existing allow rules
+		{
+			name:              "forced error: executable paths for allow action from empty policy",
+			action:            policyExecActionAllow,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: nil,
+		},
+		{
+			name:              "forced error: executable paths for deny action from empty policy",
+			action:            policyExecActionDeny,
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy", "app"},
+			expectedCompletes: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tf, streams := setupTestFactory(t, tt.policy.DeepCopy())
+			defer tf.Cleanup()
+
+			cmd := newPolicyExecCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.action)
+			completes, directive := cmd.ValidArgsFunction(cmd, tt.args, "")
+			assert.Equal(t, tt.expectedCompletes, completes)
+			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 		})
 	}
 }

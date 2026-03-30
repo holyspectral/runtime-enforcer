@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	fakeclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/fake"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -21,13 +23,13 @@ func TestRunPolicyModeSet(t *testing.T) {
 		policyName = "test-policy"
 	)
 
-	createTestPolicyWithMode := func(mode string) *apiv1alpha1.WorkloadPolicy {
-		return &apiv1alpha1.WorkloadPolicy{
+	createTestPolicyWithMode := func(mode string) *securityv1alpha1.WorkloadPolicy {
+		return &securityv1alpha1.WorkloadPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      policyName,
 				Namespace: namespace,
 			},
-			Spec: apiv1alpha1.WorkloadPolicySpec{
+			Spec: securityv1alpha1.WorkloadPolicySpec{
 				Mode: mode,
 			},
 		}
@@ -35,7 +37,7 @@ func TestRunPolicyModeSet(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		policy         *apiv1alpha1.WorkloadPolicy
+		policy         *securityv1alpha1.WorkloadPolicy
 		expectedMode   string
 		expectedOutput string
 		expectedError  string
@@ -58,7 +60,7 @@ func TestRunPolicyModeSet(t *testing.T) {
 		},
 		{
 			name:          "missing policy",
-			policy:        &apiv1alpha1.WorkloadPolicy{},
+			policy:        &securityv1alpha1.WorkloadPolicy{},
 			expectedMode:  policymode.MonitorString,
 			expectedError: "not found",
 		},
@@ -96,6 +98,45 @@ func TestRunPolicyModeSet(t *testing.T) {
 				Get(ctx, policyName, metav1.GetOptions{})
 			require.NoError(t, getErr)
 			require.Equal(t, tt.expectedMode, updatedPolicy.Spec.Mode)
+		})
+	}
+}
+
+func TestCompletePolicyModeArgs(t *testing.T) {
+	t.Parallel()
+
+	policyName := "test-policy"
+	testPolicy := &securityv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: policyName,
+		},
+	}
+
+	// This auto-completes policy name in `kubectl runtime-enforcer policy protect|monitor [TAB]`
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{
+			name: "policy names for protect mode",
+			mode: policymode.ProtectString,
+		},
+		{
+			name: "policy names for monitor mode",
+			mode: policymode.MonitorString,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tf, streams := setupTestFactory(t, testPolicy.DeepCopy())
+			defer tf.Cleanup()
+
+			cmd := newPolicyModeCmd(commonCmdDeps{f: tf, ioStreams: streams}, tt.mode)
+			completes, directive := cmd.ValidArgsFunction(cmd, []string{}, "")
+			assert.Equal(t, []string{policyName}, completes)
+			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 		})
 	}
 }
