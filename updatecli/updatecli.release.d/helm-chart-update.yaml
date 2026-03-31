@@ -12,6 +12,8 @@ sources:
   releaseVersion:
     name: "Get latest runtime-enforcer version"
     kind: githubrelease
+    typefilter:
+      prerelease: true
     spec:
       owner: '{{ requiredEnv .github.owner }}'
       repository: runtime-enforcer
