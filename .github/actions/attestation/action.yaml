@@ -118,7 +118,7 @@ runs:
             --certificate-identity="${{ github.server_url }}/${{ github.workflow_ref }}" \
             ${{ inputs.artifact_prefix }}${{ inputs.image }}-attestation-${{ inputs.arch }}-sbom.json
       - name: Upload SBOMs as artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: attestation-${{ inputs.artifact_prefix }}${{ inputs.image }}-${{ inputs.arch }}
           path: ${{ inputs.artifact_prefix }}${{ inputs.image }}-attestation-${{ inputs.arch }}*
