@@ -330,7 +330,15 @@ func parseLearningNamespaceSelector(s string) (labels.Selector, error) {
 	if err := json.Unmarshal([]byte(s), &ls); err != nil {
 		return nil, fmt.Errorf("invalid JSON label selector %q: %w", s, err)
 	}
-	return metav1.LabelSelectorAsSelector(&ls)
+	selector, err := metav1.LabelSelectorAsSelector(&ls)
+	if err != nil {
+		return nil, err
+	}
+
+	if selector.Empty() {
+		return nil, fmt.Errorf("invalid JSON label selector %q: must not be empty if learning is enabled", s)
+	}
+	return selector, nil
 }
 
 func parseFlags() Config {
