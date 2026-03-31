@@ -15,6 +15,28 @@ entries:
       catalog.cattle.io/ui-component: runtime-enforcer
     apiVersion: v2
     appVersion: v0.5.0
+    created: "2026-03-31T18:03:02.236860454Z"
+    description: SUSE Security Runtime Enforcer helm chart
+    digest: 5a7de8235978a6d0a1441ec486c1649b47150b0800629440bab852f9cdc0c2a2
+    name: runtime-enforcer
+    type: application
+    urls:
+    - https://github.com/holyspectral/runtime-enforcer/releases/download/runtime-enforcer-chart-0.2.0-rc2/runtime-enforcer-0.2.0-rc2.tgz
+    version: 0.2.0-rc2
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/display-name: RuntimeEnforcer
+      catalog.cattle.io/namespace: cattle-runtime-enforcer-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/provides-gvr: security.rancher.io/v1
+      catalog.cattle.io/rancher-version: '>= 2.6.0-0 <= 2.12.100-0'
+      catalog.cattle.io/release-name: rancher-runtime-enforcer
+      catalog.cattle.io/requests-cpu: 500m
+      catalog.cattle.io/requests-memory: 128Mi
+      catalog.cattle.io/type: cluster-tool
+      catalog.cattle.io/ui-component: runtime-enforcer
+    apiVersion: v2
+    appVersion: v0.5.0
     created: "2026-03-31T17:57:36.76270157Z"
     description: SUSE Security Runtime Enforcer helm chart
     digest: 6c25d80dfc2e12975907d9922b8ee96075378b60e0b9f64c9e93af74b49719fd
@@ -89,4 +111,4 @@ entries:
     urls:
     - https://github.com/holyspectral/runtime-enforcer/releases/download/runtime-enforcer-chart-0.1.2/runtime-enforcer-0.1.2.tgz
     version: 0.1.2
-generated: "2026-03-31T17:57:36.762715606Z"
+generated: "2026-03-31T18:03:02.236884834Z"
