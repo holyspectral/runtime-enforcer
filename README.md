@@ -10,7 +10,24 @@ See [docs/compatibility.adoc](docs/compatibility.adoc) for complete details.
 
 ## Documentation
 
+### Getting Started
+
+- [Quick Start](docs/installation/quickstart.adoc)
+- [Uninstall](docs/installation/uninstall.adoc)
+- [Compatibility Matrix](docs/compatibility.adoc)
+
+### Usage
+
+- [Phases: Learn, Monitor, Protect](docs/phases.adoc)
+- [Learning Mode Configuration](docs/learning_mode_configuration.adoc)
+- [Troubleshooting](docs/troubleshooting.adoc)
+
+### Reference
+
+- [API Reference (CRDs)](docs/crd.adoc)
+- [CRD Documentation](docs/crds/README.md)
+
 ### Development
 
-- [Setup a development environment](docs/setup-development-env.md)
-- [Compatibility Matrix](docs/compatibility.adoc)
+- [Setup a Development Environment](docs/setup-development-env.md)
+- [Build Requirements](docs/build.adoc)
