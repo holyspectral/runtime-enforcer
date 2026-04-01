@@ -2,6 +2,18 @@
 
 This document provides guidance for diagnosing issues with runtime-enforcer.
 
+== Enable verbose logs
+
+To enable more verbose logs in each container via Helm values:
+[source,bash]
+----
+helm upgrade --install runtime-enforcer runtime-enforcer/runtime-enforcer \
+  --namespace runtime-enforcer \
+  --set agent.logLevel=debug \
+  --set controller.logLevel=debug \
+  --reuse-values
+----
+
 == Debugger
 
 The debugger is an optional Kubernetes Deployment that helps diagnose issues between the runtime-enforcer agents and the actual state of the Kubernetes cluster.
