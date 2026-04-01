@@ -55,8 +55,10 @@ conditions:
       command: 'echo {{ source releaseVersion | quote }} | grep -E "v[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*[0-9A-Za-z-]+" && exit 1'
 
 actions:
-  default:
+  create-release-pr:
     title: 'chore: helm chart {{ source "chartVersion" }} release'
+    dependson:
+      - condition#release:and
     kind: github/pullrequest
     scmid: default
     spec:
@@ -64,6 +66,22 @@ actions:
       mergemethod: squash
       description: |
         Automatic Helm chart {{ source "chartVersion" }} update.
+        This PR has been created by the automation used to automatically update the Helm charts when RuntimeEnforcer is released or helm chart content is updated.
+        REMEMBER IF YOU WANT TO MERGE IN A SINGLE COMMIT CHANGES AND VERSION BUMP, YOU MUST SQUASH THE COMMIT BEFORE MERGING THIS PR!
+      draft: false
+      labels:
+        - "chore"
+  create-prerelease-pr:
+    title: 'chore: helm chart {{ source "chartVersion" }}-{{ source "releaseVersion" }} release'
+    dependson:
+      - condition#prerelease:and
+    kind: github/pullrequest
+    scmid: default
+    spec:
+      automerge: false
+      mergemethod: squash
+      description: |
+        Automatic Helm chart {{ source "chartVersion" }}-{{ source "releaseVersion" }} update.
         This PR has been created by the automation used to automatically update the Helm charts when RuntimeEnforcer is released or helm chart content is updated.
         REMEMBER IF YOU WANT TO MERGE IN A SINGLE COMMIT CHANGES AND VERSION BUMP, YOU MUST SQUASH THE COMMIT BEFORE MERGING THIS PR!
       draft: false
