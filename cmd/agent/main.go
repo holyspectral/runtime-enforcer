@@ -304,21 +304,6 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 	return nil
 }
 
-func parseLogLevel(level string) slog.Level {
-	switch strings.ToLower(level) {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		panic(fmt.Sprintf("invalid log level: %s", level))
-	}
-}
-
 // parseLearningNamespaceSelector parses the learning namespace selector from a JSON object (e.g. {"matchLabels":{"env":"prod"}}).
 func parseLearningNamespaceSelector(s string) (labels.Selector, error) {
 	s = strings.TrimSpace(s)
@@ -402,7 +387,13 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(config.logLevel)})
+	logLevel := slog.LevelInfo
+	if err = logLevel.UnmarshalText([]byte(config.logLevel)); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse log level: %v\n", err)
+		os.Exit(1)
+	}
+
+	slogHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
 	slogger := slog.New(slogHandler).With("component", "agent")
 	slog.SetDefault(slogger)
 	ctrl.SetLogger(logr.FromSlogHandler(slogger.Handler()))

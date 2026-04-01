@@ -44,9 +44,11 @@ type Config struct {
 	enableHTTP2                                      bool
 	tlsOpts                                          []func(*tls.Config)
 	wpStatusSyncConfig                               controller.WorkloadPolicyStatusSyncConfig
+	logLevel                                         string
 }
 
-func parseArgs(logger *slog.Logger, config *Config) {
+func parseFlags() Config {
+	var config Config
 	flag.StringVar(&config.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&config.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -86,22 +88,15 @@ func parseArgs(logger *slog.Logger, config *Config) {
 		"wp-status-reconciler-agent-grpc-mtls-cert-dir",
 		grpcexporter.DefaultCertDirPath,
 		"Path to the directory containing the client and ca TLS certificate.")
+	flag.StringVar(
+		&config.logLevel,
+		"log-level",
+		"info",
+		"controller logger level (debug, info, warn, error)",
+	)
 	flag.Parse()
 
-	// if the enable-http2 flag is false (the default), http/2 should be disabled
-	// due to its vulnerabilities. More specifically, disabling http/2 will
-	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
-	// Rapid Reset CVEs. For more information see:
-	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
-	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
-		logger.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	if !config.enableHTTP2 {
-		config.tlsOpts = append(config.tlsOpts, disableHTTP2)
-	}
+	return config
 }
 
 func SetupControllers(logger logr.Logger,
@@ -189,10 +184,23 @@ func parseWebhookOptions(logger *slog.Logger, config *Config) (*certwatcher.Cert
 	return webhookCertWatcher, webhookTLSOpts
 }
 
+//nolint:funlen // the main function is too long.  will refactor in the next commit.
 func main() {
+	var err error
+	config := parseFlags()
+
+	ctx := ctrl.SetupSignalHandler()
+
+	logLevel := slog.LevelInfo
+	if err = logLevel.UnmarshalText([]byte(config.logLevel)); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to parse log level: %v\n", err)
+		os.Exit(1)
+	}
+
 	slogHandler := httpserverlogger.NewServerErrorLogHandler(
-		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}),
 	)
+
 	slogger := slog.New(slogHandler).With("component", "controller")
 	slog.SetDefault(slogger)
 	ctrlLogger := logr.FromSlogHandler(slogger.Handler())
@@ -200,9 +208,20 @@ func main() {
 	klog.SetLogger(ctrlLogger)
 	setupLog := ctrlLogger.WithName("setup")
 
-	var config Config
-	parseArgs(slogger, &config)
+	// if the enable-http2 flag is false (the default), http/2 should be disabled
+	// due to its vulnerabilities. More specifically, disabling http/2 will
+	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
+	// Rapid Reset CVEs. For more information see:
+	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
+	// - https://github.com/advisories/GHSA-4374-p667-p6c8
+	disableHTTP2 := func(c *tls.Config) {
+		slogger.Info("disabling http/2")
+		c.NextProtos = []string{"http/1.1"}
+	}
 
+	if !config.enableHTTP2 {
+		config.tlsOpts = append(config.tlsOpts, disableHTTP2)
+	}
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(securityv1alpha1.AddToScheme(scheme))
@@ -250,7 +269,6 @@ func main() {
 			"metrics-cert-key",
 			config.metricsCertKey)
 
-		var err error
 		metricsCertWatcher, err = certwatcher.New(
 			filepath.Join(config.metricsCertPath, config.metricsCertName),
 			filepath.Join(config.metricsCertPath, config.metricsCertKey),
@@ -303,7 +321,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err = mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err = mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
