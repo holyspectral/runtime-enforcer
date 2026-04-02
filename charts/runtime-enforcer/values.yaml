@@ -149,7 +149,7 @@ debugger:
       - ALL
   image:
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/debugger
-    tag: v0.13.0-rc1
+    tag: v0.13.0-rc2
     pullPolicy: IfNotPresent
   resources:
     limits:
