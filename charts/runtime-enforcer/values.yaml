@@ -87,7 +87,7 @@ agent:
         - ALL
   image:
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/agent
-    tag: v0.13.0-rc2
+    tag: v0.13.0
     pullPolicy: IfNotPresent
   grpcExporterPort: "50051"
   # agent logger level. Can be one of: debug, info, warn, error.
