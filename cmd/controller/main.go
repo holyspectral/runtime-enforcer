@@ -191,13 +191,13 @@ func setupHTTP2(logger *slog.Logger, config *Config) {
 	// Rapid Reset CVEs. For more information see:
 	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
 	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
+	disableHTTP2Option := func(c *tls.Config) {
 		logger.Info("disabling http/2")
 		c.NextProtos = []string{"http/1.1"}
 	}
 
 	if !config.enableHTTP2 {
-		config.tlsOpts = append(config.tlsOpts, disableHTTP2)
+		config.tlsOpts = append(config.tlsOpts, disableHTTP2Option)
 	}
 }
 
