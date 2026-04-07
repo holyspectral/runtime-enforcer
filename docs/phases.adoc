@@ -27,6 +27,7 @@ Operationally, if you want complete proposals, enable learning first and then *(
 ** No per-workload configuration is required to start generating proposals (proposals are created as exec events are observed).
 * *Leave*
 ** Mark the corresponding proposal as ready by setting the label: `security.rancher.io/policy-ready=true`
+** Alternatively, use the kubectl plugin: `kubectl runtime-enforcer proposal promote <PROPOSAL_NAME>`.
 ** This triggers creation of a `WorkloadPolicy` (defaulting to `mode: monitor`), with the `workloadpolicy.security.rancher.io/promoted-from` label set so the promotion relationship is explicit.
 ** The `WorkloadPolicyProposal` object will be deleted after the promotion. Under rare conditions, caches might not be immediately updated, causing the `WorkloadPolicyProposal` to be created again. In those cases, a periodic cleanup will remove the leftover proposals.
 
@@ -65,7 +66,7 @@ WARNING: The `security.rancher.io/policy` label must be set at Pod creation time
 WARNING: By default in the runtime-enforcer Helm chart, pods with a non-existing policy will be prevented from running. This ensures that when a pod starts, it has all protection ready. To enable fail-open behavior, set `agent.nriFailopen=true`.
 
 * *Leave*
-** *Monitor → Protect*: update the `WorkloadPolicy` and set `.spec.mode: protect`.
+** *Monitor → Protect*: update the `WorkloadPolicy` and set `.spec.mode: protect` (or `kubectl runtime-enforcer policy protect <POLICY_NAME>`).
 ** *Monitor → Learn*: remove the binding label from workloads/pods, delete the `WorkloadPolicy`, then delete the existing `WorkloadPolicyProposal`, or set `security.rancher.io/policy-ready=false` on the proposal to resume learning.
 
 === CRDs created/updated during this phase
@@ -95,7 +96,7 @@ Containers added to an already protected pod without a matching per-container ru
 WARNING: The `security.rancher.io/policy` label must be set at Pod creation time only. Changing this label on a running Pod (adding, removing, or modifying its value) is prohibited.
 ** Update the `WorkloadPolicy` to set `.spec.mode: protect`.
 * *Leave*
-** *Protect → Monitor*: update the `WorkloadPolicy` and set `.spec.mode: monitor`.
+** *Protect → Monitor*: update the `WorkloadPolicy` and set `.spec.mode: monitor` (or `kubectl runtime-enforcer policy monitor <POLICY_NAME>`).
 ** *Protect → Learn*: remove the binding label from workloads/pods, delete the `WorkloadPolicy`, then delete the existing `WorkloadPolicyProposal`, or set `security.rancher.io/policy-ready=false` on the proposal to resume learning.
 
 === CRDs created/updated during this phase

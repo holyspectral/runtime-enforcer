@@ -20,6 +20,7 @@ See [docs/compatibility.adoc](docs/compatibility.adoc) for complete details.
 
 - [Phases: Learn, Monitor, Protect](docs/phases.adoc)
 - [Learning Mode Configuration](docs/learning_mode_configuration.adoc)
+- [kubectl plugin](docs/kubectl_plugin.adoc)
 - [Troubleshooting](docs/troubleshooting.adoc)
 
 ### Reference

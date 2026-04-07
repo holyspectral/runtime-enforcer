@@ -179,6 +179,12 @@ To do that, we label the `WorkloadPolicyProposal` with the `security.rancher.io/
 kubectl label workloadpolicyproposals.security.rancher.io deploy-ubuntu-deployment security.rancher.io/policy-ready=true
 ```
 
+You can also use the kubectl plugin to perform the same step:
+
+```bash
+kubectl runtime-enforcer proposal promote deploy-ubuntu-deployment
+```
+
 After a few seconds, you should see a new Custom Resource called `WorkloadPolicy`.
 
 ```bash
@@ -301,6 +307,12 @@ From now on, every violation of the executable list will be blocked.
 
 ```bash
 kubectl patch workloadpolicy deploy-ubuntu-deployment -n default --type='json' -p='[{"op": "replace", "path": "/spec/mode", "value": "protect"}]'
+```
+
+You can also use the kubectl plugin to perform the same step:
+
+```bash
+kubectl runtime-enforcer policy protect deploy-ubuntu-deployment -n default
 ```
 
 Now we can try again an allowed binary, nothing should be reported.

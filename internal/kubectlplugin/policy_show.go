@@ -1,4 +1,4 @@
-package main
+package kubectlplugin
 
 import (
 	"github.com/spf13/cobra"
