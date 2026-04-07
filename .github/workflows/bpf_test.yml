@@ -45,5 +45,5 @@ jobs:
         uses: ./.github/actions/bpfvalidator
         with:
           args: |
-            --config=$GITHUB_WORKSPACE/bpfvalidator-${{ matrix.arch }}-config.yaml --cmd="$GITHUB_WORKSPACE/tester -test.v"
+            --config=${{ github.workspace }}/bpfvalidator-${{ matrix.arch }}-config.yaml --cmd=${{ github.workspace }}/tester -test.v
           arch: ${{ matrix.arch }}
