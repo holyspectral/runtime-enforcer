@@ -33,6 +33,7 @@ targets:
       files:
         - package/Dockerfile.controller
         - package/Dockerfile.agent
+        - package/Dockerfile.debugger
       instruction:
         keyword: FROM
         matcher: docker.io/library/golang
