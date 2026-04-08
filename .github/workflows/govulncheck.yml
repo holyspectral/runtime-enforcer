@@ -24,7 +24,20 @@ jobs:
         with:
           go-version-file: "go.mod"
           check-latest: true # Always check for the latest patch release
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            pip \
+            build-essential \
+            libelf-dev \
+            clang \
+            llvm \
+            libbpf-dev
+          pip install pre-commit
+      - name: Generate eBPF code
+        run: make generate-ebpf
       - name: govulncheck
-        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
+        uses: golang/govulncheck-action@31f7c5463448f83528bd771c2d978d940080c9fd
         with:
           go-package: ./...
