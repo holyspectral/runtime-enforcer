@@ -1,4 +1,4 @@
-name: Update RuntimeEnforcer chart versions
+name: Update RuntimeEnforcer prerelease chart versions
 
 sources:
   chartVersion:
@@ -43,23 +43,23 @@ scms:
         footers: "Signed-off-by: RuntimeEnforcer bot <runtime-enforcer-bot@users.noreply.github.com>"
 
 conditions:
-  release:
-    name: Check if the latest runtime-enforcer release is a official release
+  prerelease:
+    name: Check if the latest runtime-enforcer release is a pre-release.
     disablesourceinput: true
     kind: shell
     spec:
-      command: '! echo {{ source `releaseVersion` }} | grep -E "v[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*[0-9A-Za-z-]+"'
+      command: 'echo {{ source `releaseVersion` }} | grep -E "v[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*[0-9A-Za-z-]+"'
 
 actions:
   default:
-    title: 'chore: helm chart {{ source "chartVersion" }} release'
+    title: 'chore: helm chart {{ source "chartVersion" }}-prerelease-{{ source "releaseVersion" }} release'
     kind: github/pullrequest
     scmid: default
     spec:
       automerge: false
       mergemethod: squash
       description: |
-        Automatic Helm chart {{ source "chartVersion" }} update.
+        Automatic Helm chart {{ source "chartVersion" }}-prerelease-{{ source "releaseVersion" }} update.
         This PR has been created by the automation used to automatically update the Helm charts when RuntimeEnforcer is released or helm chart content is updated.
         REMEMBER IF YOU WANT TO MERGE IN A SINGLE COMMIT CHANGES AND VERSION BUMP, YOU MUST SQUASH THE COMMIT BEFORE MERGING THIS PR!
       draft: false
@@ -71,10 +71,11 @@ targets:
     scmid: default
     name: update Helm chart version
     kind: yaml
-    sourceid: chartVersion
+    disablesourceinput: true
     spec:
       file: charts/runtime-enforcer/Chart.yaml
       key: $.version
+      value: '{{ source "chartVersion" }}-prerelease-{{ source "releaseVersion" }}'
   update_appversion:
     scmid: default
     name: update Helm chart appVersion
