@@ -148,7 +148,8 @@ WorkloadPolicy is the Schema for the workloadpolicies API.
 [cols="20a,50a,15a,15a", options="header"]
 |===
 | Field | Description | Default | Validation
-| *`allowed`* __string array__ | allowed defines a list of executables that are allowed to run + |  | 
+| *`allowed`* __string array__ | allowed defines a list of executables that are allowed to run + |  | items:Pattern: ^/.*$ +
+
 |===
 
 

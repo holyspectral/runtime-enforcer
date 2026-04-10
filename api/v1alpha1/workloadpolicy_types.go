@@ -38,6 +38,7 @@ const (
 
 type WorkloadPolicyExecutables struct {
 	// allowed defines a list of executables that are allowed to run
+	// +kubebuilder:validation:items:Pattern=`^/.*$`
 	// +optional
 	Allowed []string `json:"allowed,omitempty"`
 }

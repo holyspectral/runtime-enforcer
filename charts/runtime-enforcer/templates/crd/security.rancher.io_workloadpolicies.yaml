@@ -70,6 +70,7 @@ spec:
                           description: allowed defines a list of executables that
                             are allowed to run
                           items:
+                            pattern: ^/.*$
                             type: string
                           type: array
                       type: object
