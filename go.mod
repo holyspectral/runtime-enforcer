@@ -12,7 +12,7 @@ require (
 	github.com/onsi/gomega v1.39.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.18.0
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.19.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.19.0
 	go.opentelemetry.io/otel/log v0.19.0
 	go.opentelemetry.io/otel/sdk/log v0.19.0
