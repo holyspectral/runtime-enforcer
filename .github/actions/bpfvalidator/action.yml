@@ -42,7 +42,6 @@ runs:
         git clone --single-branch --branch v1.36 --depth 1 --recurse-submodules https://github.com/arighi/virtme-ng.git
         cd virtme-ng/
         BUILD_VIRTME_NG_INIT=1 pip3 install . --break-system-packages
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     # Try to enable KVM if available
     - name: KVM support
@@ -65,6 +64,7 @@ runs:
       id: run-validator
       working-directory: ${{ github.action_path }}
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         wget https://github.com/Andreagit97/bpfvalidator/releases/download/v0.4.0/bpfvalidator_0.4.0_linux_${INPUTS_ARCH}.tar.gz
         tar -xvf bpfvalidator_0.4.0_linux_${INPUTS_ARCH}.tar.gz
         ./bpfvalidator --out_path=/tmp/report.txt ${INPUTS_ARGS}
