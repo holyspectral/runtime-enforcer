@@ -5,6 +5,8 @@ on:
 
 jobs:
   test-e2e:
+    permissions:
+      contents: read
     strategy:
       matrix:
         arch: [amd64, arm64]
