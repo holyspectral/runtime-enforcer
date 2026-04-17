@@ -34,13 +34,17 @@ spec:
           value: {{ include "runtime-enforcer.grpc.certDir" . | quote }}
         {{- with .Values.debugger.resources }}
         resources:
-          {{- toYaml . | nindent 10 }}
+        {{- toYaml . | nindent 10 }}
         {{- end }}
         volumeMounts:
         - name: grpc-certs
           mountPath: {{ include "runtime-enforcer.grpc.certDir" . }}
           readOnly: true
         securityContext: {{- toYaml .Values.debugger.containerSecurityContext | nindent 10 }}
+      {{- with .Values.debugger.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
       - name: grpc-certs
         csi:
