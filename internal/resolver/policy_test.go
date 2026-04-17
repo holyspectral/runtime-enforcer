@@ -6,7 +6,9 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/events"
 )
 
 const (
@@ -95,4 +97,81 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 	require.NotContains(t, r.wpState, key)
 	statuses = r.GetPolicyStatuses()
 	require.NotContains(t, statuses, key)
+}
+
+// TestApplyPolicyToPod_RecordsEvent verifies that when a pod references a
+// WorkloadPolicy that does not exist in the resolver cache, a Kubernetes Warning event is recorded
+// on the Pod and the expected error is still returned.
+func TestApplyPolicyToPod_RecordsEvent(t *testing.T) {
+	fakeRecorder := events.NewFakeRecorder(10)
+	r := NewTestResolverWithOptions(t, WithEventRecorder(fakeRecorder))
+
+	tcs := []struct {
+		name        string
+		input       PodInput
+		expectedErr bool
+		verify      func(t *testing.T)
+	}{
+		{
+			name: "pod references non-existing policy",
+			input: PodInput{
+				Meta: PodMeta{
+					ID:        "uid",
+					Name:      "pod",
+					Namespace: "namespace",
+					Labels:    map[string]string{v1alpha1.PolicyLabelKey: "policy-not-existing"},
+				},
+				Containers: map[ContainerID]ContainerInput{
+					cid1: {
+						ContainerMeta: ContainerMeta{CgroupID: 200, Name: c1, ID: cid1},
+						CgroupPath:    "",
+					},
+				},
+			},
+			expectedErr: true,
+			verify: func(t *testing.T) {
+				// Exactly one Warning event should have been recorded.
+				require.Len(t, fakeRecorder.Events, 1)
+				evt := <-fakeRecorder.Events
+				require.Contains(t, evt, corev1.EventTypeWarning)
+				require.Contains(t, evt, "PolicyNotFound")
+				require.Contains(t, evt, "namespace")
+				require.Contains(t, evt, "pod")
+				require.Contains(t, evt, "policy-not-existing")
+			},
+		},
+		{
+			name: "pod doesn't reference any policy",
+			input: PodInput{
+				Meta: PodMeta{
+					ID:        "uid2",
+					Name:      "pod2",
+					Namespace: "namespace",
+				},
+				Containers: map[ContainerID]ContainerInput{
+					cid2: {
+						ContainerMeta: ContainerMeta{CgroupID: 201, Name: c2, ID: cid2},
+						CgroupPath:    "",
+					},
+				},
+			},
+			expectedErr: false,
+			verify: func(t *testing.T) {
+				require.Empty(t, fakeRecorder.Events)
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			err := r.AddPodContainerFromNri(tc.input)
+			if tc.expectedErr {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "policy does not exist")
+			} else {
+				require.NoError(t, err)
+			}
+			tc.verify(t)
+		})
+	}
 }

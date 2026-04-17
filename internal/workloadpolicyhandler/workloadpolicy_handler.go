@@ -40,6 +40,7 @@ func NewWorkloadPolicyHandler(
 }
 
 // +kubebuilder:rbac:groups=security.rancher.io,resources=workloadpolicies,verbs=get;list;watch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 func (r *WorkloadPolicyHandler) Reconcile(
 	ctx context.Context,

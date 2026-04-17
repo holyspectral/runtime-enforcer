@@ -37,12 +37,18 @@ func (w testWriter) Write(p []byte) (int, error) {
 
 func NewTestResolver(t testing.TB) *Resolver {
 	t.Helper()
+	return NewTestResolverWithOptions(t)
+}
+
+func NewTestResolverWithOptions(t testing.TB, opts ...Option) *Resolver {
+	t.Helper()
 	r, err := NewResolver(
 		slog.New(slog.NewJSONHandler(testWriter{t}, nil)),
 		mockCgTrackerUpdateFunc,
 		mockCgroupToPolicyMapUpdateFunc,
 		mockPolicyUpdateBinariesFunc,
 		mockPolicyModeUpdateFunc,
+		opts...,
 	)
 	require.NoError(t, err)
 	return r
