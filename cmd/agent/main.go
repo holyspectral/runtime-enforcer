@@ -52,6 +52,9 @@ type Config struct {
 	otlpClientCert            string
 	otlpClientKey             string
 	nodeName                  string
+	podName                   string
+	podNamespace              string
+	podUID                    string
 	violationLogger           otellog.Logger
 }
 
@@ -235,6 +238,7 @@ func startAgent(ctx context.Context, logger *slog.Logger, config Config) error {
 		bpfManager.GetPolicyUpdateBinariesFunc(),
 		bpfManager.GetPolicyModeUpdateFunc(),
 		resolver.WithEventRecorder(ctrlMgr.GetEventRecorder("runtime-enforcer-agent")),
+		resolver.WithAgentPod(config.podName, config.podNamespace, config.podUID),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create resolver: %w", err)
@@ -378,6 +382,9 @@ func parseFlags() Config {
 		"Node name for violation reporting (defaults to NODE_NAME env var)")
 	flag.StringVar(&config.otlpProtocol, "otlp-protocol", os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"),
 		"OTLP protocol (defaults to OTEL_EXPORTER_OTLP_PROTOCOL env var)")
+	config.podName = os.Getenv("POD_NAME")
+	config.podNamespace = os.Getenv("POD_NAMESPACE")
+	config.podUID = os.Getenv("POD_UID")
 	flag.Parse()
 	return config
 }

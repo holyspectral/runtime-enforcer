@@ -104,7 +104,10 @@ func TestHandleWP_Lifecycle(t *testing.T) {
 // on the Pod and the expected error is still returned.
 func TestApplyPolicyToPod_RecordsEvent(t *testing.T) {
 	fakeRecorder := events.NewFakeRecorder(10)
-	r := NewTestResolverWithOptions(t, WithEventRecorder(fakeRecorder))
+	r := NewTestResolverWithOptions(t,
+		WithEventRecorder(fakeRecorder),
+		WithAgentPod("agent-pod", "runtime-enforcer", "agent-uid"),
+	)
 
 	tcs := []struct {
 		name        string

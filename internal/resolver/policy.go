@@ -9,6 +9,8 @@ import (
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type (
@@ -141,10 +143,17 @@ func (r *Resolver) applyPolicyToPodIfPresent(state *podEntry) error {
 		//
 		// Here we only care about the latter, assuming an admission policy or webhook will ensure that the policy always exists.
 		// When this happens, we return the error to NRI, so the container would be prevented from starting, depending on related failopen setting.
-		if r.eventRecorder != nil {
+		if r.eventRecorder != nil && r.agentPod != nil {
+			relatedPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      state.podName(),
+					Namespace: state.podNamespace(),
+					UID:       types.UID(state.meta.ID),
+				},
+			}
 			r.eventRecorder.Eventf(
-				nil,
-				nil,
+				r.agentPod,
+				relatedPod,
 				corev1.EventTypeWarning,
 				"PolicyNotFound",
 				"stopping",
