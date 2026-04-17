@@ -169,6 +169,7 @@ func (p *plugin) Synchronize(
 	}
 	// Mark resolver as synchronized, so old agent can be safely removed.
 	p.resolver.NRISynchronized()
+	p.logger.InfoContext(ctx, "Pod sandboxes synchronized")
 	return nil, nil
 }
 
