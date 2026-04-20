@@ -187,6 +187,7 @@ func (r *Resolver) ReconcileWP(wp *v1alpha1.WorkloadPolicy) error {
 	r.logger.Info(
 		"reconcile wp-policy",
 		"wp", wp.NamespacedName(),
+		"mode", wp.Spec.Mode,
 	)
 	r.mu.Lock()
 

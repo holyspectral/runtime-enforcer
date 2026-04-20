@@ -84,35 +84,30 @@ func getOtelCollectorTest() types.Feature {
 		Assess("violations produce Prometheus metrics on the collector",
 			func(ctx context.Context, t *testing.T, config *envconf.Config) context.Context {
 				expectedPodName := ctx.Value(key("targetPodName")).(string)
-				r := getClient(ctx)
-				var err error
 
 				t.Log("executing disallowed command to trigger a violation")
+				disallowedBinary := "/usr/bin/true"
 				requireExecAllowedInCurrentNamespace(
 					ctx,
 					t,
 					expectedPodName,
 					"ubuntu",
-					[]string{"/usr/bin/sh", "-c", "/usr/bin/apt update"},
+					[]string{disallowedBinary},
 				)
 
 				// Wait for the violation to appear in WorkloadPolicy status first.
 				// This confirms the gRPC scrape path works and gives the OTEL
 				// pipeline enough time to process the event.
 				t.Log("waiting for violation to appear in WorkloadPolicy status")
-				policyToCheck := &v1alpha1.WorkloadPolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-policy",
-						Namespace: getNamespace(ctx),
-					},
-				}
-				err = wait.For(conditions.New(r).ResourceMatch(policyToCheck, func(obj k8s.Object) bool {
+				policyToCheck := ctx.Value(key("policy")).(*v1alpha1.WorkloadPolicy)
+				r := getClient(ctx)
+				err := wait.For(conditions.New(r).ResourceMatch(policyToCheck, func(obj k8s.Object) bool {
 					wp, ok := obj.(*v1alpha1.WorkloadPolicy)
 					if !ok || len(wp.Status.Violations) == 0 {
 						return false
 					}
 					for _, v := range wp.Status.Violations {
-						if v.ExecutablePath == "/usr/bin/apt" &&
+						if v.ExecutablePath == disallowedBinary &&
 							v.Action == policymode.MonitorString &&
 							v.PodName == expectedPodName {
 							return true

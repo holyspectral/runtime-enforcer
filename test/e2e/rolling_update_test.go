@@ -50,6 +50,7 @@ func getRollingUpdateTest() types.Feature {
 			createAndWaitUbuntuDeployment(ctx, t, withPolicy("test-policy"),
 				decoder.MutateOption(func(obj k8s.Object) error {
 					deployment := obj.(*appsv1.Deployment)
+					// This will cause a lot of violations so it is possible to see some `violation buffer full` logs.
 					deployment.Spec.Template.Spec.Containers[0].Command = []string{
 						"bash",
 						"-c",
