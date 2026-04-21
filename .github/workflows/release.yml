@@ -234,4 +234,3 @@ jobs:
     permissions:
       contents: write # for updatecli to update the repository
       pull-requests: write # for updatecli to create a PR
-    secrets: inherit
