@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"errors"
 	"slices"
 
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
@@ -62,11 +61,18 @@ func (p *WorkloadPolicyProposal) getExecutablesLength() int {
 	return result
 }
 
-func (p *WorkloadPolicyProposal) AddProcess(containerName string, executable string) error {
-	if p.getExecutablesLength() >= PolicyProposalMaxExecutables {
-		return errors.New("the number of executables has exceeded its maximum")
+func (p *WorkloadPolicyProposal) NamespacedName() string {
+	if p == nil {
+		return ""
 	}
+	return p.Namespace + "/" + p.Name
+}
 
+func (p *WorkloadPolicyProposal) IsFull() bool {
+	return p.getExecutablesLength() >= PolicyProposalMaxExecutables
+}
+
+func (p *WorkloadPolicyProposal) AddProcess(containerName string, executable string) {
 	if p.Spec.RulesByContainer == nil {
 		p.Spec.RulesByContainer = make(map[string]*WorkloadPolicyRules)
 	}
@@ -78,16 +84,14 @@ func (p *WorkloadPolicyProposal) AddProcess(containerName string, executable str
 				Allowed: []string{executable},
 			},
 		}
-		return nil
+		return
 	}
 
 	if slices.Contains(rules.Executables.Allowed, executable) {
-		return nil
+		return
 	}
 
 	rules.Executables.Allowed = append(rules.Executables.Allowed, executable)
-
-	return nil
 }
 
 func (p *WorkloadPolicyProposal) AddPartialOwnerReferenceDetails(workloadKind string, workload string) {

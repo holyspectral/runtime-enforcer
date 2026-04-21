@@ -287,10 +287,14 @@ func (r *LearningReconciler) reconcile(
 			return nil
 		}
 
-		if err = policyProposal.AddProcess(req.ContainerName, req.ExecutablePath); err != nil {
-			// unable to add a process to a policy proposal.  The policy proposal is likely full.
-			return reconcile.TerminalError(fmt.Errorf("failed to add process to policy proposal: %w", err))
+		if policyProposal.IsFull() {
+			logger.Info("proposal is full, cannot add new executables",
+				"proposal", policyProposal.NamespacedName(),
+				"exe", req.ExecutablePath,
+			)
+			return nil
 		}
+		policyProposal.AddProcess(req.ContainerName, req.ExecutablePath)
 
 		// If the owner reference is already there we do nothing.
 		// We should always have the owner reference populated unless we are creating the resource for the first time.
