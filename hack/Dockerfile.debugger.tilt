@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/bci-minimal
+FROM registry.suse.com/bci/bci-base
 WORKDIR /
 COPY ./bin/debugger /debugger
 
