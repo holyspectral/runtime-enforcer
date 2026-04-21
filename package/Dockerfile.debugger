@@ -14,8 +14,8 @@ COPY go.mod go.sum /src/
 COPY Makefile /src/
 RUN make debugger
 
-# We use alpine and not `scratch` since it provides a more complete environment.
-FROM alpine
+# We use bci-minimal and not `scratch` since it provides a more complete environment.
+FROM registry.suse.com/bci/bci-minimal
 WORKDIR /
 COPY --from=builder /src/bin/debugger /debugger
 
