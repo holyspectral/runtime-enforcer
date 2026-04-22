@@ -10,29 +10,10 @@ import (
 	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/internal/cgroups"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/testutil"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	"golang.org/x/sync/errgroup"
 )
-
-//////////////////////
-// Test Logger
-//////////////////////
-
-type testLogWriter struct {
-	t *testing.T
-}
-
-func (w *testLogWriter) Write(p []byte) (int, error) {
-	// use the formatted output to avoid the new line
-	w.t.Logf("%s", string(p))
-	return len(p), nil
-}
-
-func newTestLogger(t *testing.T) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(&testLogWriter{t: t}, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})).With("component", "bpftest")
-}
 
 //////////////////////
 // Channel helpers
@@ -246,5 +227,5 @@ func newCgroupRunnerWithLogger(t *testing.T, logger *slog.Logger) (*cgroupRunner
 }
 
 func newCgroupRunner(t *testing.T) (*cgroupRunner, error) {
-	return newCgroupRunnerWithLogger(t, newTestLogger(t))
+	return newCgroupRunnerWithLogger(t, testutil.NewTestLogger(t))
 }

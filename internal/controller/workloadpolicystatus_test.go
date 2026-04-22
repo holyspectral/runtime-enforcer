@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/testutil"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/require"
@@ -19,16 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-type testLogWriter struct {
-	t *testing.T
-}
-
-func (w *testLogWriter) Write(p []byte) (int, error) {
-	// use the formatted output to avoid the new line
-	w.t.Logf("%s", string(p))
-	return len(p), nil
-}
 
 func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 	scheme := runtime.NewScheme()
@@ -44,9 +34,7 @@ func createTestWPStatusSync(t *testing.T) *WorkloadPolicyStatusSync {
 			LabelSelectorString: "app=agent",
 			// We explicitly provide a namespace so that this is not computed at runtime.
 			Namespace: "test-namespace",
-			Logger: slog.New(slog.NewJSONHandler(&testLogWriter{t: t}, &slog.HandlerOptions{
-				Level: slog.LevelDebug,
-			})).With("component", "agent-pool"),
+			Logger:    testutil.NewTestLogger(t),
 		},
 		UpdateInterval: 1 * time.Second,
 	}
