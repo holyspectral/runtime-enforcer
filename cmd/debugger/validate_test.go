@@ -2,286 +2,277 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
-func TestContainerIDFromContainerStatus(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "containerd prefix is stripped",
-			input:    "containerd://d4813c4da49cbaa50542f86bd077608e5d3da101efef52642346803c4d5a902b",
-			expected: "d4813c4da49cbaa50542f86bd077608e5d3da101efef52642346803c4d5a902b",
-		},
-		{
-			name:     "docker prefix is stripped",
-			input:    "docker://abc123def456",
-			expected: "abc123def456",
-		},
-		{
-			name:     "crio prefix is stripped",
-			input:    "cri-o://somecontainerid",
-			expected: "somecontainerid",
-		},
-		{
-			name:     "no prefix leaves the string unchanged",
-			input:    "plaincontainerid",
-			expected: "plaincontainerid",
-		},
-		{
-			name:     "empty string returns empty string",
-			input:    "",
-			expected: "",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			status := &corev1.ContainerStatus{ContainerID: tc.input}
-			got := containerIDFromContainerStatus(status)
-			require.Equal(t, tc.expected, got)
-		})
-	}
+func agentContainerFixture(id, name string) *agentv1.ContainerMeta {
+	return &agentv1.ContainerMeta{Id: id, Name: name}
 }
 
-func TestAddContainerToPodView(t *testing.T) {
-	podView := &agentv1.PodView{
-		Containers: make(map[string]*agentv1.ContainerMeta),
-	}
-
-	containerID := "aabbcc112233"
-	containerName := "my-container"
-	status := &corev1.ContainerStatus{
-		ContainerID: fmt.Sprintf("containerd://%s", containerID),
-		Name:        containerName,
-	}
-
-	addContainerToPodView(status, podView)
-
-	require.Len(t, podView.GetContainers(), 1)
-	meta, ok := podView.GetContainers()[containerID]
-	require.True(t, ok, "container should be keyed by the stripped ID")
-	assert.Equal(t, containerID, meta.GetId())
-	assert.Equal(t, containerName, meta.GetName())
-	assert.Equal(t, uint64(0), meta.GetCgroupId())
+func clusterContainerFixture(id, name string, terminating bool) *clusterContainerMeta {
+	return &clusterContainerMeta{id: id, name: name, terminating: terminating}
 }
 
-func TestPodToView(t *testing.T) {
-	tests := []struct {
-		name         string
-		pod          *corev1.Pod
-		expectedView *agentv1.PodView
-	}{
-		{
-			name: "simple pod",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "my-pod",
-					Namespace: "my-namespace",
-					UID:       types.UID("uid-1234"),
-				},
-				Status: corev1.PodStatus{
-					ContainerStatuses: []corev1.ContainerStatus{
-						{ContainerID: "containerd://cid1", Name: "main"},
-					},
-				},
-			},
-			expectedView: &agentv1.PodView{
-				Meta: &agentv1.PodMeta{
-					Id:        "uid-1234",
-					Name:      "my-pod",
-					Namespace: "my-namespace",
-				},
-				Containers: map[string]*agentv1.ContainerMeta{
-					"cid1": {
-						Id:   "cid1",
-						Name: "main",
-					},
-				},
-			},
-		},
-		{
-			name: "static pod",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "static-pod",
-					Namespace: "kube-system",
-					UID:       types.UID("api-server-generated-uid"),
-					Annotations: map[string]string{
-						staticPodAnnotation: "mirror-uid",
-					},
-				},
-				Status: corev1.PodStatus{
-					InitContainerStatuses: []corev1.ContainerStatus{
-						{ContainerID: "containerd://init1", Name: "init-container"},
-					},
-					ContainerStatuses: []corev1.ContainerStatus{
-						{ContainerID: "containerd://main1", Name: "main-container"},
-					},
-					EphemeralContainerStatuses: []corev1.ContainerStatus{
-						{ContainerID: "containerd://eph1", Name: "debug-container"},
-					},
-				},
-			},
-			expectedView: &agentv1.PodView{
-				Meta: &agentv1.PodMeta{
-					Id:        "mirror-uid",
-					Name:      "static-pod",
-					Namespace: "kube-system",
-				},
-				Containers: map[string]*agentv1.ContainerMeta{
-					"init1": {
-						Id:   "init1",
-						Name: "init-container",
-					},
-					"main1": {
-						Id:   "main1",
-						Name: "main-container",
-					},
-					"eph1": {
-						Id:   "eph1",
-						Name: "debug-container",
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			view := podToView(tc.pod)
-			require.Equal(t, tc.expectedView, view)
-		})
-	}
-}
-
-func TestZeroOutUnrecoverableDetails(t *testing.T) {
-	cache := map[nodeName][]*agentv1.PodView{
-		"node-1": {
-			{
-				Meta: &agentv1.PodMeta{
-					Id:           "pod-1",
-					Name:         "my-pod",
-					Namespace:    "default",
-					WorkloadName: "my-deployment",
-					WorkloadType: "Deployment",
-					Labels:       map[string]string{"app": "test"},
-				},
-				Containers: map[string]*agentv1.ContainerMeta{
-					"cid1": {Id: "cid1", Name: "c1", CgroupId: 42},
-				},
-			},
-		},
-	}
-
-	zeroOutUnrecoverableDetails(cache)
-	expectedPodView := &agentv1.PodView{
-		Meta: &agentv1.PodMeta{
-			Id:        "pod-1",
-			Name:      "my-pod",
-			Namespace: "default",
-			// clean these fields
-			WorkloadName: "",
-			WorkloadType: "",
-			Labels:       nil,
-		},
-		Containers: map[string]*agentv1.ContainerMeta{
-			// clean the cgroupID
-			"cid1": {Id: "cid1", Name: "c1", CgroupId: 0},
-		},
-	}
-
-	podView := cache["node-1"][0]
-	assert.Equal(t, expectedPodView, podView)
-}
-
-func podViewFixture(id, name, namespace string, containers map[string]string) *agentv1.PodView {
-	c := make(map[string]*agentv1.ContainerMeta, len(containers))
-	for cid, cname := range containers {
-		c[cid] = &agentv1.ContainerMeta{Id: cid, Name: cname}
-	}
-	return &agentv1.PodView{
+func agentPodViewFixture(id, name, namespace string,
+	containers map[containerID]*agentv1.ContainerMeta,
+) *agentPodView {
+	return &agentPodView{PodView: &agentv1.PodView{
 		Meta: &agentv1.PodMeta{
 			Id:        id,
 			Name:      name,
 			Namespace: namespace,
 		},
-		Containers: c,
+		Containers: containers,
+	}}
+}
+
+func clusterPodViewFixture(
+	id, name, namespace string,
+	containers map[containerID]*clusterContainerMeta,
+) *clusterPodView {
+	return &clusterPodView{
+		id:         id,
+		name:       name,
+		namespace:  namespace,
+		containers: containers,
 	}
 }
 
-func TestValidateAgentCache(t *testing.T) {
-	podA := podViewFixture("uid-1", "pod-a", "default", map[string]string{"cid1": "c1"})
-	podB := podViewFixture("uid-2", "pod-b", "default", map[string]string{"cid2": "c2"})
-	nodeName1 := "node-1"
-	nodeName2 := "node-2"
+func TestComparePods(t *testing.T) {
+	t.Parallel()
 
 	tests := []struct {
-		name           string
-		agentCache     map[nodeName][]*agentv1.PodView
-		expectedCache  map[nodeName][]*agentv1.PodView
-		expectedOutput []string
+		name         string
+		clusterPod   *clusterPodView
+		agentPod     *agentPodView
+		expectedDiff []string
 	}{
 		{
-			name: "cache aligned",
-			agentCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podA},
-				nodeName2: {podB},
-			},
-			expectedCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podA},
-				nodeName2: {podB},
-			},
-			expectedOutput: []string{"caches are aligned"},
+			name: "aligned pod",
+			clusterPod: clusterPodViewFixture(
+				"uid-1",
+				"pod-1",
+				"ns-1",
+				map[containerID]*clusterContainerMeta{
+					"cid1": clusterContainerFixture("cid1", "cname1", false),
+				},
+			),
+			agentPod: agentPodViewFixture(
+				"uid-1",
+				"pod-1",
+				"ns-1",
+				map[containerID]*agentv1.ContainerMeta{
+					"cid1": agentContainerFixture("cid1", "cname1"),
+				},
+			),
+			expectedDiff: nil,
 		},
 		{
-			name: "node mismatch",
-			agentCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podA},
+			name: "reports metadata and container mismatches",
+			clusterPod: clusterPodViewFixture(
+				"uid-1",
+				"cluster-pod",
+				"cluster-ns",
+				map[containerID]*clusterContainerMeta{
+					"cid1": clusterContainerFixture("cid1", "cluster-main", false),
+					"cid2": clusterContainerFixture("cid2", "sidecar", false),
+				},
+			),
+			agentPod: agentPodViewFixture(
+				"uid-1",
+				"agent-pod",
+				"agent-ns",
+				map[containerID]*agentv1.ContainerMeta{
+					"cid1": agentContainerFixture("cid1", "agent-main"),
+					"cid3": agentContainerFixture("cid3", "stale"),
+				},
+			),
+			expectedDiff: []string{
+				`cluster-ns/cluster-pod (uid-1): "namespace" mismatch: cluster="cluster-ns", agent="agent-ns"`,
+				`cluster-ns/cluster-pod (uid-1): "name" mismatch: cluster="cluster-pod", agent="agent-pod"`,
+				`cluster-ns/cluster-pod (uid-1): container "cid1": "name" mismatch: cluster="cluster-main", agent="agent-main"`,
+				`cluster-ns/cluster-pod (uid-1): missing container "sidecar" ("cid2") in the agent cache`,
+				`cluster-ns/cluster-pod (uid-1): container "stale" ("cid3") is only in the agent cache`,
 			},
-			expectedCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podA},
-				nodeName2: {podB},
-			},
-			expectedOutput: []string{"Some nodes in the cluster don't have an agent cache", "caches are aligned"},
 		},
 		{
-			name: "pod mismatch",
-			agentCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podA},
-			},
-			expectedCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podB},
-			},
-			expectedOutput: []string{"caches are not aligned"},
-		},
-		{
-			name:       "missing agent cache",
-			agentCache: map[nodeName][]*agentv1.PodView{},
-			expectedCache: map[nodeName][]*agentv1.PodView{
-				nodeName1: {podB},
-			},
-			expectedOutput: []string{"no agent cache available"},
+			name: "ignores terminating init container missing from agent cache",
+			clusterPod: clusterPodViewFixture(
+				"uid-2",
+				"pod-1",
+				"ns-1",
+				map[containerID]*clusterContainerMeta{
+					"cid1": clusterContainerFixture("cid1", "cname1", false),
+					"cid2": clusterContainerFixture("cid2", "init-container", true),
+				},
+			),
+			agentPod: agentPodViewFixture(
+				"uid-2",
+				"pod-1",
+				"ns-1",
+				map[containerID]*agentv1.ContainerMeta{
+					"cid1": agentContainerFixture("cid1", "cname1"),
+				},
+			),
+			expectedDiff: nil,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := comparePods(tc.clusterPod, tc.agentPod)
+			assert.ElementsMatch(t, tc.expectedDiff, got)
+		})
+	}
+}
+
+func TestCompareCaches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		clusterCache []*clusterPodView
+		agentCache   []*agentPodView
+		expectedDiff []string
+	}{
+		{
+			name: "reports missing and unexpected pods",
+			clusterCache: []*clusterPodView{
+				clusterPodViewFixture(
+					"uid-1",
+					"pod-1",
+					"ns-1",
+					map[containerID]*clusterContainerMeta{
+						"cid1": clusterContainerFixture("cid1", "cname1", false),
+					},
+				),
+			},
+			agentCache: []*agentPodView{
+				agentPodViewFixture(
+					"uid-2",
+					"pod-2",
+					"ns-2",
+					map[containerID]*agentv1.ContainerMeta{
+						"cid2": agentContainerFixture("cid2", "cname2"),
+					},
+				),
+			},
+			expectedDiff: []string{
+				"pod ns-1/pod-1 (uid-1) is missing from the agent cache",
+				"unexpected pod ns-2/pod-2 (uid-2) found in the agent cache",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := compareCaches(tc.clusterCache, tc.agentCache)
+			assert.ElementsMatch(t, tc.expectedDiff, got)
+		})
+	}
+}
+
+func TestValidateCaches(t *testing.T) {
+	t.Parallel()
+
+	nodeName1 := "node-1"
+	nodeName2 := "node-2"
+
+	tests := []struct {
+		name           string
+		agentCache     map[nodeName][]*agentPodView
+		clusterCache   map[nodeName][]*clusterPodView
+		expectedOutput []string
+	}{
+		{
+			name: "aligned caches",
+			agentCache: map[nodeName][]*agentPodView{
+				nodeName1: {
+					agentPodViewFixture("uid-1", "pod-1", "ns-1", map[containerID]*agentv1.ContainerMeta{
+						"cid1": agentContainerFixture("cid1", "cname1"),
+					}),
+				},
+			},
+			clusterCache: map[nodeName][]*clusterPodView{
+				nodeName1: {
+					clusterPodViewFixture("uid-1", "pod-1", "ns-1", map[containerID]*clusterContainerMeta{
+						"cid1": clusterContainerFixture("cid1", "cname1", false),
+					}),
+				},
+			},
+			expectedOutput: []string{
+				"=== Nodes in the cluster: 1, agent caches: 1.",
+			},
+		},
+		{
+			name: "found node differences",
+			agentCache: map[nodeName][]*agentPodView{
+				nodeName1: {
+					agentPodViewFixture("uid-1", "pod-1", "ns-1", map[containerID]*agentv1.ContainerMeta{
+						"cid1":             agentContainerFixture("cid1", "cname1"),
+						"cid1-terminated1": agentContainerFixture("cid1-terminated1", "cname1"),
+						// this is a terminated container still in the agent container cache but no more in the cluster
+						"cid1-terminated2": agentContainerFixture("cid1-terminated2", "cname1"),
+					}),
+				},
+			},
+			clusterCache: map[nodeName][]*clusterPodView{
+				nodeName1: {
+					clusterPodViewFixture("uid-1", "pod-1", "ns-1", map[containerID]*clusterContainerMeta{
+						"cid1":             clusterContainerFixture("cid1", "cname1", false),
+						"cid1-terminated1": clusterContainerFixture("cid1-terminated1", "cname1", true),
+					}),
+				},
+			},
+			expectedOutput: []string{
+				nodeMessage(nodeName1, foundNodeDifferences),
+				`ns-1/pod-1 (uid-1): container "cname1" ("cid1-terminated2") is only in the agent cache`,
+				"==== Agent cache dump (1 pods)",
+			},
+		},
+		{
+			name:       "missing agent cache",
+			agentCache: map[nodeName][]*agentPodView{},
+			clusterCache: map[nodeName][]*clusterPodView{
+				nodeName1: {
+					clusterPodViewFixture("uid-1", "pod-1", "ns-1", map[containerID]*clusterContainerMeta{
+						"cid1": clusterContainerFixture("cid1", "cname1", false),
+					}),
+				},
+			},
+			expectedOutput: []string{
+				nodeMessage(nodeName1, noAgentCache),
+			},
+		},
+		{
+			name: "unexpected agent cache",
+			agentCache: map[nodeName][]*agentPodView{
+				nodeName2: {
+					agentPodViewFixture("uid-2", "pod-2", "ns-2", map[containerID]*agentv1.ContainerMeta{
+						"cid2": agentContainerFixture("cid2", "cname2"),
+					}),
+				},
+			},
+			clusterCache: map[nodeName][]*clusterPodView{},
+			expectedOutput: []string{
+				nodeMessage(nodeName2, unexpectedAgentCache),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
-			validateAgentCache(&buf, tc.agentCache, tc.expectedCache)
+			validateCaches(&buf, tc.agentCache, tc.clusterCache)
+			out := buf.String()
 			for _, line := range tc.expectedOutput {
-				assert.Contains(t, buf.String(), line, "output: %s", buf.String())
+				assert.Contains(t, out, line, "output: %s", out)
 			}
 		})
 	}

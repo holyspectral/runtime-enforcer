@@ -7,33 +7,29 @@ import (
 	"log/slog"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	agentv1 "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
-	"google.golang.org/protobuf/testing/protocmp"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 )
 
-const staticPodAnnotation = "kubernetes.io/config.mirror"
-
 type nodeName = string
 
-func printNodeAgentCache(w io.Writer,
-	nodeName string,
-	nodeCache []*agentv1.PodView) {
-	fmt.Fprintf(w, "=== Node '%s' cache dump (%d pods) ===\n", nodeName, len(nodeCache))
-	for _, view := range nodeCache {
-		fmt.Fprintf(
-			w,
-			"- pod: (%s/%s)-%s\n",
-			view.GetMeta().GetNamespace(),
-			view.GetMeta().GetName(),
-			view.GetMeta().GetId(),
-		)
+type nodeMsg string
+
+const (
+	noAgentCache         nodeMsg = "no agent cache available"
+	foundNodeDifferences nodeMsg = "found differences"
+	unexpectedAgentCache nodeMsg = "unexpected agent cache"
+)
+
+func printAgentCache(w io.Writer,
+	agentCache []*agentPodView) {
+	fmt.Fprintf(w, "==== Agent cache dump (%d pods)\n", len(agentCache))
+	for _, view := range agentCache {
+		fmt.Fprintf(w, "- pod: %s\n", view)
 		for containerID, containerMeta := range view.GetContainers() {
 			fmt.Fprintf(w, "-- container: (id=%s) %s\n", containerID, containerMeta.GetName())
 		}
@@ -41,124 +37,186 @@ func printNodeAgentCache(w io.Writer,
 	fmt.Fprintln(w)
 }
 
-func validateAgentCache(w io.Writer,
-	agentCachePerNode map[nodeName][]*agentv1.PodView,
-	expectedCachePerNode map[nodeName][]*agentv1.PodView) {
-	fmt.Fprintf(w, "=== Caches diff with cluster state: %v ===\n", time.Now())
-	hasDiff := false
+func nodeMessage(nodeName string, msg nodeMsg) string {
+	return fmt.Sprintf("\n=== Node %q: %s\n", nodeName, msg)
+}
 
-	if len(expectedCachePerNode) != len(agentCachePerNode) {
-		// This is possible for example when the runtime enforcer is not installed on some agents.
-		fmt.Fprintf(
-			w,
-			"- Some nodes in the cluster don't have an agent cache. Nodes in the cluster: %d, agent caches: %d.\n",
-			len(expectedCachePerNode),
-			len(agentCachePerNode),
-		)
-	}
+func printNodeMessage(w io.Writer, nodeName string, msg nodeMsg) {
+	fmt.Fprint(w, nodeMessage(nodeName, msg))
+}
 
-	// We are sure the number of nodes is the same
-	for nodeName, expectedPods := range expectedCachePerNode {
+func validateCaches(w io.Writer,
+	agentCaches map[nodeName][]*agentPodView,
+	clusterCaches map[nodeName][]*clusterPodView) {
+	fmt.Fprintf(w, "== Caches diff with cluster state: %v ==\n", time.Now())
+
+	// These could be different when the runtime enforcer is not installed on some agents.
+	fmt.Fprintf(
+		w,
+		"=== Nodes in the cluster: %d, agent caches: %d.\n",
+		len(clusterCaches),
+		len(agentCaches),
+	)
+
+	for nodeName, clusterCache := range clusterCaches {
 		// Skip nodes without an agent cache
-		actualPods, ok := agentCachePerNode[nodeName]
+		agentCache, ok := agentCaches[nodeName]
 		if !ok {
-			fmt.Fprintf(w, "- node '%s': no agent cache available\n", nodeName)
+			printNodeMessage(w, nodeName, noAgentCache)
 			continue
 		}
 
-		// Order the slices by pod Name.
-		sort.Slice(expectedPods, func(i, j int) bool {
-			return expectedPods[i].GetMeta().GetName() < expectedPods[j].GetMeta().GetName()
+		sort.Slice(agentCache, func(i, j int) bool {
+			return agentCache[i].sortKey() < agentCache[j].sortKey()
 		})
-		sort.Slice(actualPods, func(i, j int) bool {
-			return actualPods[i].GetMeta().GetName() < actualPods[j].GetMeta().GetName()
+		sort.Slice(clusterCache, func(i, j int) bool {
+			return clusterCache[i].sortKey() < clusterCache[j].sortKey()
 		})
 
-		if diff := cmp.Diff(expectedPods, actualPods, protocmp.Transform()); diff != "" {
-			fmt.Fprintf(w, "- cache on node '%s' is not aligned\n%s\n",
-				nodeName, diff)
-			hasDiff = true
-			// In case of diff, print the agent cache
-			printNodeAgentCache(w, nodeName, agentCachePerNode[nodeName])
-		}
-	}
-
-	if !hasDiff {
-		fmt.Fprintln(w, "caches are aligned")
-	} else {
-		fmt.Fprintln(w, "caches are not aligned")
-	}
-}
-
-func containerIDFromContainerStatus(c *corev1.ContainerStatus) string {
-	// This is the layout of a container inside the pod
-	// "containerd://d4813c4da49cbaa50542f86bd077608e5d3da101efef52642346803c4d5a902b"
-	// we want to remove the prefix
-	ret := c.ContainerID
-	if idx := strings.Index(ret, "://"); idx != -1 {
-		ret = ret[idx+3:]
-	}
-	return ret
-}
-
-func addContainerToPodView(containerStatus *corev1.ContainerStatus, podView *agentv1.PodView) {
-	containerID := containerIDFromContainerStatus(containerStatus)
-	containerMeta := &agentv1.ContainerMeta{
-		Id:       containerID,
-		Name:     containerStatus.Name,
-		CgroupId: 0, // we don't recover it today
-	}
-	podView.Containers[containerID] = containerMeta
-}
-
-func podToView(pod *corev1.Pod) *agentv1.PodView {
-	// If this is a static Pod we replace the Pod UID generated by the API server
-	// with the one from the annotation.
-	podUID := string(pod.UID)
-	if pod.Annotations != nil && pod.Annotations[staticPodAnnotation] != "" {
-		podUID = pod.Annotations[staticPodAnnotation]
-	}
-
-	podView := &agentv1.PodView{
-		Meta: &agentv1.PodMeta{
-			Id:        podUID,
-			Name:      pod.Name,
-			Namespace: pod.Namespace,
-			// We don't set the labels because they will be different from the ones the NRI find.
-			// Labels:    pod.Labels,
-		},
-		Containers: make(map[string]*agentv1.ContainerMeta),
-	}
-
-	for _, containerStatus := range pod.Status.InitContainerStatuses {
-		addContainerToPodView(&containerStatus, podView)
-	}
-	for _, containerStatus := range pod.Status.ContainerStatuses {
-		addContainerToPodView(&containerStatus, podView)
-	}
-	for _, containerStatus := range pod.Status.EphemeralContainerStatuses {
-		addContainerToPodView(&containerStatus, podView)
-	}
-	return podView
-}
-
-func zeroOutUnrecoverableDetails(cache map[nodeName][]*agentv1.PodView) {
-	for _, podViews := range cache {
-		for _, podView := range podViews {
-			// At the moment we don't recover them from the ownerReference when we get the pod from the informer.
-			podView.Meta.WorkloadName = ""
-			podView.Meta.WorkloadType = ""
-
-			// Zero out labels since we don't get the full set from the NRI.
-			// Labels we have in our view won't match the ones in the cluster.
-			podView.Meta.Labels = nil
-
-			// Zero out cgroup ID, at the moment we don't recover it when we get the pod from the informer.
-			for _, containerMeta := range podView.GetContainers() {
-				containerMeta.CgroupId = 0
+		differences := compareCaches(clusterCache, agentCache)
+		// If there is at least a difference on the node level, we print the full agent cache.
+		if len(differences) > 0 {
+			printNodeMessage(w, nodeName, foundNodeDifferences)
+			for _, difference := range differences {
+				fmt.Fprintf(w, "- %s\n", difference)
 			}
+			printAgentCache(w, agentCaches[nodeName])
 		}
 	}
+
+	for nodeName := range agentCaches {
+		if _, ok := clusterCaches[nodeName]; !ok {
+			printNodeMessage(w, nodeName, unexpectedAgentCache)
+			printAgentCache(w, agentCaches[nodeName])
+		}
+	}
+}
+
+func compareCaches(clusterCache []*clusterPodView, agentCache []*agentPodView) []string {
+	clusterIdx := 0
+	agentIdx := 0
+	differences := make([]string, 0)
+
+	for clusterIdx < len(clusterCache) && agentIdx < len(agentCache) {
+		clusterPod := clusterCache[clusterIdx]
+		cachePod := agentCache[agentIdx]
+
+		clusterKey := clusterPod.sortKey()
+		cacheKey := cachePod.sortKey()
+
+		switch {
+		case clusterKey < cacheKey:
+			differences = append(differences, missingPodFromAgentCache(clusterPod))
+			clusterIdx++
+		case cacheKey < clusterKey:
+			differences = append(differences, unexpectedPodInAgentCache(cachePod))
+			agentIdx++
+		default:
+			differences = append(differences, comparePods(clusterPod, cachePod)...)
+			clusterIdx++
+			agentIdx++
+		}
+	}
+
+	for ; clusterIdx < len(clusterCache); clusterIdx++ {
+		differences = append(
+			differences,
+			missingPodFromAgentCache(clusterCache[clusterIdx]),
+		)
+	}
+
+	for ; agentIdx < len(agentCache); agentIdx++ {
+		differences = append(
+			differences,
+			unexpectedPodInAgentCache(agentCache[agentIdx]),
+		)
+	}
+	return differences
+}
+
+func missingPodFromAgentCache(clusterPod *clusterPodView) string {
+	return fmt.Sprintf("pod %s is missing from the agent cache", clusterPod)
+}
+
+func unexpectedPodInAgentCache(agentPod *agentPodView) string {
+	return fmt.Sprintf("unexpected pod %s found in the agent cache", agentPod)
+}
+
+func fieldMismatch(fieldName, clusterValue, agentValue string) string {
+	return fmt.Sprintf("%q mismatch: cluster=%q, agent=%q", fieldName, clusterValue, agentValue)
+}
+
+func containerNameMismatch(containerID, clusterValue, agentValue string) string {
+	return fmt.Sprintf("container %q: %s", containerID, fieldMismatch("name", clusterValue, agentValue))
+}
+
+func comparePods(clusterPod *clusterPodView, cachePod *agentPodView) []string {
+	differences := make([]string, 0)
+
+	// At the moment we don't compare
+	// - WorkloadName, WorkloadType -> we don't recover them from the ownerReference when we get the pod from the informer.
+	// - Labels -> we don't get the full set from the agent so they won't match the ones in the cluster.
+	// - CgroupID -> we don't recover it when we get the pod from the informer.
+
+	// Namespace
+	if clusterPod.getNamespace() != cachePod.getNamespace() {
+		differences = append(
+			differences,
+			fieldMismatch("namespace", clusterPod.getNamespace(), cachePod.getNamespace()),
+		)
+	}
+
+	if clusterPod.getName() != cachePod.getName() {
+		differences = append(
+			differences,
+			fieldMismatch("name", clusterPod.getName(), cachePod.getName()),
+		)
+	}
+
+	// Containers
+	for containerID, clusterContainer := range clusterPod.getContainers() {
+		cacheContainer, ok := cachePod.getContainers()[containerID]
+		if !ok {
+			if clusterContainer.terminating {
+				// if the container is terminating, we can skip it
+				continue
+			}
+
+			differences = append(
+				differences,
+				fmt.Sprintf("missing container %q (%q) in the agent cache", clusterContainer.name, containerID),
+			)
+			continue
+		}
+
+		if clusterContainer.name != cacheContainer.GetName() {
+			differences = append(
+				differences,
+				containerNameMismatch(containerID, clusterContainer.name, cacheContainer.GetName()),
+			)
+		}
+	}
+
+	for containerID, cacheContainer := range cachePod.GetContainers() {
+		if _, ok := clusterPod.containers[containerID]; ok {
+			continue
+		}
+
+		// These will be very likely old terminated containers left in the cache because we still need to receive the RemoveContainer event.
+		// For now we leave them because we want to compare the real status of the cache also to debug possible memory issues/leakage.
+		// In the future we could put in place heuristics to ignore these containers by looking if there is already a container with that name in the pod.
+		differences = append(
+			differences,
+			fmt.Sprintf("container %q (%q) is only in the agent cache", cacheContainer.GetName(), containerID),
+		)
+	}
+
+	podStr := clusterPod.String()
+	for i, diff := range differences {
+		differences[i] = fmt.Sprintf("%s: %s", podStr, diff)
+	}
+
+	return differences
 }
 
 func validatePodCacheIntegrity(ctx context.Context,
@@ -172,7 +230,7 @@ func validatePodCacheIntegrity(ctx context.Context,
 	}
 
 	// Build the agent cache per node from GRPC.
-	agentCachePerNode := make(map[nodeName][]*agentv1.PodView)
+	agentCaches := make(map[nodeName][]*agentPodView)
 	for nodeName, client := range clients {
 		if client == nil {
 			logger.ErrorContext(ctx, "Agent client is nil", "node", nodeName)
@@ -186,28 +244,30 @@ func validatePodCacheIntegrity(ctx context.Context,
 			logger.ErrorContext(ctx, "Failed to list pod cache", "node", nodeName, "error", err)
 			continue
 		}
-		agentCachePerNode[nodeName] = podCacheList
+		agentCaches[nodeName] = newAgentPodViews(podCacheList)
 	}
 
 	// Build the expected cache from the cluster pod list.
-	expectedCachePerNode := make(map[nodeName][]*agentv1.PodView)
+	clusterCaches := make(map[nodeName][]*clusterPodView)
 	var podList corev1.PodList
 	if err = c.List(ctx, &podList); err != nil {
 		return fmt.Errorf("failed to list pods in the cluster: %w", err)
 	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		expectedCachePerNode[pod.Spec.NodeName] = append(
-			expectedCachePerNode[pod.Spec.NodeName],
-			podToView(pod),
+
+		// We only consider pods that are running or succeeded
+		if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodSucceeded {
+			continue
+		}
+
+		clusterCaches[pod.Spec.NodeName] = append(
+			clusterCaches[pod.Spec.NodeName],
+			newClusterPodView(pod),
 		)
 	}
 
-	// Scraping pods from the cluster we don't get some details we get during NRI extraction and vice versa.
-	// So we need to zero out those details in the agent cache before doing the comparison.
-	zeroOutUnrecoverableDetails(agentCachePerNode)
-
 	// Print diff between expected and actual cache per node.
-	validateAgentCache(os.Stdout, agentCachePerNode, expectedCachePerNode)
+	validateCaches(os.Stdout, agentCaches, clusterCaches)
 	return nil
 }
