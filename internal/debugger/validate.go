@@ -1,4 +1,4 @@
-package main
+package debugger
 
 import (
 	"context"
@@ -219,7 +219,7 @@ func comparePods(clusterPod *clusterPodView, cachePod *agentPodView) []string {
 	return differences
 }
 
-func validatePodCacheIntegrity(ctx context.Context,
+func ValidatePodCacheIntegrity(ctx context.Context,
 	logger *slog.Logger,
 	c cache.Cache,
 	pool *grpcexporter.AgentClientPool,

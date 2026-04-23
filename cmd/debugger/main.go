@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/debugger"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/grpcexporter"
 	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -140,7 +141,7 @@ func main() {
 				// We terminate.
 				return nil
 			case <-time.After(config.interval):
-				if err = validatePodCacheIntegrity(ctx, slogger, cache, pool); err != nil {
+				if err = debugger.ValidatePodCacheIntegrity(ctx, slogger, cache, pool); err != nil {
 					slogger.Error("Failed to validate pod cache integrity", "error", err)
 				}
 			}
