@@ -191,9 +191,7 @@ func (p *plugin) StartContainer(
 			return nil
 		}
 		nriErr := fmt.Errorf(
-			"%s: %w. Runtime-enforcer has prevented the container '%s/%s' from starting. To change this behavior, set agent.nriFailopen=true in the helm chart",
-			reason,
-			err,
+			"runtime-enforcer has prevented the container '%s/%s' from starting. To change this behavior, set agent.nriFailopen=true in the helm chart",
 			pod.GetName(),
 			container.GetName(),
 		)

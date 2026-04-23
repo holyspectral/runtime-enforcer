@@ -2,12 +2,11 @@ package nri
 
 import (
 	"errors"
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/containerd/nri/pkg/api"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/resolver"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/testutil"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/workloadkind"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +19,7 @@ func newTestPlugin(
 	t.Helper()
 
 	return &plugin{
-		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		logger:   testutil.NewTestLogger(t),
 		resolver: resolver.NewTestResolver(t),
 		failOpen: failOpen,
 		resolveCgroupID: func(*api.Container) (resolver.CgroupID, string, error) {
@@ -100,8 +99,7 @@ func TestPluginStartContainer(t *testing.T) {
 
 		err := p.StartContainer(t.Context(), pod, container)
 		require.Error(t, err)
-		require.ErrorContains(t, err, "failed to get cgroup ID from container: lookup failed")
-		require.ErrorContains(t, err, "Runtime-enforcer has prevented the container 'demo-pod/app' from starting")
+		require.ErrorContains(t, err, "runtime-enforcer has prevented the container 'demo-pod/app' from starting")
 		require.Empty(t, p.resolver.PodCacheSnapshot())
 	})
 }

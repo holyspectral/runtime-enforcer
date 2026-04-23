@@ -2,6 +2,8 @@ package bpf
 
 import (
 	"testing"
+
+	"github.com/rancher-sandbox/runtime-enforcer/internal/testutil"
 )
 
 // run it with: go test -v -run TestNoVerifierFailures ./internal/bpf -count=1 -exec "sudo -E".
@@ -18,7 +20,7 @@ func TestNoVerifierFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Loading happens here so we can catch verifier errors without running the manager
-			_, err := NewManager(newTestLogger(t), tt.enableLearning)
+			_, err := NewManager(testutil.NewTestLogger(t), tt.enableLearning)
 			if err == nil {
 				t.Log("BPF manager started successfully :)!!")
 				return
