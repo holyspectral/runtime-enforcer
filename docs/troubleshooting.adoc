@@ -43,6 +43,80 @@ caches are aligned
 
 If there is a discrepancy you will see a diff with the affected node and pods, followed by a full dump of the agent cache for that node.
 
+== NRI timeouts and required plugins
+
+Runtime Enforcer relies on NRI (Node Resource Interface) integration provided by the container runtime.
+Some environments may hit the NRI default request timeout (default is `2s`), which can cause the NRI plugin to be detached from the container runtime. This can cause the agent to repeatedly retry connecting to the NRI plugin, resulting in the agent not coming up as expected.
+
+To mitigate this, you can increase the NRI timeout on the container runtime side by editing the container runtime configuration file.
+
+=== containerd: increase NRI timeout
+
+Edit `/etc/containerd/config.toml` and update the NRI plugin timeouts under `[plugins."io.containerd.nri.v1.nri"]`:
+
+[source,toml]
+----
+[plugins."io.containerd.nri.v1.nri"]
+  # plugin_registration_timeout is the timeout for a plugin to register after connection.
+  plugin_registration_timeout = "5s"
+  # plugin_request_timeout is the timeout for a plugin to handle an event/request.
+  plugin_request_timeout = "2s"
+----
+
+For details and additional NRI settings, see https://github.com/containerd/containerd/blob/main/docs/NRI.md#disabling-nri-support-in-containerd[containerd NRI configuration documentation].
+
+=== CRI-O: increase NRI timeout
+
+Edit `/etc/crio/crio.conf` and update the `crio.nri` table:
+
+[source,toml]
+----
+[crio.nri]
+  # Timeout for a plugin to register itself with NRI.
+  nri_plugin_registration_timeout = "5s"
+  # Timeout for a plugin to handle an NRI request.
+  nri_plugin_request_timeout = "2s"
+----
+
+For details, see https://github.com/cri-o/cri-o/blob/main/docs/crio.conf.5.md#crionri-table[CRI-O NRI configuration documentation].
+
+=== Required Plugins
+
+Additionally, recent container runtimes provide an option to require a set of NRI plugins to always be present for container creation to succeed.
+
+WARNING: When this is enabled and the required NRI plugin is not present on a node, the container runtime will reject container creation/start requests.
+
+==== containerd: required_plugins
+
+In `/etc/containerd/config.toml`, configure the `default_validator`:
+
+[source,toml]
+----
+[plugins."io.containerd.nri.v1.nri".default_validator]
+  enable = true
+  required_plugins = [ <list of required NRI plugins> ]
+----
+
+Replace `"<list of required NRI plugins>"` with our plugin name `runtime-enforcer-agent` as registered with NRI in your environment.
+See https://github.com/containerd/containerd/blob/main/docs/NRI.md#default-validator[containerd NRI configuration documentation] for more details.
+
+==== CRI-O: nri_validator_required_plugins
+
+In `/etc/crio/crio.conf`, configure the `crio.nri.default_validator` table:
+
+[source,toml]
+----
+[crio.nri.default_validator]
+  nri_enable_default_validator = true
+  # List of required NRI plugins that must be present.
+  nri_validator_required_plugins = ["<list of required NRI plugins>"]
+----
+
+Replace `"<list of required NRI plugins>"` with our plugin name `runtime-enforcer-agent` as registered with NRI in your environment.
+See https://github.com/cri-o/cri-o/blob/main/docs/crio.conf.5.md#crionridefault_validator-table[CRI-O NRI configuration documentation] for more details.
+
+NOTE: The *required plugins* feature is available since *containerd 2.2* and *CRI-O 1.34.0*.
+
 === Enabling the debugger
 
 The debugger is disabled by default. Enable it via Helm values:
