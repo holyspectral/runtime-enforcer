@@ -197,8 +197,8 @@ func comparePods(clusterPod *clusterPodView, cachePod *agentPodView) []string {
 		}
 	}
 
-	for containerID, cacheContainer := range cachePod.GetContainers() {
-		if _, ok := clusterPod.containers[containerID]; ok {
+	for containerID, cacheContainer := range cachePod.getContainers() {
+		if _, ok := clusterPod.getContainers()[containerID]; ok {
 			continue
 		}
 
