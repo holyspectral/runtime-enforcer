@@ -256,15 +256,24 @@ func ValidatePodCacheIntegrity(ctx context.Context,
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 
-		// We only consider pods that are running or succeeded
-		if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodSucceeded {
+		switch pod.Status.Phase {
+		// We can see at least a case in which a failed pod won't be present in agent cache,
+		// but only in the cluster one -> if during a StartContainer we prevent the container startup,
+		// we won't see the pod in our agent cache, but we will see it in the cluster as failed.
+		// This could cause a difference between the agent cache and the cluster representation.
+		// On the other side, we can also see the opposite case, where a failed pod is present in our cache
+		// but we wouldn't find it in our cluster representation because we skip it here...
+		// Since the second case should be more common than the first one, we add failed pods to the cache
+		case corev1.PodRunning, corev1.PodSucceeded, corev1.PodFailed:
+			clusterCaches[pod.Spec.NodeName] = append(
+				clusterCaches[pod.Spec.NodeName],
+				newClusterPodView(pod),
+			)
+		case corev1.PodPending:
+		case corev1.PodUnknown:
+		default:
 			continue
 		}
-
-		clusterCaches[pod.Spec.NodeName] = append(
-			clusterCaches[pod.Spec.NodeName],
-			newClusterPodView(pod),
-		)
 	}
 
 	// Print diff between expected and actual cache per node.
