@@ -12,8 +12,8 @@ func agentContainerFixture(id, name string) *agentv1.ContainerMeta {
 	return &agentv1.ContainerMeta{Id: id, Name: name}
 }
 
-func clusterContainerFixture(id, name string, terminating bool) *clusterContainerMeta {
-	return &clusterContainerMeta{id: id, name: name, terminating: terminating}
+func clusterContainerFixture(id, name string, terminated bool) *clusterContainerMeta {
+	return &clusterContainerMeta{id: id, name: name, terminated: terminated}
 }
 
 func agentPodViewFixture(id, name, namespace string,
@@ -99,7 +99,7 @@ func TestComparePods(t *testing.T) {
 			},
 		},
 		{
-			name: "ignores terminating init container missing from agent cache",
+			name: "ignores terminated init container missing from agent cache",
 			clusterPod: clusterPodViewFixture(
 				"uid-2",
 				"pod-1",

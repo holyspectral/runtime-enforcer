@@ -177,8 +177,8 @@ func comparePods(clusterPod *clusterPodView, cachePod *agentPodView) []string {
 	for containerID, clusterContainer := range clusterPod.getContainers() {
 		cacheContainer, ok := cachePod.getContainers()[containerID]
 		if !ok {
-			if clusterContainer.terminating {
-				// if the container is terminating, we can skip it
+			if clusterContainer.terminated {
+				// if the container is terminated, we can skip it
 				continue
 			}
 

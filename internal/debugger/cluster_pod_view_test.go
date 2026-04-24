@@ -100,9 +100,9 @@ func TestNewClusterPodView(t *testing.T) {
 				namespace: "my-namespace",
 				containers: map[containerID]*clusterContainerMeta{
 					"cid1": {
-						id:          "cid1",
-						name:        "main",
-						terminating: false,
+						id:         "cid1",
+						name:       "main",
+						terminated: false,
 					},
 				},
 			},
@@ -152,24 +152,24 @@ func TestNewClusterPodView(t *testing.T) {
 				namespace: "kube-system",
 				containers: map[containerID]*clusterContainerMeta{
 					"init1": &clusterContainerMeta{
-						id:          "init1",
-						name:        "init-container",
-						terminating: true,
+						id:         "init1",
+						name:       "init-container",
+						terminated: true,
 					},
 					"main2": &clusterContainerMeta{
-						id:          "main2",
-						name:        "main-container",
-						terminating: false,
+						id:         "main2",
+						name:       "main-container",
+						terminated: false,
 					},
 					"main1": &clusterContainerMeta{
-						id:          "main1",
-						name:        "main-container",
-						terminating: true,
+						id:         "main1",
+						name:       "main-container",
+						terminated: true,
 					},
 					"eph1": &clusterContainerMeta{
-						id:          "eph1",
-						name:        "debug-container",
-						terminating: false,
+						id:         "eph1",
+						name:       "debug-container",
+						terminated: false,
 					},
 				},
 			},
@@ -203,9 +203,9 @@ func TestAddContainerToPodView(t *testing.T) {
 			},
 			expectedContainers: map[containerID]*clusterContainerMeta{
 				"terminatedID": {
-					id:          "terminatedID",
-					name:        "terminated-container",
-					terminating: true,
+					id:         "terminatedID",
+					name:       "terminated-container",
+					terminated: true,
 				},
 			},
 		},
@@ -222,14 +222,14 @@ func TestAddContainerToPodView(t *testing.T) {
 			},
 			expectedContainers: map[containerID]*clusterContainerMeta{
 				"terminatedID": {
-					id:          "terminatedID",
-					name:        "name1",
-					terminating: true,
+					id:         "terminatedID",
+					name:       "name1",
+					terminated: true,
 				},
 				"restartedID": {
-					id:          "restartedID",
-					name:        "name1",
-					terminating: false,
+					id:         "restartedID",
+					name:       "name1",
+					terminated: false,
 				},
 			},
 		},

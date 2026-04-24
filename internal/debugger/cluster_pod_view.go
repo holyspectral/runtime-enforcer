@@ -12,13 +12,13 @@ const staticPodAnnotation = "kubernetes.io/config.mirror"
 type containerID = string
 
 type clusterContainerMeta struct {
-	id          containerID
-	name        string
-	terminating bool
+	id         containerID
+	name       string
+	terminated bool
 }
 
 func (m *clusterContainerMeta) String() string {
-	return fmt.Sprintf("Container(id=%s, name=%s, terminating=%t)", m.id, m.name, m.terminating)
+	return fmt.Sprintf("Container(id=%s, name=%s, terminated=%t)", m.id, m.name, m.terminated)
 }
 
 type clusterPodView struct {
@@ -45,9 +45,9 @@ func addContainerToPodView(containerStatus *corev1.ContainerStatus, podView *clu
 	// If it is terminated we can safely skip it during the comparison because the agent cache could have been started after the container termination.
 	cID := extractContainerID(containerStatus.ContainerID)
 	podView.containers[cID] = &clusterContainerMeta{
-		id:          cID,
-		name:        containerStatus.Name,
-		terminating: containerStatus.State.Terminated != nil,
+		id:         cID,
+		name:       containerStatus.Name,
+		terminated: containerStatus.State.Terminated != nil,
 	}
 
 	// Then we check if the container is restarted looking at the `lastState`
@@ -71,9 +71,9 @@ func addContainerToPodView(containerStatus *corev1.ContainerStatus, podView *clu
 	if terminatedStatus != nil {
 		terminatedCID := extractContainerID(terminatedStatus.ContainerID)
 		podView.containers[terminatedCID] = &clusterContainerMeta{
-			id:          terminatedCID,
-			name:        containerStatus.Name,
-			terminating: true,
+			id:         terminatedCID,
+			name:       containerStatus.Name,
+			terminated: true,
 		}
 	}
 }
