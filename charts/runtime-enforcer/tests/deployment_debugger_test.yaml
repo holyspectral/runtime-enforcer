@@ -25,3 +25,28 @@ tests:
     asserts:
       - notExists:
           path: spec.template.spec.nodeSelector
+  - it: "should set podLabels and podAnnotations"
+    set:
+      debugger:
+        enabled: true
+        podLabels:
+          label: label
+        podAnnotations:
+          annotation: annotation
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["label"]
+          value: label
+      - equal:
+          path: spec.template.metadata.annotations["annotation"]
+          value: annotation
+
+  - it: "should not render podLabels and podAnnotations when empty"
+    set:
+      debugger:
+        enabled: true
+    asserts:
+      - notExists:
+          path: spec.template.metadata.labels["label"]
+      - notExists:
+          path: spec.template.metadata.annotations["annotation"]

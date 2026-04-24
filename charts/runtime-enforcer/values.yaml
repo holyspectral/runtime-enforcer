@@ -158,6 +158,12 @@ debugger:
     requests:
       cpu: 500m
       memory: 256Mi
+  # debugger.podLabels -- Additional labels to add to the agent pods.
+  # @schema additionalProperties:true
+  podLabels: {}
+  # debugger.podAnnotations -- Additional annotations to add to the agent pods.
+  # @schema additionalProperties:true
+  podAnnotations: {}
   # debugger.nodeSelector -- Node selector for the debugger pods.
   # @schema additionalProperties:true
   nodeSelector: {}
