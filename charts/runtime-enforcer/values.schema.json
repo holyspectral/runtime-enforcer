@@ -112,6 +112,15 @@
                         "runAsNonRoot": {
                             "type": "boolean"
                         },
+                        "seLinuxOptions": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
                         "seccompProfile": {
                             "type": "object",
                             "properties": {

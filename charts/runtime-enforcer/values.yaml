@@ -112,6 +112,9 @@ agent:
     # this is required for us the access the cgroup setting on the host
     appArmorProfile:
       type: Unconfined
+    # this is required for us the access the cgroup setting on the host with SELinux enabled
+    seLinuxOptions:
+      type: spc_t
   serviceAccount:
     # agent.serviceAccount.annotations -- Additional annotations to add to agent's service account.
     # @schema additionalProperties:true
