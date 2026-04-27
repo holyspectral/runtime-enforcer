@@ -1,7 +1,12 @@
 suite: "Debugger Deployment Tests"
 templates:
   - "templates/debugger/deployment.yaml"
-
+chart:
+  version: 1.0.0
+  appVersion: 2.0.0
+release:
+  name: my-release
+  namespace: my-namespace
 tests:
   - it: "should set nodeSelector"
     set:
@@ -41,12 +46,21 @@ tests:
           path: spec.template.metadata.annotations["annotation"]
           value: annotation
 
-  - it: "should not render podLabels and podAnnotations when empty"
+  - it: "should not render custom podLabels and podAnnotations when empty"
     set:
       debugger:
         enabled: true
     asserts:
-      - notExists:
-          path: spec.template.metadata.labels["label"]
-      - notExists:
-          path: spec.template.metadata.annotations["annotation"]
+      - equal:
+          path: spec.template.metadata.labels
+          value:
+            "helm.sh/chart": "runtime-enforcer-1.0.0"
+            "app.kubernetes.io/managed-by": "Helm"
+            "app.kubernetes.io/version": "2.0.0"
+            "app.kubernetes.io/component": "debugger"
+            "app.kubernetes.io/name": "runtime-enforcer"
+            "app.kubernetes.io/instance": "my-release"
+      - equal:
+          path: spec.template.metadata.annotations
+          value:
+            "kubectl.kubernetes.io/default-container": "debugger"
