@@ -16,7 +16,8 @@ spec:
   template:
     metadata:
       labels:
-      {{- include "runtime-enforcer.agent.labelSelector" . | nindent 8 }}
+        {{- include "runtime-enforcer.labels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
       {{- with .Values.agent.podLabels }}
       {{- toYaml . | nindent 8 }}
       {{- end }}
