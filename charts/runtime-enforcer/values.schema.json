@@ -341,6 +341,10 @@
         "debugger": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "containerSecurityContext": {
                     "type": "object",
                     "properties": {
@@ -367,6 +371,10 @@
                 },
                 "enabled": {
                     "type": "boolean"
+                },
+                "env": {
+                    "type": "array",
+                    "additionalProperties": true
                 },
                 "image": {
                     "type": "object",
@@ -427,6 +435,9 @@
                         }
                     },
                     "additionalProperties": false
+                },
+                "tolerations": {
+                    "type": "array"
                 }
             },
             "additionalProperties": false

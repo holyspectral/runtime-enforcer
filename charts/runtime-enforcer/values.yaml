@@ -1,8 +1,8 @@
 controller:
   args:
-  - --metrics-bind-address=:8443
-  - --leader-elect
-  - --health-probe-bind-address=:8081
+    - --metrics-bind-address=:8443
+    - --leader-elect
+    - --health-probe-bind-address=:8081
   # controller.env -- Additional environment variables
   # @schema additionalProperties:true
   env: []
@@ -13,7 +13,7 @@ controller:
     allowPrivilegeEscalation: false
     capabilities:
       drop:
-      - ALL
+        - ALL
   image:
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/controller
     tag: v0.5.0
@@ -47,6 +47,7 @@ controller:
     # controller.serviceAccount.annotations -- Additional annotations to add to controller's service account.
     # @schema additionalProperties:true
     annotations: {}
+  # controller.tolerations -- Tolerations to apply on the controller pods
   tolerations: []
   # controller.podLabels -- Additional labels to add to the controller pods.
   # @schema additionalProperties:true
@@ -62,7 +63,7 @@ controller:
   affinity: {}
 agent:
   args:
-  - ""
+    - ""
   # agent.env -- Additional environment variables
   # @schema additionalProperties:true
   env: []
@@ -119,6 +120,7 @@ agent:
     # agent.serviceAccount.annotations -- Additional annotations to add to agent's service account.
     # @schema additionalProperties:true
     annotations: {}
+  # agent.tolerations -- Tolerations to apply on the agent pods
   tolerations: []
   # agent.podLabels -- Additional labels to add to the agent pods.
   # @schema additionalProperties:true
@@ -141,6 +143,9 @@ kubernetesClusterDomain: cluster.local
 imagePullSecrets: []
 
 debugger:
+  # debugger.env -- Additional environment variables
+  # @schema additionalProperties:true
+  env: []
   enabled: false
   interval: 30s
   # @schema additionalProperties:true
@@ -149,7 +154,7 @@ debugger:
     allowPrivilegeEscalation: false
     capabilities:
       drop:
-      - ALL
+        - ALL
   image:
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/debugger
     tag: v0.5.0
@@ -170,6 +175,11 @@ debugger:
   # debugger.nodeSelector -- Node selector for the debugger pods.
   # @schema additionalProperties:true
   nodeSelector: {}
+  # debugger.affinity -- Affinity rules for the debugger pods.
+  # @schema additionalProperties:true
+  affinity: {}
+  # debugger.tolerations -- Tolerations to apply on the debugger pods
+  tolerations: []
 
 # Learning mode configuration
 learning:
