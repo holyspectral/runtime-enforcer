@@ -27,6 +27,7 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "runtime-enforcer.fullname" . }}-debugger
+      securityContext: {{- toYaml .Values.debugger.podSecurityContext | nindent 8 }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- toYaml .Values.imagePullSecrets | nindent 8 }}

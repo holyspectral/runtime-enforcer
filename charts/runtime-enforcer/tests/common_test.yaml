@@ -48,6 +48,22 @@ sharedValues: &sharedValues
                 operator: In
                 values:
                   - amd64
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 123
+    seccompProfile:
+      type: seccompType
+    appArmorProfile:
+      type: appArmorType
+    seLinuxOptions:
+      type: seLinuxType
+  resources:
+    limits:
+      cpu: 111m
+      memory: 222Mi
+    requests:
+      cpu: 55m
+      memory: 111Mi
 
 sharedAsserts: &sharedAsserts
   - equal:
@@ -96,6 +112,26 @@ sharedAsserts: &sharedAsserts
       path: "spec.template.spec.imagePullSecrets"
       content:
         name: pullSecret
+  - equal:
+      path: spec.template.spec.securityContext
+      value:
+        runAsNonRoot: true
+        runAsUser: 123
+        seccompProfile:
+          type: seccompType
+        appArmorProfile:
+          type: appArmorType
+        seLinuxOptions:
+          type: seLinuxType
+  - equal:
+      path: spec.template.spec.containers[0].resources
+      value:
+        limits:
+          cpu: 111m
+          memory: 222Mi
+        requests:
+          cpu: 55m
+          memory: 111Mi
 
 tests:
   - it: "should support all common flags in agent"

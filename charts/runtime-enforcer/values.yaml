@@ -166,6 +166,9 @@ debugger:
     requests:
       cpu: 500m
       memory: 256Mi
+  # The podSecurityContext used by debugger pods
+  # @schema additionalProperties:true
+  podSecurityContext: {}
   # debugger.podLabels -- Additional labels to add to the debugger pods.
   # @schema additionalProperties:true
   podLabels: {}
