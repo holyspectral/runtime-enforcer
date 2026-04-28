@@ -30,7 +30,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 	k8s.io/kubectl v0.35.3
 	sigs.k8s.io/controller-runtime v0.23.3
-	sigs.k8s.io/e2e-framework v0.6.0
+	sigs.k8s.io/e2e-framework v0.7.0
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2
 )
 
@@ -96,7 +96,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/tetratelabs/wazero v1.10.1 // indirect
-	github.com/vladimirvivien/gexe v0.4.1 // indirect
+	github.com/vladimirvivien/gexe v0.5.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
