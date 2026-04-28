@@ -390,6 +390,14 @@
                     "type": "object",
                     "additionalProperties": true
                 },
+                "podAnnotations": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "podLabels": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "resources": {
                     "type": "object",
                     "properties": {
