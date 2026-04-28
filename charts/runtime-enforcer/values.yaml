@@ -4,7 +4,6 @@ controller:
     - --leader-elect
     - --health-probe-bind-address=:8081
   # controller.env -- Additional environment variables
-  # @schema additionalProperties:true
   env: []
   # The containerSecurityContext used by runtime-enforcer controller
   # @schema additionalProperties:true
@@ -65,7 +64,6 @@ agent:
   args:
     - ""
   # agent.env -- Additional environment variables
-  # @schema additionalProperties:true
   env: []
   # The containerSecurityContext used by agent
   # @schema additionalProperties:true
@@ -144,7 +142,6 @@ imagePullSecrets: []
 
 debugger:
   # debugger.env -- Additional environment variables
-  # @schema additionalProperties:true
   env: []
   enabled: false
   interval: 30s

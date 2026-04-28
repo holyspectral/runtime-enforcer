@@ -46,8 +46,7 @@
                     "additionalProperties": true
                 },
                 "env": {
-                    "type": "array",
-                    "additionalProperties": true
+                    "type": "array"
                 },
                 "grpcExporterPort": {
                     "type": "string"
@@ -217,8 +216,7 @@
                     "additionalProperties": true
                 },
                 "env": {
-                    "type": "array",
-                    "additionalProperties": true
+                    "type": "array"
                 },
                 "image": {
                     "type": "object",
@@ -373,8 +371,7 @@
                     "type": "boolean"
                 },
                 "env": {
-                    "type": "array",
-                    "additionalProperties": true
+                    "type": "array"
                 },
                 "image": {
                     "type": "object",
