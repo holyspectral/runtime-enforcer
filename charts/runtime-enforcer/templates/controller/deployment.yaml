@@ -48,8 +48,7 @@ spec:
         {{- with .Values.controller.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        image: {{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}
         imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
         livenessProbe:
           httpGet:

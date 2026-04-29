@@ -38,8 +38,7 @@ tests:
     asserts:
       - contains:
           path: "spec.template.spec.containers[0].args"
-          content: "--learning-namespace-selector={\"matchExpressions\":[{\"key\":\"kuber\
-            netes.io/metadata.name\",\"operator\":\"Exists\"}]}"
+          content: '--learning-namespace-selector={"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"Exists"}]}'
 
   - it: "should render a custom learning namespace selector"
     set:

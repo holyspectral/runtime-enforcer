@@ -4,9 +4,6 @@ templates:
 
 tests:
   - it: "should render component and default container"
-    set:
-      debugger:
-        enabled: true
     asserts:
       - equal:
           path: spec.template.metadata.labels["app.kubernetes.io/component"]

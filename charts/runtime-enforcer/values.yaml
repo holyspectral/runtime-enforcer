@@ -14,7 +14,11 @@ controller:
       drop:
         - ALL
   image:
+    # The image path used by controller
+    # @schema required
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/controller
+    # The image tag used by controller
+    # @schema required
     tag: v0.5.0
     pullPolicy: IfNotPresent
   logLevel: info # @schema enum: [debug, info, warn, error]
@@ -86,7 +90,11 @@ agent:
       drop:
         - ALL
   image:
+    # The image path used by agent
+    # @schema required
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/agent
+    # The image tag used by agent
+    # @schema required
     tag: v0.5.0
     pullPolicy: IfNotPresent
   grpcExporterPort: "50051"
@@ -153,7 +161,11 @@ debugger:
       drop:
         - ALL
   image:
+    # The image path used by debugger
+    # @schema required
     repository: ghcr.io/rancher-sandbox/runtime-enforcer/debugger
+    # The image tag used by debugger
+    # @schema required
     tag: v0.5.0
     pullPolicy: IfNotPresent
   resources:

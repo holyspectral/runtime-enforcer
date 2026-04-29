@@ -85,8 +85,7 @@ spec:
         {{- with .Values.agent.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        image: {{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}
         imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
         name: agent
         startupProbe:

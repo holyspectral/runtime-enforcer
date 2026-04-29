@@ -56,6 +56,10 @@
                 },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
@@ -220,6 +224,10 @@
                 },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
@@ -375,6 +383,10 @@
                 },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
