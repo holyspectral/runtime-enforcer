@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pause-deployment
+  namespace: ${namespace}
+spec:
+  replicas: ${replicas}
+  selector:
+    matchLabels:
+      app: pause
+  template:
+    metadata:
+      labels:
+        app: pause
+        security.rancher.io/policy: pause-policy
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.10

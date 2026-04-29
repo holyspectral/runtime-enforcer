@@ -1,0 +1,12 @@
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: bench-policy-${index}
+  namespace: ${namespace}
+spec:
+  mode: monitor
+  rulesByContainer:
+    bench:
+      executables:
+        allowed:
+          - /usr/bin/true

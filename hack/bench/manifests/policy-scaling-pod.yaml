@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bench-policy-pod-${index}
+  namespace: ${namespace}
+  labels:
+    security.rancher.io/policy: bench-policy-${index}
+spec:
+  containers:
+  - name: bench
+    image: busybox:latest
+    command: ["sleep", "300"]

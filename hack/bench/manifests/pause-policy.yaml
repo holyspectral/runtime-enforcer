@@ -1,0 +1,12 @@
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: pause-policy
+  namespace: ${namespace}
+spec:
+  mode: monitor
+  rulesByContainer:
+    pause:
+      executables:
+        allowed:
+          - /usr/bin/pause

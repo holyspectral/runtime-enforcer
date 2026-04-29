@@ -1,0 +1,16 @@
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: bench-hotpath-policy
+  namespace: ${namespace}
+spec:
+  mode: monitor
+  rulesByContainer:
+    bench-hotpath-pod:
+      executables:
+        allowed:
+          - /usr/bin/sleep
+          - /usr/bin/dash
+          - /usr/bin/true
+          - /usr/bin/seq
+          - /usr/bin/date

@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${job_name}
+spec:
+  ttlSecondsAfterFinished: 30
+  template:
+    spec:
+      restartPolicy: Never
+      hostPID: true
+      hostNetwork: true
+      securityContext:
+        seccompProfile:
+          type: Unconfined
+      tolerations:
+        - operator: Exists
+      nodeSelector:
+        kubernetes.io/os: linux
+      volumes:
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+      containers:
+        - name: bpftool
+          image: ${image}
+          securityContext:
+            privileged: true
+          command: ["sh", "-c"]
+          args: ["${bpftool_cmd}"]
+          volumeMounts:
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+              readOnly: true
