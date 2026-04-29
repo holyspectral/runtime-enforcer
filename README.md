@@ -27,6 +27,7 @@ See [docs/compatibility.adoc](docs/compatibility.adoc) for complete details.
 
 - [API Reference (CRDs)](docs/crd.adoc)
 - [CRD Documentation](docs/crds/README.md)
+- [Resource Consumption](docs/resource-consumption.md)
 
 ### Development
 
