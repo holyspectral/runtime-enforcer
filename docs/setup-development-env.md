@@ -11,7 +11,7 @@ Runtime enforcer supports Tilt to run development environment in your local.
 
 ## Pre-requisite
 
-- On a supported Linux host to run a local kubernetes cluster, install a one node kubernetes cluster.  Minikube is not supported.
+- On a supported Linux host to run a local kubernetes cluster, install a one node kubernetes cluster.
 - Setup golang development environments.
 
 ## Steps
