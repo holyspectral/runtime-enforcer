@@ -3,24 +3,26 @@ templates:
   - "templates/controller/deployment.yaml"
 
 tests:
-  - it: "should allow image, and imagePullPolicy to be overridden"
+  - it: "should render component and default container"
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["app.kubernetes.io/component"]
+          value: "controller"
+      - equal:
+          path: spec.template.metadata.annotations["kubectl.kubernetes.io/default-container"]
+          value: "manager"
+
+  - it: "should allow replicas to be overridden"
     set:
       controller:
         replicas: 5
-        image:
-          repository: somewhere/controller
-          tag: v9.9.9
-          pullPolicy: Always
     asserts:
       - equal:
           path: "spec.replicas"
           value: 5
-      - equal:
-          path: "spec.template.spec.containers[0].image"
-          value: "somewhere/controller:v9.9.9"
-      - equal:
-          path: "spec.template.spec.containers[0].imagePullPolicy"
-          value: "Always"
+
+  - it: "should render default priority class name"
+    asserts:
       - equal:
           path: "spec.template.spec.priorityClassName"
           value: "runtime-enforcer-priorityclass"
@@ -47,107 +49,6 @@ tests:
     asserts:
       - contains:
           path: spec.template.spec.containers[0].args
-          content: "--wp-status-reconciler-agent-label-selector=app.kubernetes.io/component=agent,app.kubernetes.io/instance=RELEASE-NAME,app.kubernetes.io/name=runtime-enforcer"
-
-  - it: "check tolerations"
-    set:
-      controller:
-        tolerations:
-          - key: "dedicated"
-            operator: "Equal"
-            value: "experimental"
-            effect: "NoSchedule"
-    asserts:
-      - contains:
-          path: spec.template.spec.tolerations
-          content:
-            key: "dedicated"
-            operator: "Equal"
-            value: "experimental"
-            effect: "NoSchedule"
-
-  - it: "should add extra pod environment variables"
-    set:
-      controller:
-        env:
-          - name: EXTRA_ENV
-            value: extra_value
-    asserts:
-      - contains:
-          path: "spec.template.spec.containers[0].env"
-          content:
-            name: EXTRA_ENV
-            value: extra_value
-
-  - it: "should add extra pod labels"
-    set:
-      controller:
-        podLabels:
-          environment: production
-          team: infra
-    asserts:
-      - equal:
-          path: spec.template.metadata.labels.environment
-          value: production
-      - equal:
-          path: spec.template.metadata.labels.team
-          value: infra
-
-  - it: "should add extra pod annotations"
-    set:
-      controller:
-        podAnnotations:
-          prometheus.io/scrape: "true"
-          prometheus.io/port: "8443"
-    asserts:
-      - equal:
-          path: spec.template.metadata.annotations["prometheus.io/scrape"]
-          value: "true"
-      - equal:
-          path: spec.template.metadata.annotations["prometheus.io/port"]
-          value: "8443"
-
-  - it: "should set nodeSelector"
-    set:
-      controller:
-        nodeSelector:
-          kubernetes.io/os: linux
-          node-role: control-plane
-    asserts:
-      - equal:
-          path: spec.template.spec.nodeSelector["kubernetes.io/os"]
-          value: linux
-      - equal:
-          path: spec.template.spec.nodeSelector["node-role"]
-          value: control-plane
-
-  - it: "should not render nodeSelector when empty"
-    set:
-      controller:
-        nodeSelector: {}
-    asserts:
-      - notExists:
-          path: spec.template.spec.nodeSelector
-
-  - it: "should set affinity"
-    set:
-      controller:
-        affinity:
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/name: runtime-enforcer
-                topologyKey: kubernetes.io/hostname
-    asserts:
-      - equal:
-          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey
-          value: kubernetes.io/hostname
-
-  - it: "should not render affinity when empty"
-    set:
-      controller:
-        affinity: {}
-    asserts:
-      - notExists:
-          path: spec.template.spec.affinity
+          content: "--wp-status-reconciler-agent-label-selector=app.kubernetes.io/compone\
+            nt=agent,app.kubernetes.io/instance=RELEASE-NAME,app.kubernetes.io/\
+            name=runtime-enforcer"

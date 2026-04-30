@@ -14,8 +14,8 @@ spec:
   template:
     metadata:
       labels:
+        {{- include "runtime-enforcer.labels" . | nindent 8 }}
         app.kubernetes.io/component: controller
-      {{- include "runtime-enforcer.selectorLabels" . | nindent 8 }}
       {{- with .Values.controller.podLabels }}
       {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -48,8 +48,7 @@ spec:
         {{- with .Values.controller.env }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        image: {{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag
-          | default .Chart.AppVersion }}
+        image: {{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}
         imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
         livenessProbe:
           httpGet:

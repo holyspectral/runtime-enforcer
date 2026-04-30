@@ -46,8 +46,7 @@
                     "additionalProperties": true
                 },
                 "env": {
-                    "type": "array",
-                    "additionalProperties": true
+                    "type": "array"
                 },
                 "grpcExporterPort": {
                     "type": "string"
@@ -57,6 +56,10 @@
                 },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
@@ -217,11 +220,14 @@
                     "additionalProperties": true
                 },
                 "env": {
-                    "type": "array",
-                    "additionalProperties": true
+                    "type": "array"
                 },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
@@ -341,6 +347,10 @@
         "debugger": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "containerSecurityContext": {
                     "type": "object",
                     "properties": {
@@ -368,8 +378,15 @@
                 "enabled": {
                     "type": "boolean"
                 },
+                "env": {
+                    "type": "array"
+                },
                 "image": {
                     "type": "object",
+                    "required": [
+                        "repository",
+                        "tag"
+                    ],
                     "properties": {
                         "pullPolicy": {
                             "type": "string"
@@ -395,6 +412,10 @@
                     "additionalProperties": true
                 },
                 "podLabels": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "podSecurityContext": {
                     "type": "object",
                     "additionalProperties": true
                 },
@@ -427,6 +448,9 @@
                         }
                     },
                     "additionalProperties": false
+                },
+                "tolerations": {
+                    "type": "array"
                 }
             },
             "additionalProperties": false

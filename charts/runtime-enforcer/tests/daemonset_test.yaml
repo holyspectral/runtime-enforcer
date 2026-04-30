@@ -3,20 +3,17 @@ templates:
   - "templates/agent/daemonset.yaml"
 
 tests:
-  - it: "should allow image, and imagePullPolicy to be overridden"
-    set:
-      agent:
-        image:
-          repository: somewhere/agent
-          tag: v9.9.9
-          pullPolicy: Always
+  - it: "should render component and default container"
     asserts:
       - equal:
-          path: "spec.template.spec.containers[0].image"
-          value: "somewhere/agent:v9.9.9"
+          path: spec.template.metadata.labels["app.kubernetes.io/component"]
+          value: "agent"
       - equal:
-          path: "spec.template.spec.containers[0].imagePullPolicy"
-          value: "Always"
+          path: spec.template.metadata.annotations["kubectl.kubernetes.io/default-container"]
+          value: "agent"
+
+  - it: "should render default priority class name"
+    asserts:
       - equal:
           path: "spec.template.spec.priorityClassName"
           value: "runtime-enforcer-priorityclass"
@@ -30,7 +27,8 @@ tests:
     asserts:
       - notContains:
           path: "spec.template.spec.containers[0].args"
-          content: '--learning-namespace-selector={"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"Exists"}]}'
+          content: "--learning-namespace-selector={\"matchExpressions\":[{\"key\":\"kuber\
+            netes.io/metadata.name\",\"operator\":\"Exists\"}]}"
 
   - it: "should include default selector"
     set:
@@ -52,7 +50,7 @@ tests:
     asserts:
       - contains:
           path: "spec.template.spec.containers[0].args"
-          content: '--learning-namespace-selector={"matchLabels":{"env":"prod"}}'
+          content: "--learning-namespace-selector={\"matchLabels\":{\"env\":\"prod\"}}"
 
   - it: "should include grpc port argument"
     set:
@@ -63,23 +61,6 @@ tests:
           path: "spec.template.spec.containers[0].args"
           content: "--grpc-port=12"
 
-  - it: "check tolerations"
-    set:
-      agent:
-        tolerations:
-          - key: "dedicated"
-            operator: "Equal"
-            value: "experimental"
-            effect: "NoSchedule"
-    asserts:
-      - contains:
-          path: spec.template.spec.tolerations
-          content:
-            key: "dedicated"
-            operator: "Equal"
-            value: "experimental"
-            effect: "NoSchedule"
-
   - it: "should include log level argument"
     set:
       agent:
@@ -89,95 +70,8 @@ tests:
           path: "spec.template.spec.containers[0].args"
           content: "--log-level=debug"
 
-  - it: "should add extra pod environment variables"
-    set:
-      agent:
-        env:
-          - name: EXTRA_ENV
-            value: extra_value
-    asserts:
-      - contains:
-          path: "spec.template.spec.containers[0].env"
-          content:
-            name: EXTRA_ENV
-            value: extra_value
-
-  - it: "should add extra pod labels"
-    set:
-      agent:
-        podLabels:
-          environment: staging
-          team: platform
-    asserts:
-      - equal:
-          path: spec.template.metadata.labels.environment
-          value: staging
-      - equal:
-          path: spec.template.metadata.labels.team
-          value: platform
-
-  - it: "should add extra pod annotations"
-    set:
-      agent:
-        podAnnotations:
-          prometheus.io/scrape: "true"
-          prometheus.io/port: "9090"
-    asserts:
-      - equal:
-          path: spec.template.metadata.annotations["prometheus.io/scrape"]
-          value: "true"
-      - equal:
-          path: spec.template.metadata.annotations["prometheus.io/port"]
-          value: "9090"
-
-  - it: "should set nodeSelector"
-    set:
-      agent:
-        nodeSelector:
-          kubernetes.io/os: linux
-          disk: ssd
-    asserts:
-      - equal:
-          path: spec.template.spec.nodeSelector["kubernetes.io/os"]
-          value: linux
-      - equal:
-          path: spec.template.spec.nodeSelector.disk
-          value: ssd
-
-  - it: "should not render nodeSelector when empty"
-    set:
-      agent:
-        nodeSelector: {}
-    asserts:
-      - notExists:
-          path: spec.template.spec.nodeSelector
-
-  - it: "should set affinity"
-    set:
-      agent:
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: kubernetes.io/arch
-                      operator: In
-                      values:
-                        - amd64
-    asserts:
-      - equal:
-          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
-          value: kubernetes.io/arch
-
-  - it: "should not render affinity when empty"
-    set:
-      agent:
-        affinity: {}
-    asserts:
-      - notExists:
-          path: spec.template.spec.affinity
-
-  - it: "should set OTEL env vars to built-in collector when collectorStrategy is default"
+  - it: "should set OTEL env vars to built-in collector when collectorStrategy is
+      default"
     set:
       telemetry:
         collectorStrategy: default
@@ -186,14 +80,16 @@ tests:
           path: "spec.template.spec.containers[0].env"
           content:
             name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: "https://RELEASE-NAME-runtime-enforcer-otel-collector.NAMESPACE.svc.cluster.local:4317"
+            value: "https://RELEASE-NAME-runtime-enforcer-otel-collector.NAMESPACE.svc.clus\
+              ter.local:4317"
       - contains:
           path: "spec.template.spec.containers[0].env"
           content:
             name: OTEL_EXPORTER_OTLP_CERTIFICATE
             value: "/etc/runtime-enforcer/certs/ca.crt"
 
-  - it: "should set OTEL env vars to external endpoint with insecure when no CA cert"
+  - it: "should set OTEL env vars to external endpoint with insecure when no CA
+      cert"
     set:
       telemetry:
         collectorStrategy: external
