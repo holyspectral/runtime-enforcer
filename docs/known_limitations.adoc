@@ -20,7 +20,7 @@ This can happen when Kubernetes truncates pod names due to the 63-character limi
 
 In these cases, runtime-enforcer may only be able to report a shortened/best-effort workload name and will not be able to extract the full workload name.
 
-* *Impact*: workload names shown in policy proposals and violation reporting can be incomplete and may not exactly match the original Kubernetes resource name.
+* *Impact*: workload names shown in policy proposals and violation reporting can be incomplete and may not exactly match the original Kubernetes resource name. Since workload type/name is also used to derive the `WorkloadPolicyProposal` resource name, the proposal may be created under an unexpected name, which can make it look like learning did not happen.
 
 == Static pods: API-server Pod UID cannot be resolved via NRI
 
@@ -35,6 +35,8 @@ In the NRI context, runtime-enforcer cannot reliably retrieve the *API-server* P
 runtime-enforcer uses Kubernetes Validating Admission Policy (VAP) to enforce admission-time protections (for example, preventing changes that would add/remove/update the `security.rancher.io/policy` label on Pods).
 
 VAP is only available as `admissionregistration.k8s.io/v1` starting in Kubernetes 1.30. On Kubernetes versions prior to v1.30, runtime-enforcer does not apply any VAP-based protections.
+
+Earlier Kubernetes versions exposed Validating Admission Policy as `admissionregistration.k8s.io/v1beta1`, but runtime-enforcer won't support it. This is a design decision.
 
 * *Impact*: on Kubernetes 1.29 and earlier, changes that should be blocked by VAP (such as mutating `security.rancher.io/policy` on existing Pods) may be allowed.
 
