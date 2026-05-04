@@ -113,9 +113,9 @@ func (r *Resolver) NRISynchronized() {
 	r.nriSynchronized.Store(true)
 }
 
-func (r *Resolver) Ping(_ *http.Request) error {
+func (r *Resolver) Ping(req *http.Request) error {
 	if !r.nriSynchronized.Load() {
-		r.logger.Warn("NRI handler has not yet synchronized")
+		r.logger.WarnContext(req.Context(), "NRI handler has not yet synchronized")
 		return errors.New("NRI handler has not yet synchronized")
 	}
 	return nil

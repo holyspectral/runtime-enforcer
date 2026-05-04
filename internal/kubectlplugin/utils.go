@@ -13,6 +13,10 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+const (
+	resourceWorkloadPolicies = "workloadpolicies"
+)
+
 type commonCmdDeps struct {
 	f cmdutil.Factory
 

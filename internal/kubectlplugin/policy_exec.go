@@ -50,7 +50,7 @@ func newPolicyExecValidArgsFunction(
 		case len(args) == positionPolicyName:
 			return completion.CompGetResource(
 				deps.f,
-				"workloadpolicies",
+				resourceWorkloadPolicies,
 				toComplete,
 			), cobra.ShellCompDirectiveNoFileComp
 		case len(args) == positionContainerName:
@@ -63,7 +63,7 @@ func newPolicyExecValidArgsFunction(
 				&templateStr,
 				deps.f,
 				"",
-				[]string{"workloadpolicies", args[0]},
+				[]string{resourceWorkloadPolicies, args[0]},
 				toComplete,
 			), cobra.ShellCompDirectiveNoFileComp
 		case len(args) >= positionFirstExecutable:
@@ -81,7 +81,7 @@ func newPolicyExecValidArgsFunction(
 					&templateStr,
 					deps.f,
 					"",
-					[]string{"workloadpolicies", args[0]},
+					[]string{resourceWorkloadPolicies, args[0]},
 					toComplete,
 				)
 				execs = cmdutil.Difference(execs, args[2:])
@@ -99,7 +99,7 @@ func newPolicyExecValidArgsFunction(
 					&templateStr,
 					deps.f,
 					"",
-					[]string{"workloadpolicies", args[0]},
+					[]string{resourceWorkloadPolicies, args[0]},
 					toComplete,
 				)
 				execs = cmdutil.Difference(execs, args[2:])

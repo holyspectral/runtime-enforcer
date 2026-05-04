@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	securityv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,17 +52,41 @@ func (p *ProposalWebhook) updateResource(
 	// the proposal contains a partial owner reference so that here we can understand which resource to query.
 	switch ownerRef.Kind {
 	case "Deployment":
-		res = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   appsv1.SchemeGroupVersion.Group,
+			Version: appsv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	case "DaemonSet":
-		res = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   appsv1.SchemeGroupVersion.Group,
+			Version: appsv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	case "StatefulSet":
-		res = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   appsv1.SchemeGroupVersion.Group,
+			Version: appsv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	case "ReplicaSet":
-		res = schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   appsv1.SchemeGroupVersion.Group,
+			Version: appsv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	case "Job":
-		res = schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   batchv1.SchemeGroupVersion.Group,
+			Version: batchv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	case "CronJob":
-		res = schema.GroupVersionKind{Group: "batch", Version: "v1", Kind: ownerRef.Kind}
+		res = schema.GroupVersionKind{
+			Group:   batchv1.SchemeGroupVersion.Group,
+			Version: batchv1.SchemeGroupVersion.Version,
+			Kind:    ownerRef.Kind,
+		}
 	default:
 		return &ProposalValidatorError{
 			status: metav1.Status{

@@ -28,7 +28,7 @@ func newPolicyModeCmdValidArgsFunction(
 		case 0:
 			return completion.CompGetResource(
 				deps.f,
-				"workloadpolicies",
+				resourceWorkloadPolicies,
 				toComplete,
 			), cobra.ShellCompDirectiveNoFileComp
 		default:
