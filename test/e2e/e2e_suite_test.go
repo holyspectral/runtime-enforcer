@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -172,9 +173,9 @@ func uninstallHelmRepos(charts []helmChart) env.Func {
 		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 		// we need to uninstall the chart in reverse order to guarantee dependencies are respected.
-		for i := len(charts) - 1; i >= 0; i-- {
-			chart := charts[i]
-			logger.Info("uninstall helm release if present",
+		for _, v := range slices.Backward(charts) {
+			chart := v
+			logger.InfoContext(ctx, "uninstall helm release if present",
 				"name", chart.name,
 				"namespace", chart.namespace)
 			// First we try to uninstall the chart
@@ -184,21 +185,21 @@ func uninstallHelmRepos(charts []helmChart) env.Func {
 				helm.WithTimeout(defaultHelmTimeout.String()),
 			)
 			if err != nil && !strings.Contains(err.Error(), helmRepoReleaseNotFound) {
-				logger.Warn("failed to uninstall helm chart release",
+				logger.WarnContext(ctx, "failed to uninstall helm chart release",
 					"name", chart.name,
 					"namespace", chart.namespace,
 					"error", err)
 			}
 
 			// Then we try to remove the repo
-			logger.Info("remove helm repo if present",
+			logger.InfoContext(ctx, "remove helm repo if present",
 				"repo", chart.repoLocalName,
 			)
 			err = manager.RunRepo(helm.WithArgs("remove", chart.repoLocalName))
 			if err != nil &&
 				!strings.Contains(err.Error(), helmRepoNotFoundString) &&
 				!strings.Contains(err.Error(), helmNoRepositoriesConfigured) {
-				logger.Warn("failed to remove helm repo",
+				logger.WarnContext(ctx, "failed to remove helm repo",
 					"repo", chart.repoLocalName,
 					"error", err)
 			}
@@ -244,7 +245,7 @@ func installHelmRepos(charts []helmChart) env.Func {
 				helm.WithTimeout(defaultHelmTimeout.String()),
 			}
 			opts = append(opts, chart.helmOptions...)
-			logger.Info("installing helm release",
+			logger.InfoContext(ctx, "installing helm release",
 				"path", chartPath,
 				"name", chart.name,
 				"namespace", chart.namespace,

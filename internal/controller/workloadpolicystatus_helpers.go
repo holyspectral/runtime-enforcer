@@ -7,14 +7,15 @@ import (
 
 	"github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	"github.com/rancher-sandbox/runtime-enforcer/internal/types/loglevel"
+	"github.com/rancher-sandbox/runtime-enforcer/internal/types/policymode"
 	pb "github.com/rancher-sandbox/runtime-enforcer/proto/agent/v1"
 )
 
 func convertToPolicyMode(mode string) pb.PolicyMode {
 	switch mode {
-	case "protect":
+	case policymode.ProtectString:
 		return pb.PolicyMode_POLICY_MODE_PROTECT
-	case "monitor":
+	case policymode.MonitorString:
 		return pb.PolicyMode_POLICY_MODE_MONITOR
 	default:
 		panic(fmt.Sprintf("unhandled policy mode: %v", mode))
