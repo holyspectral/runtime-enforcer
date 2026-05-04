@@ -34,7 +34,7 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./api/v1alpha1" paths="./internal/controller" output:crd:artifacts:config=charts/runtime-enforcer/templates/crd output:rbac:artifacts:config=charts/runtime-enforcer/templates/controller
+	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./api/v1alpha1" paths="./internal/controller" output:crd:artifacts:config=charts/runtime-enforcer/templates/crd output:rbac:artifacts:config=charts/runtime-enforcer/templates/controller output:webhook:none
 	$(CONTROLLER_GEN) rbac:roleName=agent-role paths="./cmd/agent" paths="./internal/eventhandler" paths="./internal/workloadpolicyhandler" output:rbac:artifacts:config=charts/runtime-enforcer/templates/agent
 	$(CONTROLLER_GEN) rbac:roleName=debugger-role paths="./cmd/debugger" output:rbac:artifacts:config=charts/runtime-enforcer/templates/debugger
 	sed -i 's/controller-role/{{ include "runtime-enforcer.fullname" . }}-controller/' charts/runtime-enforcer/templates/controller/role.yaml
