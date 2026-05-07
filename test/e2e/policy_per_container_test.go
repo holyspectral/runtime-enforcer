@@ -38,7 +38,7 @@ func getPolicyPerContainerTest() types.Feature {
 						"init-container": {
 							Executables: v1alpha1.WorkloadPolicyExecutables{
 								Allowed: []string{
-									"/usr/bin/echo",
+									"/usr/lib/cargo/bin/coreutils/echo",
 								},
 							},
 						},
@@ -75,14 +75,14 @@ func getPolicyPerContainerTest() types.Feature {
 						InitContainers: []corev1.Container{
 							{
 								Name:    "init-container",
-								Image:   "ubuntu:24.04",
+								Image:   "ubuntu",
 								Command: []string{"echo", "init completed"},
 							},
 						},
 						Containers: []corev1.Container{
 							{
 								Name:    "main-container",
-								Image:   "ubuntu:24.04",
+								Image:   "ubuntu",
 								Command: []string{"sleep", "3600"},
 							},
 						},
@@ -137,14 +137,14 @@ func getPolicyPerContainerTest() types.Feature {
 						InitContainers: []corev1.Container{
 							{
 								Name:    "init-container",
-								Image:   "ubuntu:24.04",
+								Image:   "ubuntu",
 								Command: []string{"date"},
 							},
 						},
 						Containers: []corev1.Container{
 							{
 								Name:    "main-container",
-								Image:   "ubuntu:24.04",
+								Image:   "ubuntu",
 								Command: []string{"sleep", "3600"},
 							},
 						},
