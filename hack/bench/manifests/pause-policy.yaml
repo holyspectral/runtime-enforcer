@@ -1,0 +1,31 @@
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: pause-policy
+  namespace: ${namespace}
+spec:
+  mode: monitor
+  rulesByContainer:
+    pause:
+      executables:
+        allowed:
+          - /usr/bin/pause0
+          - /usr/bin/pause1
+          - /usr/bin/pause2
+          - /usr/bin/pause3
+          - /usr/bin/pause4
+          - /usr/bin/pause5
+          - /usr/bin/pause6
+          - /usr/bin/pause7
+          - /usr/bin/pause8
+          - /usr/bin/pause9
+          - /usr/bin/pause10
+          - /usr/bin/pause11
+          - /usr/bin/pause12
+          - /usr/bin/pause13
+          - /usr/bin/pause14
+          - /usr/bin/pause15
+          - /usr/bin/pause16
+          - /usr/bin/pause17
+          - /usr/bin/pause18
+          - /usr/bin/pause19

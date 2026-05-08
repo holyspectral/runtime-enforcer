@@ -1,0 +1,19 @@
+apiVersion: security.rancher.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: benchmark-policy
+  namespace: ${namespace}
+spec:
+  mode: ${mode}
+  rulesByContainer:
+    benchmark-pod:
+      executables:
+        allowed:
+        - /usr/bin/sleep
+        - /usr/bin/bash
+        - /usr/bin/groups
+        - /usr/bin/dircolors
+        - /usr/bin/tail
+        - /usr/bin/mawk
+        - /usr/local/bin/perf
+        - /usr/bin/true
