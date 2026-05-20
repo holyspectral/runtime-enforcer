@@ -73,6 +73,9 @@ jobs:
           pip install pre-commit
       - name: Generate eBPF code
         run: make generate-ebpf
+      - name: Install linters
+        run: |
+          pre-commit install --install-hooks
       - name: Run linters
         run: |
           pre-commit run --show-diff-on-failure --color=always --all-files
