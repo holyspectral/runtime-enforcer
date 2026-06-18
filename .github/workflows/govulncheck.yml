@@ -1,9 +1,6 @@
 name: govulncheck
 on:
   push:
-    paths:
-      - go.sum
-      - go.mod
   schedule:
     - cron: "0 0 * * *"
 
