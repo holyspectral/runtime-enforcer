@@ -46,7 +46,7 @@ func newPolicyAckValidArgsFunction(
 				toComplete,
 			), cobra.ShellCompDirectiveNoFileComp
 		case positionViolationID:
-			templateStr := "{{ range .status.violations }}{{ printf \"%d\" .id }} {{end}}"
+			templateStr := "{{ range .status.violations }}{{ printf \"%d\" .id }}\t{{ .executablePath }} {{end}}"
 			if _, err := template.New("").Parse(templateStr); err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}

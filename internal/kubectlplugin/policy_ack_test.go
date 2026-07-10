@@ -230,7 +230,7 @@ func TestCompletePolicyAckValidArgs(t *testing.T) {
 			name:              "violation ids",
 			policy:            testWorkloadPolicy,
 			args:              []string{"test-policy"},
-			expectedCompletes: []string{"1", "2"},
+			expectedCompletes: []string{"1\t/bin/mv", "2\t/bin/ls"},
 		},
 		{
 			name:              "no violation ids from empty policy",
