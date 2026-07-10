@@ -8,6 +8,7 @@ import (
 
 	apiv1alpha1 "github.com/rancher-sandbox/runtime-enforcer/api/v1alpha1"
 	fakeclient "github.com/rancher-sandbox/runtime-enforcer/pkg/generated/clientset/versioned/fake"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -121,7 +122,7 @@ func TestRunPolicyAck(t *testing.T) {
 			violationID:  99,
 			reason:       "ignored",
 			reasonSet:    true,
-			expectErrSub: "violation id 99 not found in status.violations (active ids: 1, 2)",
+			expectErrSub: "violation id 99 not found in status.violations",
 		},
 		{
 			name: "noop_same_annotation",
@@ -183,6 +184,80 @@ func TestRunPolicyAck(t *testing.T) {
 			updatedPolicy, err := securityClient.WorkloadPolicies(ns).Get(ctx, name, metav1.GetOptions{})
 			require.NoError(t, err)
 			require.Equal(t, tt.expectAnnotVal, updatedPolicy.Annotations[tt.expectAnnotKey])
+		})
+	}
+}
+
+func TestCompletePolicyAckValidArgs(t *testing.T) {
+	t.Parallel()
+
+	testWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "test",
+		},
+		Status: apiv1alpha1.WorkloadPolicyStatus{
+			Violations: []apiv1alpha1.ViolationRecord{
+				{ID: 1, ContainerName: "app", ExecutablePath: "/bin/mv"},
+				{ID: 2, ContainerName: "app", ExecutablePath: "/bin/ls"},
+			},
+		},
+	}
+
+	emptyWorkloadPolicy := &apiv1alpha1.WorkloadPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-policy",
+			Namespace: "test",
+		},
+		Status: apiv1alpha1.WorkloadPolicyStatus{},
+	}
+
+	tests := []struct {
+		name              string
+		policy            *apiv1alpha1.WorkloadPolicy
+		args              []string
+		expectedCompletes []string
+	}{
+		// policy name completion: `kubectl runtime-enforcer policy ack [TAB]`
+		{
+			name:              "policy names",
+			policy:            testWorkloadPolicy,
+			args:              []string{},
+			expectedCompletes: []string{"test-policy"},
+		},
+		// violation id completion: `kubectl runtime-enforcer policy ack test-policy [TAB]`
+		{
+			name:              "violation ids",
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: []string{"1", "2"},
+		},
+		{
+			name:              "no violation ids from empty policy",
+			policy:            emptyWorkloadPolicy,
+			args:              []string{"test-policy"},
+			expectedCompletes: nil,
+		},
+		// no further positional args: `kubectl runtime-enforcer policy ack test-policy 1 [TAB]`
+		{
+			name:              "no completions after both args",
+			policy:            testWorkloadPolicy,
+			args:              []string{"test-policy", "1"},
+			expectedCompletes: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tf, streams := setupTestFactory(t, tt.policy.DeepCopy())
+			defer tf.Cleanup()
+
+			cmd := newPolicyAckCmd(commonCmdDeps{f: tf, ioStreams: streams})
+			completes, directive := cmd.ValidArgsFunction(cmd, tt.args, "")
+			assert.Equal(t, tt.expectedCompletes, completes)
+			assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 		})
 	}
 }

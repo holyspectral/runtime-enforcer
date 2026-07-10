@@ -268,7 +268,7 @@ func resolveAckReason(opts *policyAckOptions, in io.Reader, errOut io.Writer) (s
 		fmt.Fprint(errOut, "Reason for acknowledgement: ")
 		reader := bufio.NewReader(in)
 		line, err := reader.ReadString('\n')
-		if err != nil && line == "" {
+		if err != nil {
 			return "", fmt.Errorf("failed to read acknowledgement reason: %w", err)
 		}
 		reason = strings.TrimRight(line, "\r\n")
@@ -289,22 +289,9 @@ func findViolationByID(violations []apiv1alpha1.ViolationRecord, id int64) (apiv
 		}
 	}
 
-	activeIDs := make([]string, 0, len(violations))
-	for _, violation := range violations {
-		activeIDs = append(activeIDs, strconv.FormatInt(violation.ID, 10))
-	}
-
-	if len(activeIDs) == 0 {
-		return apiv1alpha1.ViolationRecord{}, fmt.Errorf(
-			"violation id %d not found in status.violations (no active violations)",
-			id,
-		)
-	}
-
 	return apiv1alpha1.ViolationRecord{}, fmt.Errorf(
-		"violation id %d not found in status.violations (active ids: %s)",
+		"violation id %d not found in status.violations",
 		id,
-		strings.Join(activeIDs, ", "),
 	)
 }
 
