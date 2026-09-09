@@ -19,8 +19,8 @@ jobs:
     name: Run Updatecli
     runs-on: ubuntu-latest
     permissions:
-      contents: write # for updatecli to update the repository
-      pull-requests: write # for updatecli to create a PR
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,23 +33,14 @@ jobs:
       - name: Run Updatecli (dryrun)
         if: github.ref != 'refs/heads/main'
         env:
-          # TODO: switch to a GitHub App token instead of the default
-          # GITHUB_TOKEN, like
-          # https://github.com/kubewarden/adm-controller/blob/main/.github/workflows/update-dependencies.yaml
-          # does. This requires the APP_ID, APP_PRIVATE_KEY and
-          # APP_INSTALLATION_ID secrets to be available to this repository.
           UPDATECLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPDATECLI_GITHUB_OWNER: ${{ github.repository_owner }}
+          UPDATECLI_GITHUB_USERNAME: ${{ github.repository_owner }}
         run: "updatecli compose diff --file updatecli/updatecli-compose.yaml"
 
       - name: Run Updatecli
         if: github.ref == 'refs/heads/main'
         env:
-          # TODO: switch to a GitHub App token instead of the default
-          # GITHUB_TOKEN, like
-          # https://github.com/kubewarden/adm-controller/blob/main/.github/workflows/update-dependencies.yaml
-          # does. This requires the APP_ID, APP_PRIVATE_KEY and
-          # APP_INSTALLATION_ID secrets to be available to this repository.
-          UPDATECLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UPDATECLI_GITHUB_OWNER: ${{ github.repository_owner }}
+          UPDATECLI_GITHUB_APP_CLIENT_ID: ${{ secrets.APP_ID }}
+          UPDATECLI_GITHUB_APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          UPDATECLI_GITHUB_APP_INSTALLATION_ID: "${{ secrets.APP_INSTALLATION_ID }}"
         run: "updatecli compose apply --file updatecli/updatecli-compose.yaml"
