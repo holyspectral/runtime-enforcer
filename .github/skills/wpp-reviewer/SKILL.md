@@ -153,7 +153,8 @@ Accept the proposal as:
   whatever tool is available), then run the full flow below — Phase 1
   (sections 1–6), and Phase 2 (section 7) if applicable — **independently
   for each proposal found**. If none are found, say so plainly rather than
-  fabricating one. See section 9 for handling this at scale without
+  fabricating one. See section 2.1 for how to pace this output across
+  multiple proposals, and section 9 for handling this at scale without
   per-proposal confirmation, when explicitly requested.
 
 If no `rulesByContainer` data is present, or the resource can't be parsed,
@@ -163,6 +164,34 @@ containers.
 If context about the workload's expected purpose (e.g. "static Go binary
 web server", "Python ETL job") is missing and would materially change the
 assessment of an ambiguous executable, ask rather than guess silently.
+
+### 2.1 Processing multi-proposal scopes one at a time
+
+Whenever more than one proposal is in scope (e.g. "every WPP in
+namespace X"), never batch multiple proposals' full output into the
+same response — printing everything at once risks the response being
+cut off by the model's max-output-token limit before it finishes. This
+constraint applies regardless of whether Phase 2/batch mode (section 9)
+is subsequently triggered.
+
+Instead:
+
+- Process proposals **strictly one at a time**: each response/turn
+  contains the full Phase 1 output (structured block + Markdown table +
+  disclaimer, per section 6) — and Phase 2's output too, if applicable —
+  for exactly **one** proposal.
+- Clearly label each proposal's output with its position in the scope,
+  e.g. "Reviewing proposal 4 of 11: `namespace/name`."
+- After finishing one proposal, move on to the next one in a
+  subsequent turn: if the runtime supports the agent autonomously
+  continuing to a new turn on its own, do so without waiting on the
+  user; otherwise, end the response by stating which proposal is next
+  and asking the user to continue (e.g. "reply to continue"), keeping
+  track of progress (position and remaining proposals) so it can pick
+  back up correctly. Either way, never silently stop before every
+  proposal in scope has been addressed.
+- Once every proposal in scope has been processed this way, print a
+  final aggregate summary (see section 6.1).
 
 ## 3. Risk taxonomy
 
@@ -318,6 +347,26 @@ wppPromotion:
 followed by the target manifest as its own fenced `yaml` code block (so
 the user can copy/paste or redirect it into a file), and a short summary
 of what the manifest does.
+
+### 6.1 Final aggregate summary for multi-proposal scopes
+
+When a request covers more than one proposal (section 2.1) and is
+processed as a plain review (not batch/promote-everything mode, section
+9), once every proposal in scope has been processed one-by-one, print
+one final consolidated summary in its own response, covering:
+
+- Total proposals found/processed.
+- Counts by overall recommendation (approve / request_changes / comment).
+- Which proposals (by `namespace/name`) had CRITICAL or HIGH findings.
+- Any enumeration or parse failures encountered along the way, named
+  explicitly.
+
+This final summary is in addition to, not a replacement for, each
+proposal's own full Phase 1 output produced in section 2.1. It is
+distinct from section 9.3's batch-mode summary, which additionally
+reports promotion/apply outcomes for the promote-everything opt-in — use
+this section 6.1 summary whenever section 9 wasn't triggered, and
+section 9.3's summary when it was.
 
 ## 7. Promotion (Phase 2)
 
@@ -516,6 +565,10 @@ requiring investigation — don't guess at a cause without evidence.
   candidate as plain text, re-run Phase 1 on it (mandatory), then proceed
   to Phase 2. Don't dead-end the user by refusing to help — point them to
   this workflow instead.
+- Never process more than one proposal's full output in a single
+  response when multiple proposals are in scope — see section 2.1 for
+  the required one-at-a-time pacing, which prevents responses from
+  being truncated by the max-output-token limit.
 
 ## 9. Batch / unattended mode (explicit opt-in)
 
@@ -551,7 +604,11 @@ mode — process the request under the normal Phase 1/Phase 2 flow instead
 ### 9.2 Behavior once triggered
 
 For each WPP found in the given scope (see section 2 for enumerating a
-namespace's proposals):
+namespace's proposals), as in section 2.1, process proposals **strictly
+one at a time**: complete steps 1–4 below for one proposal in full,
+labeled with its position (e.g. "Proposal 4 of 11"), before moving to
+the next one in a subsequent turn — never batch more than one
+proposal's full output (review + promotion) into a single response.
 
 1. Run the full Phase 1 review (sections 1–6) and print the complete
    structured + Markdown report **and the disclaimer**, exactly as for a
