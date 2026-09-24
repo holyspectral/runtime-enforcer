@@ -18,6 +18,9 @@ spec:
       labels:
         {{- include "runtime-enforcer.labels" . | nindent 8 }}
         app.kubernetes.io/component: agent
+        {{- if .Values.agent.defaultPolicy.enabled }}
+        runtimeenforcer.kubewarden.io/policy: {{ include "runtime-enforcer.agent.defaultPolicyName" . }}
+        {{- end }}
       {{- with .Values.agent.podLabels }}
       {{- toYaml . | nindent 8 }}
       {{- end }}

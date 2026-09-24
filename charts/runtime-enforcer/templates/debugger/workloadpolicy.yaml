@@ -1,0 +1,15 @@
+{{- if and .Values.debugger.enabled .Values.debugger.defaultPolicy.enabled }}
+apiVersion: runtimeenforcer.kubewarden.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: {{ include "runtime-enforcer.debugger.defaultPolicyName" . }}
+  labels:
+    {{- include "runtime-enforcer.labels" . | nindent 4 }}
+spec:
+  mode: monitor
+  rulesByContainer:
+    debugger:
+      executables:
+        allowed:
+          - /debugger
+{{- end }}

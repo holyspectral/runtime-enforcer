@@ -1,0 +1,15 @@
+{{- if .Values.agent.defaultPolicy.enabled }}
+apiVersion: runtimeenforcer.kubewarden.io/v1alpha1
+kind: WorkloadPolicy
+metadata:
+  name: {{ include "runtime-enforcer.agent.defaultPolicyName" . }}
+  labels:
+    {{- include "runtime-enforcer.labels" . | nindent 4 }}
+spec:
+  mode: monitor
+  rulesByContainer:
+    agent:
+      executables:
+        allowed:
+          - /agent
+{{- end }}

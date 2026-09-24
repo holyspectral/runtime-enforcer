@@ -17,6 +17,9 @@ spec:
       labels:
         {{- include "runtime-enforcer.labels" . | nindent 8 }}
         app.kubernetes.io/component: debugger
+        {{- if .Values.debugger.defaultPolicy.enabled }}
+        runtimeenforcer.kubewarden.io/policy: {{ include "runtime-enforcer.debugger.defaultPolicyName" . }}
+        {{- end }}
       {{- with .Values.debugger.podLabels }}
       {{- toYaml . | nindent 8 }}
       {{- end }}

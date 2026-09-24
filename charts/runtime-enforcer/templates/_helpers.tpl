@@ -105,6 +105,19 @@ Usage:
 {{- end -}}
 
 {{/*
+Default WorkloadPolicy names for runtime-enforcer's own components.
+*/}}
+{{- define "runtime-enforcer.agent.defaultPolicyName" -}}
+{{ include "runtime-enforcer.fullname" . }}-agent
+{{- end -}}
+{{- define "runtime-enforcer.controller.defaultPolicyName" -}}
+{{ include "runtime-enforcer.fullname" . }}-controller-manager
+{{- end -}}
+{{- define "runtime-enforcer.debugger.defaultPolicyName" -}}
+{{ include "runtime-enforcer.fullname" . }}-debugger
+{{- end -}}
+
+{{/*
 Print the image pull secrets in the expected format (an array of objects with one possible field, "name").
 */}}
 {{- define "imagePullSecrets" }}

@@ -1,0 +1,87 @@
+suite: "Default WorkloadPolicy Tests"
+templates:
+  - "templates/agent/workloadpolicy.yaml"
+  - "templates/controller/workloadpolicy.yaml"
+  - "templates/debugger/workloadpolicy.yaml"
+tests:
+  - it: "should render a monitor-mode policy allowing only /agent for the agent container"
+    template: "templates/agent/workloadpolicy.yaml"
+    asserts:
+      - equal:
+          path: metadata.name
+          value: "RELEASE-NAME-runtime-enforcer-agent"
+      - equal:
+          path: spec.mode
+          value: "monitor"
+      - equal:
+          path: spec.rulesByContainer.agent.executables.allowed
+          value:
+            - "/agent"
+
+  - it: "should not render the agent policy when disabled"
+    template: "templates/agent/workloadpolicy.yaml"
+    set:
+      agent:
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "should render a monitor-mode policy allowing only /controller for the manager container"
+    template: "templates/controller/workloadpolicy.yaml"
+    asserts:
+      - equal:
+          path: metadata.name
+          value: "RELEASE-NAME-runtime-enforcer-controller-manager"
+      - equal:
+          path: spec.mode
+          value: "monitor"
+      - equal:
+          path: spec.rulesByContainer.manager.executables.allowed
+          value:
+            - "/controller"
+
+  - it: "should not render the controller policy when disabled"
+    template: "templates/controller/workloadpolicy.yaml"
+    set:
+      controller:
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "should not render the debugger policy by default (debugger disabled)"
+    template: "templates/debugger/workloadpolicy.yaml"
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: "should render a monitor-mode policy allowing only /debugger for the debugger container when debugger is enabled"
+    template: "templates/debugger/workloadpolicy.yaml"
+    set:
+      debugger:
+        enabled: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: "RELEASE-NAME-runtime-enforcer-debugger"
+      - equal:
+          path: spec.mode
+          value: "monitor"
+      - equal:
+          path: spec.rulesByContainer.debugger.executables.allowed
+          value:
+            - "/debugger"
+
+  - it: "should not render the debugger policy when debugger is enabled but its default policy is disabled"
+    template: "templates/debugger/workloadpolicy.yaml"
+    set:
+      debugger:
+        enabled: true
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

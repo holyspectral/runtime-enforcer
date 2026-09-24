@@ -13,3 +13,22 @@ tests:
       - equal:
           path: spec.template.metadata.annotations["kubectl.kubernetes.io/default-container"]
           value: "debugger"
+
+  - it: "should bind the debugger pods to the default WorkloadPolicy"
+    set:
+      debugger:
+        enabled: true
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]
+          value: "RELEASE-NAME-runtime-enforcer-debugger"
+
+  - it: "should not set the policy label when the default policy is disabled"
+    set:
+      debugger:
+        enabled: true
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]

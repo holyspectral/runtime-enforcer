@@ -31,6 +31,11 @@ controller:
     tag: v0.10.1
     pullPolicy: IfNotPresent
   logLevel: info # @schema enum: [debug, info, warn, error]
+  # controller.defaultPolicy.enabled -- Deploys a default WorkloadPolicy (in
+  # monitor mode) that only allows the /controller binary to run in the
+  # controller's "manager" container, and binds the controller pods to it.
+  defaultPolicy:
+    enabled: true
   # To make the Pods "Guaranteed" (evicted last under node pressure), kubelet requires
   # requests and limits are specified for all the containers and they are equal.
   # Please refer to https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#pod-selection-for-kubelet-eviction
@@ -108,6 +113,11 @@ agent:
     pullPolicy: IfNotPresent
   grpcExporterPort: "50051"
   logLevel: info # @schema enum: [debug, info, warn, error]
+  # agent.defaultPolicy.enabled -- Deploys a default WorkloadPolicy (in
+  # monitor mode) that only allows the /agent binary to run in the agent's
+  # "agent" container, and binds the agent pods to it.
+  defaultPolicy:
+    enabled: true
   # To make the Pods "Guaranteed" (evicted last under node pressure), kubelet requires
   # requests and limits are specified for all the containers and they are equal.
   # Please refer to https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#pod-selection-for-kubelet-eviction
@@ -162,6 +172,12 @@ debugger:
   # debugger.env -- Additional environment variables
   env: []
   enabled: false
+  # debugger.defaultPolicy.enabled -- Deploys a default WorkloadPolicy (in
+  # monitor mode) that only allows the /debugger binary to run in the
+  # debugger's "debugger" container, and binds the debugger pods to it.
+  # Only takes effect when debugger.enabled is true.
+  defaultPolicy:
+    enabled: true
   interval: 30s
   # @schema additionalProperties:true
   containerSecurityContext:

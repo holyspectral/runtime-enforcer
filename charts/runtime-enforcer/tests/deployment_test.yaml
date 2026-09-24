@@ -21,6 +21,21 @@ tests:
           path: "spec.replicas"
           value: 5
 
+  - it: "should bind the controller pods to the default WorkloadPolicy"
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]
+          value: "RELEASE-NAME-runtime-enforcer-controller-manager"
+
+  - it: "should not set the policy label when the default policy is disabled"
+    set:
+      controller:
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]
+
   - it: "should render default priority class name"
     asserts:
       - equal:

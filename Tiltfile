@@ -42,6 +42,12 @@ helm_options = [
         "debugger.image.repository=" + debugger_image,
 		# this is necessary to copy the debugger binary under `/debugger`
         "debugger.containerSecurityContext.runAsUser=null",
+        # Disable the default WorkloadPolicies for local development, since
+        # dev builds (e.g. hot-reloaded binaries) may not match the allowed
+        # executables.
+        "agent.defaultPolicy.enabled=false",
+        "controller.defaultPolicy.enabled=false",
+        "debugger.defaultPolicy.enabled=false",
 ]
 
 yaml = helm(

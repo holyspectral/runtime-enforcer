@@ -45,6 +45,15 @@
                     },
                     "additionalProperties": true
                 },
+                "defaultPolicy": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "env": {
                     "type": "array"
                 },
@@ -219,6 +228,15 @@
                     },
                     "additionalProperties": true
                 },
+                "defaultPolicy": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "env": {
                     "type": "array"
                 },
@@ -374,6 +392,15 @@
                         }
                     },
                     "additionalProperties": true
+                },
+                "defaultPolicy": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false
                 },
                 "enabled": {
                     "type": "boolean"

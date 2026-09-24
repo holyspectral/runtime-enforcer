@@ -18,6 +18,21 @@ tests:
           path: "spec.template.spec.priorityClassName"
           value: "runtime-enforcer-priorityclass"
 
+  - it: "should bind the agent pods to the default WorkloadPolicy"
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]
+          value: "RELEASE-NAME-runtime-enforcer-agent"
+
+  - it: "should not set the policy label when the default policy is disabled"
+    set:
+      agent:
+        defaultPolicy:
+          enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.metadata.labels["runtimeenforcer.kubewarden.io/policy"]
+
   - it: "should not include learning flag when there is no selector"
     set:
       learning:

@@ -84,6 +84,39 @@ The top-level keys of [`values.yaml`](charts/runtime-enforcer/values.yaml):
 
 See the comments in `values.yaml` for the full list of options.
 
+### Default WorkloadPolicies for Runtime Enforcer's own components
+
+The chart installs a default `WorkloadPolicy` (in `monitor` mode) for each
+of its own components — `agent`, `controller`, and `debugger` — allowing
+only the single binary each image ships (`/agent`, `/controller`,
+`/debugger`). The corresponding pods are bound to their policy via the
+`runtimeenforcer.kubewarden.io/policy` label, so any deviation is reported
+without blocking the components.
+
+These default policies are enabled by default and can be disabled per
+component with:
+
+```yaml
+agent:
+  defaultPolicy:
+    enabled: false
+controller:
+  defaultPolicy:
+    enabled: false
+debugger:
+  defaultPolicy:
+    enabled: false # only relevant when debugger.enabled is true
+```
+
+> [!NOTE]
+> Because the agent/controller/debugger pods are bound to their own
+> default `WorkloadPolicy`, `helm uninstall` may try to delete these
+> policies before deleting the Deployment/DaemonSet, which the
+> `WorkloadPolicy` deletion webhook rejects while pods still reference it
+> (see [Uninstall](#uninstall)). If that happens, scale down or delete the
+> `runtime-enforcer` Deployments/DaemonSet first, then retry
+> `helm uninstall`.
+
 ### CRDs
 
 CRDs are installed with the `helm.sh/resource-policy: keep` annotation:
