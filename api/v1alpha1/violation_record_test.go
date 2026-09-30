@@ -41,7 +41,7 @@ func (r ViolationRecord) withExecutable(exec string) ViolationRecord {
 }
 
 func (r ViolationRecord) withLastObserved(ts time.Time) ViolationRecord {
-	r.LastObservedTimestamp = metav1.NewTime(ts)
+	r.SomeObservedTimestamp = metav1.NewTime(ts)
 	return r
 }
 
@@ -60,7 +60,7 @@ func TestViolationRecordKeyOf(t *testing.T) {
 
 	baseViolation := ViolationRecord{
 		ID:                    0,
-		LastObservedTimestamp: baseTS,
+		SomeObservedTimestamp: baseTS,
 		PodName:               "pod-a",
 		ContainerName:         "c",
 		ExecutablePath:        "/x",
@@ -99,7 +99,7 @@ func TestMergeScrapedViolations(t *testing.T) {
 
 	baseViolation := ViolationRecord{
 		ID:                     0,
-		LastObservedTimestamp:  baseTS,
+		SomeObservedTimestamp:  baseTS,
 		Occurrences:            1,
 		FirstObservedTimestamp: baseTS,
 		PodName:                "pod-a",
@@ -204,7 +204,7 @@ func TestMergeScrapedViolations(t *testing.T) {
 					}
 				}
 				slices.SortStableFunc(r, func(a, b ViolationRecord) int {
-					return b.LastObservedTimestamp.Time.Compare(a.LastObservedTimestamp.Time)
+					return b.SomeObservedTimestamp.Time.Compare(a.SomeObservedTimestamp.Time)
 				})
 				return WorkloadPolicyStatus{
 					Violations:     r[:maxViolationRecords],
@@ -226,7 +226,7 @@ func TestMergeScrapedViolationsMultiBatch(t *testing.T) {
 	baseTS := metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 
 	baseViolation := ViolationRecord{
-		LastObservedTimestamp: baseTS,
+		SomeObservedTimestamp: baseTS,
 		PodName:               "pod-a",
 		ContainerName:         "c",
 		ExecutablePath:        "/x",
@@ -271,17 +271,17 @@ func TestMergeScrapedViolationsMultiBatch(t *testing.T) {
 	x := findByExe("/x")
 	require.Equal(t, int64(2), x.Occurrences)
 	require.Equal(t, baseTS, x.FirstObservedTimestamp)
-	require.Equal(t, baseTS.Add(time.Minute), x.LastObservedTimestamp.Time)
+	require.Equal(t, baseTS.Add(time.Minute), x.SomeObservedTimestamp.Time)
 
 	y := findByExe("/y")
 	require.Equal(t, int64(3), y.Occurrences)
 	require.Equal(t, baseTS, y.FirstObservedTimestamp)
-	require.Equal(t, baseTS.Add(time.Minute*2), y.LastObservedTimestamp.Time)
+	require.Equal(t, baseTS.Add(time.Minute*2), y.SomeObservedTimestamp.Time)
 
 	z := findByExe("/z")
 	require.Equal(t, int64(1), z.Occurrences)
 	require.Equal(t, baseTS.Add(time.Minute), z.FirstObservedTimestamp.Time)
-	require.Equal(t, baseTS.Add(time.Minute), z.LastObservedTimestamp.Time)
+	require.Equal(t, baseTS.Add(time.Minute), z.SomeObservedTimestamp.Time)
 }
 
 func TestClearAllowedViolations(t *testing.T) {
@@ -355,7 +355,7 @@ func TestAcknowledgeViolationsFromAnnotations(t *testing.T) {
 	newViolation := func(id int64) ViolationRecord {
 		return ViolationRecord{
 			ID:                    id,
-			LastObservedTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+			SomeObservedTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 			PodName:               fmt.Sprintf("pod-%d", id),
 			ContainerName:         fmt.Sprintf("container-%d", id),
 			ExecutablePath:        fmt.Sprintf("/usr/bin/exe-%d", id),

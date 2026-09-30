@@ -2,6 +2,7 @@ API rule violation: list_type_missing,github.com/kubewarden/runtime-enforcer/api
 API rule violation: list_type_missing,github.com/kubewarden/runtime-enforcer/api/v1alpha1,WorkloadPolicyStatus,AcknowledgedViolations
 API rule violation: list_type_missing,github.com/kubewarden/runtime-enforcer/api/v1alpha1,WorkloadPolicyStatus,NodesTransitioning
 API rule violation: list_type_missing,github.com/kubewarden/runtime-enforcer/api/v1alpha1,WorkloadPolicyStatus,Violations
+API rule violation: names_match,github.com/kubewarden/runtime-enforcer/api/v1alpha1,ViolationRecord,SomeObservedTimestamp
 API rule violation: names_match,github.com/kubewarden/runtime-enforcer/api/v1alpha1,violationRecordKey,action
 API rule violation: names_match,github.com/kubewarden/runtime-enforcer/api/v1alpha1,violationRecordKey,containerName
 API rule violation: names_match,github.com/kubewarden/runtime-enforcer/api/v1alpha1,violationRecordKey,executablePath
