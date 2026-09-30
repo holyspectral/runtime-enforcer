@@ -23,7 +23,7 @@ type ViolationRecord struct {
 	// negative, so the sign bit is never set in practice.
 	ID int64 `json:"id"`
 	// lastObservedTimestamp is when the violation was last observed.
-	LastObservedTimestamp metav1.Time `json:"lastObservedTimestamp"`
+	SomeObservedTimestamp metav1.Time `json:"lastObservedTimestamp"`
 	// occurrences is the number of times this violation (identified by
 	// pod, container, executable and action) has been observed since the
 	// record was first created. It is a per-record counter, distinct from
@@ -117,8 +117,8 @@ func (s *WorkloadPolicyStatus) mergeScrapedViolations(scraped []ViolationRecord)
 			// We need to overwrite the timestamp only if it is newer.
 			// if in a same batch we have multiple occurrences of the violation
 			// we just need to store the one with the highest timestamp.
-			if v.LastObservedTimestamp.Time.After(s.Violations[idx].LastObservedTimestamp.Time) {
-				s.Violations[idx].LastObservedTimestamp = v.LastObservedTimestamp
+			if v.SomeObservedTimestamp.Time.After(s.Violations[idx].SomeObservedTimestamp.Time) {
+				s.Violations[idx].SomeObservedTimestamp = v.SomeObservedTimestamp
 			}
 			// Every scraped event that matches the record is one more
 			// occurrence, even if it does not carry a newer timestamp.
@@ -128,7 +128,7 @@ func (s *WorkloadPolicyStatus) mergeScrapedViolations(scraped []ViolationRecord)
 			v.Occurrences = 1
 			// Stamp the first sighting with the scraped event's own
 			// timestamp (the earliest one we know of), never time.Now().
-			v.FirstObservedTimestamp = v.LastObservedTimestamp
+			v.FirstObservedTimestamp = v.SomeObservedTimestamp
 			s.Violations = append(s.Violations, v)
 			indexByKey[key] = len(s.Violations) - 1
 		}
@@ -136,7 +136,7 @@ func (s *WorkloadPolicyStatus) mergeScrapedViolations(scraped []ViolationRecord)
 	}
 
 	slices.SortStableFunc(s.Violations, func(a, b ViolationRecord) int {
-		return b.LastObservedTimestamp.Time.Compare(a.LastObservedTimestamp.Time)
+		return b.SomeObservedTimestamp.Time.Compare(a.SomeObservedTimestamp.Time)
 	})
 
 	if len(s.Violations) > maxViolationRecords {

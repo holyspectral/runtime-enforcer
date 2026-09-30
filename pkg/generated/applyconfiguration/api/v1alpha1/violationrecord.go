@@ -22,7 +22,7 @@ type ViolationRecordApplyConfiguration struct {
 	// negative, so the sign bit is never set in practice.
 	ID *int64 `json:"id,omitempty"`
 	// lastObservedTimestamp is when the violation was last observed.
-	LastObservedTimestamp *v1.Time `json:"lastObservedTimestamp,omitempty"`
+	SomeObservedTimestamp *v1.Time `json:"lastObservedTimestamp,omitempty"`
 	// occurrences is the number of times this violation (identified by
 	// pod, container, executable and action) has been observed since the
 	// record was first created. It is a per-record counter, distinct from
@@ -75,11 +75,11 @@ func (b *ViolationRecordApplyConfiguration) WithID(value int64) *ViolationRecord
 	return b
 }
 
-// WithLastObservedTimestamp sets the LastObservedTimestamp field in the declarative configuration to the given value
+// WithSomeObservedTimestamp sets the SomeObservedTimestamp field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the LastObservedTimestamp field is set to the value of the last call.
-func (b *ViolationRecordApplyConfiguration) WithLastObservedTimestamp(value v1.Time) *ViolationRecordApplyConfiguration {
-	b.LastObservedTimestamp = &value
+// If called multiple times, the SomeObservedTimestamp field is set to the value of the last call.
+func (b *ViolationRecordApplyConfiguration) WithSomeObservedTimestamp(value v1.Time) *ViolationRecordApplyConfiguration {
+	b.SomeObservedTimestamp = &value
 	return b
 }
 

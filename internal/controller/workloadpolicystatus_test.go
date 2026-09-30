@@ -82,7 +82,7 @@ func TestGetViolationsByPolicy(t *testing.T) {
 
 	apiRec := func(pod, node string) v1alpha1.ViolationRecord {
 		return v1alpha1.ViolationRecord{
-			LastObservedTimestamp: metav1.NewTime(ts),
+			SomeObservedTimestamp: metav1.NewTime(ts),
 			PodName:               pod,
 			ContainerName:         "c",
 			ExecutablePath:        "/usr/bin/test",

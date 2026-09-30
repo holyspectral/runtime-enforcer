@@ -159,7 +159,7 @@ func (r *WorkloadPolicyStatusSync) getViolationsByPolicy(
 		for _, v := range pbViolations {
 			namespacedName := v.GetPolicyName()
 			rec := v1alpha1.ViolationRecord{
-				LastObservedTimestamp: metav1.NewTime(v.GetTimestamp().AsTime()),
+				SomeObservedTimestamp: metav1.NewTime(v.GetTimestamp().AsTime()),
 				PodName:               v.GetPodName(),
 				ContainerName:         v.GetContainerName(),
 				ExecutablePath:        v.GetExecutablePath(),
@@ -192,7 +192,7 @@ func (r *WorkloadPolicyStatusSync) emitAcknowledgedViolationOtelLog(
 	rec.SetTimestamp(time.Now())
 	rec.AddAttributes(
 		attribute.Int64("id", violation.ID),
-		attribute.String("lastObservedTimestamp", violation.LastObservedTimestamp.UTC().Format(time.RFC3339)),
+		attribute.String("lastObservedTimestamp", violation.SomeObservedTimestamp.UTC().Format(time.RFC3339)),
 		attribute.String("reason", ack.Reason),
 		attribute.String("policy.name", policyName),
 		attribute.String("k8s.namespace.name", namespace),
