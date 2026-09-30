@@ -31,20 +31,20 @@ unprotected workload start — happens at container-creation time
 Whether `StartContainer` blocks a new container when its policy is missing
 can be customized via a flag:
 
-- **default (non-strict)**: containers are always allowed to start even if
-  their policy doesn't exist. A warning is printed.
-- **hardened (strict)**: preserves today's `StartContainer` behavior exactly
-  — a missing policy is a hard error that blocks the new container from
-  starting.
+- **fail open (non-strict)**: containers are always allowed to start even
+  if their policy doesn't exist. A warning is printed.
+- **default (hardened / strict)**: preserves today's `StartContainer`
+  behavior exactly — a missing policy is a hard error that blocks the new
+  container from starting.
 
 `Synchronize` is unconditionally non-blocking in both modes; the flag only
 affects `StartContainer`.
 
 This way, we make it clear that maintaining the label is the user's
 responsibility. A misconfigured label only affects that specific workload —
-in hardened mode its new containers are blocked, and in the default mode it
-runs unprotected with a warning — and never takes down the runtime-enforcer
-agent.
+in the default hardened mode its new containers are blocked, and in
+fail-open mode it runs unprotected with a warning — and never takes down the
+runtime-enforcer agent.
 
 # Motivation
 
@@ -74,7 +74,7 @@ However, this behavior causes problems in two scenarios:
 This is reported in
 [#853](https://github.com/kubewarden/runtime-enforcer/issues/853). The flow is:
 
-1. Install runtime-enforcer.
+1. Install runtime-enforcer through ArcgCD or tilt.
 2. Create one or more `WorkloadPolicy` resources and assign them to
    workloads (label applied to the pod template).
 3. Uninstall runtime-enforcer. This removes the CRDs (and, as a result, all
@@ -123,27 +123,24 @@ new config option would make sense:
 
 [design]: #detailed-design
 
-## New configuration
+## No errors from Synchronize NRI hook
+
+We will not return errors for Synchronize call anymore to prevent agents crash
+to ensure runtime-enforcer agent can function correctly during install or upgrade.
+The error handling is moved to StartContainer NRI hook.
+
+## New configuration to control error handling in StartContainer NRI hook
 
 A new boolean setting controls the enforcement posture for
 `StartContainer` when a `WorkloadPolicy` is missing, named to match the
-existing `nriFailopen` / `NRI_FAILOPEN` convention:
+existing `nriFailopen` / `NRI_FAILOPEN` convention : `POLICY_FAILOPEN`
 
-- Helm value: `agent.policyFailopen` (proposed default: `true`)
-- Environment variable read by the agent: `POLICY_FAILOPEN`
-  (`"true"` / `"false"`).
-
-`true` ("fail open") means a missing policy never blocks a new container
-from starting; `false` ("fail closed" / hardened) preserves today's
-`StartContainer` blocking behavior exactly. This flag has no effect on
-`Synchronize`, which never blocks on a missing policy in either mode (see
-below). It is exposed in `values.yaml`/`values.schema.json`/chart README
-the same way `agent.nriFailopen` is today, and wired into the DaemonSet's
-env in `templates/agent/daemonset.yaml`.
+This new flag allows users to define whether this is a critical error in their
+environment.
 
 ## Behavior matrix
 
-| Call site          | `policyFailopen=true` (proposed default)                            | `policyFailopen=false` (hardened)                                                               |
+| Call site          | `policyFailopen=true` (fail open)                                   | `policyFailopen=false` (default, hardened)                                                      |
 | ------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `Synchronize()`    | Log `Warn`, skip enforcement for that pod, sync continues/completes | Flag has no effect — same as the left column (unconditionally non-blocking)                     |
 | `StartContainer()` | Log `Warn`, allow the container to start unprotected                | Today's behavior: return error, blocking the container from starting, subject to `NRI_FAILOPEN` |
@@ -175,8 +172,8 @@ flowchart TD
     B2 -- Yes --> C2{"WorkloadPolicy\nfound in cache?"}
     C2 -- Yes --> D2["Apply policy to container\n(unchanged today)"]
     C2 -- No --> E2{"policyFailopen?"}
-    E2 -- "true (proposed default)" --> F2["Log warning\nAllow container to start unprotected"]
-    E2 -- "false (hardened)" --> G2["Return error\nContainer blocked from starting\n(subject to NRI_FAILOPEN)"]
+    E2 -- "true (fail open)" --> F2["Log warning\nAllow container to start unprotected"]
+    E2 -- "false (default, hardened)" --> G2["Return error\nContainer blocked from starting\n(subject to NRI_FAILOPEN)"]
 
     F1 -. "policy created later" .-> H["ReconcileWP walks pod cache,\nretroactively applies policy"]
     F2 -. "policy created later" .-> H
@@ -191,7 +188,7 @@ flowchart TD
   when closed, it returns today's error. This flag is how the two NRI
   callbacks select different behavior.
 - `internal/nri`: the plugin reads the new `POLICY_FAILOPEN` env var (with
-  a default of `true`). `Synchronize()` always calls the resolver in
+  a default of `false`). `Synchronize()` always calls the resolver in
   fail-open mode, so a missing policy can never abort startup
   synchronization (this fixes #853). `StartContainer()` uses the configured
   value, and a resulting error still flows through the existing
@@ -216,8 +213,13 @@ Kubernetes `Event` or metric is useful future work but out of scope here.
 
 [drawbacks]: #drawbacks
 
-- Out-of-box behavior is not the securest one.  Users have to disable the failopen
-  flag to ensure pods specified with a non-existing policy can't run. 
+- With the default (`policyFailopen=false`), a new container that references
+  a missing policy is blocked from starting (subject to `NRI_FAILOPEN`), so
+  a dangling or misconfigured label can still stop new pods for that
+  workload. Operators who prioritize availability must explicitly enable
+  fail-open. The `Synchronize` fix means this can never crash the agent
+  itself, but the trade-off should be documented prominently so it isn't
+  mistaken for a regression.
 
 # Alternatives
 
@@ -236,15 +238,14 @@ Kubernetes `Event` or metric is useful future work but out of scope here.
   rolling update or scale-up) would still be prevented from running. This
   is undesirable for the first user story.
 - **Not removing CRs during helm uninstall.** `helm.sh/resource-policy:
-  keep` is a Helm-only feature and doesn't work in all scenarios — e.g.
-  with ArgoCD, or when users use `helm template` piped to `kubectl apply`.
+  keep` is a Helm-only feature.  We already have this flag setup in CRDs but
+  it doesn't work in all scenarios — e.g. with ArgoCD, or when users use
+  `helm template` piped to `kubectl apply`.  This doesn't work with tilt user too.
 - **Remove labels through a post-delete hook.** Helm hooks are a rarely
   used feature and can lead to high complexity.
 - **Fallback to monitor mode** unfortunately when the policy specified
-  is not present, we don't have a monitor policy to fallback to.  
+  is not present, we don't have a monitor policy to fallback to.
 
 # Unresolved questions
 
 [unresolved]: #unresolved-questions
-
-- Whether we treat `policyFailopen` true by default. 
