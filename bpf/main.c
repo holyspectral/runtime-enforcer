@@ -243,6 +243,57 @@ static __always_inline __u64 get_tracker_id_from_curr_task() {
 	return trackerid;
 }
 
+// get_tracker_id_from_task returns the container tracker id that an arbitrary
+// task's cgroup maps to, or 0 when the task is not inside a tracked container
+// cgroup. Unlike get_tracker_id_from_curr_task it always resolves through the
+// task's cgroup (no bpf_get_current_cgroup_id fast path), so it can be used on a
+// task other than current (e.g. the parent).
+static __always_inline __u64 get_tracker_id_from_task(struct task_struct *task) {
+	struct cgroup *cgrp = get_task_cgroup(task,
+	                                      load_time_config.cgrp_fs_magic,
+	                                      load_time_config.cgrpv1_subsys_idx);
+	if(!cgrp) {
+		return 0;
+	}
+	__u64 cgroupid = get_cgroup_id(cgrp);
+	if(!cgroupid) {
+		return 0;
+	}
+	return cgrp_get_tracker_id(cgroupid);
+}
+
+// exec_is_runtime_bootstrap reports whether this exec is the OCI runtime
+// bootstrapping a container process rather than a genuine workload exec. Both
+// conditions must hold:
+//   1. The task still runs in the host init mount namespace. The runtime
+//      bootstrap (e.g. `runc init`) execs before entering the container mount
+//      namespace, whereas every in-container exec runs in the container's own
+//      mount namespace.
+//   2. The task's parent lives outside this container's cgroup. The runtime
+//      places the init process into the container cgroup while the parent
+//      (containerd shim / runc) stays in the runtime cgroup, so the exec crosses
+//      the cgroup boundary. A normal in-container exec has its parent within the
+//      same tracked cgroup and is therefore never matched here.
+// Returns false when the host mnt ns reference is unknown (0), preserving the
+// previous fail-open behavior.
+static __always_inline bool exec_is_runtime_bootstrap(__u64 cg_tracker_id) {
+	__u64 ref = load_time_config.host_mnt_ns_inum;
+	if(ref == 0) {
+		return false;
+	}
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	__u32 inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
+	if((__u64)inum != ref) {
+		return false;
+	}
+
+	struct task_struct *parent = BPF_CORE_READ(task, real_parent);
+	if(!parent) {
+		return false;
+	}
+	return get_tracker_id_from_task(parent) != cg_tracker_id;
+}
+
 /////////////////////////
 // Log helpers
 /////////////////////////
@@ -501,6 +552,17 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		// we return if we cannot get cgroup id, since our logic is based on cgroup ids.
 		// This is not an error, the userspace will populate the cgtracker_map only for the cgroups
 		// associated with containers, so all non-container cgroups will be ignored.
+		return 0;
+	}
+
+	if(exec_is_runtime_bootstrap(cg_tracker_id)) {
+		// The OCI runtime bootstrap (e.g. `runc init` / setns) execs while still
+		// in the host init mount namespace AND is entering the container cgroup
+		// from a parent that lives outside it (the shim / runc). It only enters the
+		// container mount namespace (setns/pivot_root) AFTER this execve. Every real
+		// workload exec runs in the container's own mount namespace with its parent
+		// inside the same tracked cgroup. So this exec is a runtime bootstrap, not a
+		// workload binary: suppress reporting, never deny, and never learn it.
 		return 0;
 	}
 
