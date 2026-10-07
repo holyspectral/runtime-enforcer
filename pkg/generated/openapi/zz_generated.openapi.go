@@ -546,6 +546,13 @@ func schema_kubewarden_runtime_enforcer_api_v1alpha1_WorkloadPolicyRules(ref com
 							Ref:         ref(v1alpha1.WorkloadPolicyExecutables{}.OpenAPIModelName()),
 						},
 					},
+					"allowForeignRootExec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "allowForeignRootExec permits this container to execute binaries that resolve to a foreign root filesystem (e.g. the host rootfs reached via /proc/<pid>/root, or a mount this container does not own). Such execs are blocked by default because their resolved path cannot be trusted against the container's allow-list. Enable this only for privileged containers that legitimately run host or foreign files: when set, foreign-root execs are permitted unconditionally, bypassing the executable allow-list for this container.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},

@@ -38,6 +38,38 @@ static __always_inline __u64 cgrp_get_tracker_id(__u64 cgid) {
 }
 
 /////////////////////////
+// Rootfs pin map
+/////////////////////////
+
+// rootfs_pin records the identity of a container's registered root filesystem,
+// captured once from a trusted process (the first non-bootstrap exec). Exec-path
+// resolution is pinned to this root instead of the live, attacker-mutable
+// task->fs->root, so foreign roots (e.g. the host rootfs reached via
+// /proc/<pid>/root) and chroot-into-own-rootfs no longer resolve to a
+// container-relative path that matches the allow-list.
+//
+// The fields hold kernel pointer values (stored as __u64 so the generated
+// userspace struct stays plain scalars); they are only ever compared for
+// identity, never dereferenced from userspace.
+struct rootfs_pin {
+	__u64 root_dentry; /* struct dentry * of the registered root */
+	__u64 root_mnt;    /* struct vfsmount * of the registered root */
+	__u64 root_sb;     /* struct super_block * of the registered root */
+};
+
+// Force emitting struct rootfs_pin into the ELF.
+const struct rootfs_pin *unused_rootfs_pin __attribute__((unused));
+
+#define ROOTFS_PIN_MAX_ENTRIES 65536
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, ROOTFS_PIN_MAX_ENTRIES);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, __u64);               /* tracker cgroup id */
+	__type(value, struct rootfs_pin); /* registered root identity */
+} rootfs_pin_map SEC(".maps");
+
+/////////////////////////
 // cgroup helpers
 /////////////////////////
 
@@ -294,6 +326,63 @@ static __always_inline bool exec_is_runtime_bootstrap(__u64 cg_tracker_id) {
 	return get_tracker_id_from_task(parent) != cg_tracker_id;
 }
 
+// capture_rootfs_pin records the current task's root filesystem identity as the
+// registered root for the given tracker id, if it has not been captured yet.
+//
+// It must only pin from a trusted in-container exec, so that task->fs->root is
+// still the real container rootfs set up by the OCI runtime, before any
+// in-container chroot/pivot_root/setns could have changed it. We therefore pin
+// only when the runtime-bootstrap exclusion is active (a host mnt-ns reference is
+// known) AND the current task is NOT in the host mount namespace. This excludes
+// the runtime bootstrap (`runc init`), which runs in the host mount namespace
+// with fs->root pointing at the host root before pivot_root. When the reference
+// is unknown we do not pin at all and resolution falls back to task->fs->root.
+static __always_inline void capture_rootfs_pin(__u64 cg_tracker_id) {
+	__u64 host_ref = load_time_config.host_mnt_ns_inum;
+	if(host_ref == 0) {
+		// Bootstrap exclusion disabled: we cannot confirm this is a trusted
+		// in-container exec, so we leave the container unpinned (legacy behavior).
+		return;
+	}
+
+	if(bpf_map_lookup_elem(&rootfs_pin_map, &cg_tracker_id)) {
+		// already captured for this container
+		return;
+	}
+
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	__u32 inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
+	if((__u64)inum == host_ref) {
+		// Running in the host mount namespace (e.g. a runtime bootstrap exec
+		// before pivot_root): fs->root is the host root, not the container's.
+		return;
+	}
+
+	struct fs_struct *fs = NULL;
+	bpf_core_read(&fs, sizeof(fs), &task->fs);
+	if(!fs) {
+		return;
+	}
+
+	struct dentry *root_dentry = NULL;
+	struct vfsmount *root_mnt = NULL;
+	bpf_core_read(&root_dentry, sizeof(root_dentry), &fs->root.dentry);
+	bpf_core_read(&root_mnt, sizeof(root_mnt), &fs->root.mnt);
+	if(!root_dentry || !root_mnt) {
+		return;
+	}
+
+	struct super_block *root_sb = NULL;
+	bpf_core_read(&root_sb, sizeof(root_sb), &root_dentry->d_sb);
+
+	struct rootfs_pin pin = {
+	        .root_dentry = (__u64)(unsigned long)root_dentry,
+	        .root_mnt = (__u64)(unsigned long)root_mnt,
+	        .root_sb = (__u64)(unsigned long)root_sb,
+	};
+	bpf_map_update_elem(&rootfs_pin_map, &cg_tracker_id, &pin, BPF_ANY);
+}
+
 /////////////////////////
 // Log helpers
 /////////////////////////
@@ -397,6 +486,10 @@ int tg_cgtracker_cgroup_release(struct bpf_raw_tracepoint_args *ctx) {
 		return 0;
 	}
 	bpf_map_delete_elem(&cgtracker_map, &cgid);
+	// Drop the rootfs pin too. It is keyed by tracker id (== the container's own
+	// cgroup id), so this only removes an entry when the container's tracker
+	// cgroup is released; releasing a nested cgroup is a harmless no-op here.
+	bpf_map_delete_elem(&rootfs_pin_map, &cgid);
 	return 0;
 }
 
@@ -438,14 +531,27 @@ struct {
 const struct process_evt *unused_process_evt __attribute__((unused));
 
 static __always_inline u32 populate_evt_with_path(struct process_evt *evt,
-                                                  struct linux_binprm *bprm) {
+                                                  struct linux_binprm *bprm,
+                                                  struct rootfs_pin *pin,
+                                                  bool *foreign) {
 	struct file *file = bprm->file;
 	if(file == NULL) {
 		emit_log_event(LOG_MISSING_FILE_STRUCT);
 		return 0;
 	}
 	struct path *path_arg = &file->f_path;
-	u32 current_offset = bpf_d_path_approx(path_arg, evt->path);
+
+	struct dentry *root_dentry = NULL;
+	struct vfsmount *root_mnt = NULL;
+	struct super_block *root_sb = NULL;
+	if(pin != NULL) {
+		root_dentry = (struct dentry *)(unsigned long)pin->root_dentry;
+		root_mnt = (struct vfsmount *)(unsigned long)pin->root_mnt;
+		root_sb = (struct super_block *)(unsigned long)pin->root_sb;
+	}
+
+	u32 current_offset =
+	        bpf_d_path_approx(path_arg, evt->path, root_dentry, root_mnt, root_sb, foreign);
 	if(current_offset == 0) {
 		emit_log_event(LOG_FAIL_TO_RESOLVE_PATH);
 		return 0;
@@ -491,6 +597,15 @@ struct {
 	__type(key, __u64);  /* Key is the policy id */
 	__type(value, __u8); /* mode of the policy (e.g. enforce, monitor) */
 } policy_mode_map SEC(".maps");
+
+#define POLICY_ALLOW_FOREIGN_ROOT_MAX_ENTRIES 65536
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, POLICY_ALLOW_FOREIGN_ROOT_MAX_ENTRIES);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, __u64);  /* Key is the policy id */
+	__type(value, __u8); /* non-zero: allow foreign-root execs for this policy */
+} policy_allow_foreign_root_map SEC(".maps");
 
 #define POLICY_MODE_MONITOR 1
 #define POLICY_MODE_PROTECT 2
@@ -566,6 +681,13 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		return 0;
 	}
 
+	// This is the first trusted (non-bootstrap) exec of the container or a later
+	// one. Capture the container's registered root on the first such exec, then
+	// pin all path resolution to it. `pin` is NULL only if the capture failed, in
+	// which case resolution falls back to the legacy task->fs->root behavior.
+	capture_rootfs_pin(cg_tracker_id);
+	struct rootfs_pin *pin = bpf_map_lookup_elem(&rootfs_pin_map, &cg_tracker_id);
+
 	__u64 *policy_id = bpf_map_lookup_elem(&cg_to_policy_map, &cg_tracker_id);
 	if(!policy_id) {
 		// if learning is disabled, nothing to do, we can return
@@ -587,8 +709,16 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 		levt->cg_tracker_id = cg_tracker_id;
 		levt->mode = 0;
 
-		u32 loffset = populate_evt_with_path(levt, bprm);
+		bool lforeign = false;
+		u32 loffset = populate_evt_with_path(levt, bprm, pin, &lforeign);
 		if(loffset == 0) {
+			return 0;
+		}
+		if(lforeign) {
+			// A foreign-root exec must never be learned: it would poison the
+			// proposal with a container-relative path for a binary that does not
+			// live on the container's own rootfs.
+			emit_log_event(LOG_FOREIGN_ROOT_EXEC);
 			return 0;
 		}
 
@@ -619,9 +749,56 @@ int BPF_PROG(enforce_cgroup_policy, struct linux_binprm *bprm) {
 
 	evt->cg_tracker_id = cg_tracker_id;
 
-	u32 current_offset = populate_evt_with_path(evt, bprm);
+	bool foreign = false;
+	u32 current_offset = populate_evt_with_path(evt, bprm, pin, &foreign);
 	if(current_offset == 0) {
 		return 0;
+	}
+
+	if(foreign) {
+		// The exec resolved to a file on a foreign root (e.g. the host rootfs via
+		// /proc/<pid>/root, or a mount this container does not own). The resolved
+		// string is a container-relative path that must NOT be trusted against the
+		// allow-list.
+		//
+		// By default this is a violation. A container may opt out via the
+		// per-container `allowForeignRootExec` policy flag, in which case the exec
+		// is permitted unconditionally (the allow-list is intentionally bypassed).
+		__u8 *allow_foreign = bpf_map_lookup_elem(&policy_allow_foreign_root_map, policy_id);
+		if(allow_foreign && *allow_foreign) {
+			bpf_printk("foreign-root exec allowed by policy id %d", *policy_id);
+			return 0;
+		}
+
+		// Report it with a distinct log so it can be told apart from an ordinary
+		// allow-list miss.
+		emit_log_event(LOG_FOREIGN_ROOT_EXEC);
+
+		__u8 *fmode = bpf_map_lookup_elem(&policy_mode_map, policy_id);
+		if(!fmode) {
+			emit_log_event_1(LOG_POLICY_MODE_MISSING, *policy_id);
+			return 0;
+		}
+
+		long ferr = bpf_probe_read_kernel(evt->path,
+		                                  SAFE_PATH_LEN(evt->path_len + 1),
+		                                  &evt->path[SAFE_PATH_ACCESS(current_offset)]);
+		if(ferr != 0) {
+			emit_log_event(LOG_FAIL_TO_COPY_EXEC_PATH);
+			return 0;
+		}
+		evt->mode = *fmode;
+
+		ferr = bpf_ringbuf_output(&ringbuf_monitoring, evt, 19 + SAFE_PATH_LEN(evt->path_len), 0);
+		if(ferr != 0) {
+			emit_log_event_2(LOG_DROP_VIOLATION, *policy_id, evt->mode);
+		}
+
+		if(*fmode == POLICY_MODE_MONITOR) {
+			return 0;
+		}
+		// We are in enforcing mode: deny the foreign-root exec.
+		return -EPERM;
 	}
 
 	///////////////////////////////

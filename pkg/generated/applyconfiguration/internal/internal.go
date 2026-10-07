@@ -163,6 +163,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.kubewarden.runtime-enforcer.api.v1alpha1.WorkloadPolicyRules
   map:
     fields:
+    - name: allowForeignRootExec
+      type:
+        scalar: boolean
     - name: executables
       type:
         namedType: com.github.kubewarden.runtime-enforcer.api.v1alpha1.WorkloadPolicyExecutables

@@ -7,6 +7,15 @@ package v1alpha1
 type WorkloadPolicyRulesApplyConfiguration struct {
 	// executables defines a security policy for executables.
 	Executables *WorkloadPolicyExecutablesApplyConfiguration `json:"executables,omitempty"`
+	// allowForeignRootExec permits this container to execute binaries that
+	// resolve to a foreign root filesystem (e.g. the host rootfs reached via
+	// /proc/<pid>/root, or a mount this container does not own). Such execs are
+	// blocked by default because their resolved path cannot be trusted against
+	// the container's allow-list. Enable this only for privileged containers
+	// that legitimately run host or foreign files: when set, foreign-root execs
+	// are permitted unconditionally, bypassing the executable allow-list for
+	// this container.
+	AllowForeignRootExec *bool `json:"allowForeignRootExec,omitempty"`
 }
 
 // WorkloadPolicyRulesApplyConfiguration constructs a declarative configuration of the WorkloadPolicyRules type for use with
@@ -20,5 +29,13 @@ func WorkloadPolicyRules() *WorkloadPolicyRulesApplyConfiguration {
 // If called multiple times, the Executables field is set to the value of the last call.
 func (b *WorkloadPolicyRulesApplyConfiguration) WithExecutables(value *WorkloadPolicyExecutablesApplyConfiguration) *WorkloadPolicyRulesApplyConfiguration {
 	b.Executables = value
+	return b
+}
+
+// WithAllowForeignRootExec sets the AllowForeignRootExec field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AllowForeignRootExec field is set to the value of the last call.
+func (b *WorkloadPolicyRulesApplyConfiguration) WithAllowForeignRootExec(value bool) *WorkloadPolicyRulesApplyConfiguration {
+	b.AllowForeignRootExec = &value
 	return b
 }

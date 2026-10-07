@@ -23,12 +23,25 @@
 struct path_read_data {
 	struct dentry *root_dentry;
 	struct vfsmount *root_mnt;
+	// root_sb is the superblock of the container's registered root. It is only
+	// meaningful when pin_active is true and is used (together with root_dentry)
+	// to decide whether a resolution that bottoms out at a mount-namespace global
+	// root terminated at the container's own rootfs or at a foreign one.
+	struct super_block *root_sb;
 	struct dentry *dentry;
 	struct vfsmount *vfsmnt;
 	struct mount *mnt;
 	char *bptr;
 	u32 curr_off;
 	bool resolved;
+	// pin_active is true when root_dentry/root_mnt/root_sb describe the
+	// container's registered root (the rootfs pin) rather than the current,
+	// attacker-mutable task->fs->root.
+	bool pin_active;
+	// foreign is set when resolution terminated at a mount-namespace global root
+	// that is not the container's registered root (e.g. a host/foreign rootfs
+	// reached via a procfs magic link). Only computed when pin_active is true.
+	bool foreign;
 };
 
 static __always_inline bool IS_ROOT(struct dentry *dentry) {
@@ -81,6 +94,20 @@ static __always_inline long path_read(struct path_read_data *data) {
 		bpf_core_read(&m_parent, sizeof(m_parent), &mnt->mnt_parent);
 		/* Global root? */
 		if(data->mnt == m_parent) {
+			// We reached a mount-namespace global root. When the rootfs pin is
+			// active, this is the terminating root of the resolution: classify it
+			// as the container's own rootfs or a foreign one. We compare on the
+			// root dentry and its superblock (never the vfsmount pointer) so that
+			// a benign `unshare(CLONE_NEWNS)` (same dentries/superblock, fresh
+			// mount objects) is not flagged, while a foreign rootfs (reached via a
+			// procfs magic link) or a chroot into a different mount is caught.
+			if(data->pin_active) {
+				struct super_block *sb = NULL;
+				bpf_core_read(&sb, sizeof(sb), &dentry->d_sb);
+				if(dentry != data->root_dentry || sb != data->root_sb) {
+					data->foreign = true;
+				}
+			}
 			// resolved all path components successfully
 			data->resolved = true;
 			return 1;
@@ -120,7 +147,23 @@ static __always_inline long path_read(struct path_read_data *data) {
 //  the third `MAX_PATH_LEN` segment.
 //
 // `bpf_d_path_approx` returns the offset of the last written byte in the buffer.
-static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf) {
+//
+// When root_dentry is non-NULL the resolution is *pinned*: it is performed
+// relative to the container's registered root (root_dentry/root_mnt) and, on
+// reaching a mount-namespace global root, classifies whether that root is the
+// container's own rootfs (root_dentry + root_sb) or a foreign one. In the latter
+// case `*foreign` is set to true. Pinning resolves relative to the registered
+// root rather than the live task->fs->root, so a `chroot` into a sub-directory
+// of the container's own rootfs can no longer shorten the reported path.
+//
+// When root_dentry is NULL the function falls back to the legacy behavior of
+// resolving relative to the current task->fs->root and never reports foreign.
+static __always_inline u32 bpf_d_path_approx(const struct path *path,
+                                             char *buf,
+                                             struct dentry *root_dentry,
+                                             struct vfsmount *root_mnt,
+                                             struct super_block *root_sb,
+                                             bool *foreign) {
 	int off = MAX_PATH_LEN * 2;
 	struct dentry *dentry = NULL;
 	if(bpf_core_read(&dentry, sizeof(dentry), &path->dentry) != 0) {
@@ -139,15 +182,23 @@ static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf)
 	        .curr_off = off,  // remaining length of the buffer
 	};
 
-	struct fs_struct *fs = NULL;
-	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-	bpf_core_read(&fs, sizeof(fs), &task->fs);
-	struct path *root = NULL;
-	bpf_core_read(&root, sizeof(root), &fs->root);
+	if(root_dentry != NULL) {
+		// Pinned resolution: use the container's registered root.
+		data.root_dentry = root_dentry;
+		data.root_mnt = root_mnt;
+		data.root_sb = root_sb;
+		data.pin_active = true;
+	} else {
+		// Legacy fallback: resolve relative to the current task->fs->root.
+		struct fs_struct *fs = NULL;
+		struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+		bpf_core_read(&fs, sizeof(fs), &task->fs);
+		struct path *root = NULL;
+		bpf_core_read(&root, sizeof(root), &fs->root);
 
-	// final mount and dentry
-	bpf_core_read(&data.root_dentry, sizeof(data.root_dentry), &root->dentry);
-	bpf_core_read(&data.root_mnt, sizeof(data.root_mnt), &root->mnt);
+		bpf_core_read(&data.root_dentry, sizeof(data.root_dentry), &root->dentry);
+		bpf_core_read(&data.root_mnt, sizeof(data.root_mnt), &root->mnt);
+	}
 	// current mount and dentry
 	bpf_core_read(&data.dentry, sizeof(data.dentry), &path->dentry);
 	bpf_core_read(&data.vfsmnt, sizeof(data.vfsmnt), &path->mnt);
@@ -188,6 +239,10 @@ static __always_inline u32 bpf_d_path_approx(const struct path *path, char *buf)
 		// - `true` if there is no path like in case of memfd files.
 		// - `false` if we never found the final path root. In this case we will just return -1.
 		copy_name(data.bptr, &data.curr_off, data.dentry);
+	}
+
+	if(foreign != NULL) {
+		*foreign = data.foreign;
 	}
 
 	if(data.resolved) {

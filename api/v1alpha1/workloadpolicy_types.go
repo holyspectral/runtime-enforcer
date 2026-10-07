@@ -35,6 +35,17 @@ type WorkloadPolicyRules struct {
 	// executables defines a security policy for executables.
 	// +optional
 	Executables WorkloadPolicyExecutables `json:"executables,omitempty"`
+
+	// allowForeignRootExec permits this container to execute binaries that
+	// resolve to a foreign root filesystem (e.g. the host rootfs reached via
+	// /proc/<pid>/root, or a mount this container does not own). Such execs are
+	// blocked by default because their resolved path cannot be trusted against
+	// the container's allow-list. Enable this only for privileged containers
+	// that legitimately run host or foreign files: when set, foreign-root execs
+	// are permitted unconditionally, bypassing the executable allow-list for
+	// this container.
+	// +optional
+	AllowForeignRootExec bool `json:"allowForeignRootExec,omitempty"`
 }
 
 type WorkloadPolicySpec struct {

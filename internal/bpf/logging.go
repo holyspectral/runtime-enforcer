@@ -131,6 +131,8 @@ func logEventMsg(ctx context.Context, logger *slog.Logger, evt *bpfLogEvt) {
 		logEvent(ctx, logger, evt, "failed to resolve cgroup id", slog.LevelWarn)
 	case bpfLogEventCodeLOG_FAIL_TO_RESOLVE_PARENT_CGROUP_ID:
 		logEvent(ctx, logger, evt, "failed to resolve parent cgroup id", slog.LevelWarn)
+	case bpfLogEventCodeLOG_FOREIGN_ROOT_EXEC:
+		logEvent(ctx, logger, evt, "exec resolved to a foreign root filesystem", slog.LevelWarn)
 	default:
 		logger.ErrorContext(ctx, "unknown log event type", "type", evt.Code)
 	}

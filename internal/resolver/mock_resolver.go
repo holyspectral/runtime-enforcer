@@ -18,6 +18,10 @@ func mockPolicyModeUpdateFunc(_ PolicyID, _ policymode.Mode, _ bpf.PolicyModeOpe
 	return nil
 }
 
+func mockPolicyForeignRootUpdateFunc(_ PolicyID, _ bool, _ bpf.PolicyForeignRootOperation) error {
+	return nil
+}
+
 func mockCgTrackerUpdateFunc(_ uint64, _ string) error {
 	return nil
 }
@@ -34,6 +38,7 @@ func NewTestResolver(t testing.TB) *Resolver {
 		mockCgroupToPolicyMapUpdateFunc,
 		mockPolicyUpdateBinariesFunc,
 		mockPolicyModeUpdateFunc,
+		mockPolicyForeignRootUpdateFunc,
 	)
 	require.NoError(t, err)
 	return r

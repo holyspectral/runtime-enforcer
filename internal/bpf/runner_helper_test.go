@@ -127,12 +127,21 @@ type runCommandArgs struct {
 	// namespace instead of a fresh one, to exercise the runtime-bootstrap
 	// exclusion which suppresses host-mount-namespace execs.
 	hostMntNs bool
+	// chroot, when set, runs the command chrooted into this directory (in a fresh
+	// mount namespace). Used to exercise the rootfs pin against a chroot into a
+	// sub-directory of the container's own rootfs.
+	chroot string
 }
 
 func (r *cgroupRunner) runAndFindCommand(args *runCommandArgs) error {
 	run := r.cgInfo.RunInCgroup
-	if args.hostMntNs {
+	switch {
+	case args.hostMntNs:
 		run = r.cgInfo.runInCgroupHostMntNs
+	case args.chroot != "":
+		run = func(command string, cmdArgs []string) error {
+			return r.cgInfo.runInCgroupChroot(command, cmdArgs, args.chroot)
+		}
 	}
 	err := run(args.command, []string{})
 	if args.shouldEPERM {

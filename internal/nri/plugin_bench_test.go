@@ -66,6 +66,9 @@ func newBenchPlugin(b *testing.B, maps *benchMaps) *plugin {
 	unusedMode := func(resolver.PolicyID, policymode.Mode, bpf.PolicyModeOperation) error {
 		return errors.New("this function should be unused")
 	}
+	unusedForeignRoot := func(resolver.PolicyID, bool, bpf.PolicyForeignRootOperation) error {
+		return errors.New("this function should be unused")
+	}
 
 	r, err := resolver.NewResolver(
 		logger,
@@ -77,6 +80,7 @@ func newBenchPlugin(b *testing.B, maps *benchMaps) *plugin {
 		},
 		unusedBinaries,
 		unusedMode,
+		unusedForeignRoot,
 	)
 	require.NoError(b, err)
 

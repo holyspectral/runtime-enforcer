@@ -30,6 +30,22 @@ func (c cgroupInfo) RunInCgroup(command string, args []string) error {
 	return c.runInCgroup(command, args, true)
 }
 
+// runInCgroupChroot runs the command in the cgroup inside a fresh mount
+// namespace AND chrooted into chrootDir, so the command path is interpreted
+// relative to chrootDir. It is used to exercise the rootfs pin: a chroot into a
+// sub-directory of the container's own rootfs must no longer shorten the
+// resolved exec path.
+func (c cgroupInfo) runInCgroupChroot(command string, args []string, chrootDir string) error {
+	cmd := exec.Command(command, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		UseCgroupFD:  true,
+		CgroupFD:     c.fd,
+		Unshareflags: syscall.CLONE_NEWNS,
+		Chroot:       chrootDir,
+	}
+	return cmd.Run()
+}
+
 // runInCgroupHostMntNs runs the command in the cgroup WITHOUT unsharing the mount
 // namespace, so it executes in the test process's own (host) mount namespace. It
 // is used to exercise the runtime-bootstrap exclusion, which suppresses execs

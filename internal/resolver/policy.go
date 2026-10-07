@@ -45,12 +45,16 @@ func (r *Resolver) upsertPolicyIDInBPF(
 	policyID PolicyID,
 	allowedBinaries []string,
 	mode policymode.Mode,
+	allowForeignRoot bool,
 	valuesOp bpf.PolicyValuesOperation,
 ) error {
 	if err := r.policyUpdateBinariesFunc(policyID, allowedBinaries, valuesOp); err != nil {
 		return err
 	}
 	if err := r.policyModeUpdateFunc(policyID, mode, bpf.UpdateMode); err != nil {
+		return err
+	}
+	if err := r.policyForeignRootUpdateFunc(policyID, allowForeignRoot, bpf.UpdateForeignRoot); err != nil {
 		return err
 	}
 	return nil
@@ -67,6 +71,9 @@ func (r *Resolver) clearPolicyIDFromBPF(policyID PolicyID) error {
 	// TODO: refactor the PolicyModeUpdateFunc to not collapse the update and delete operations
 	// behind the same API. By doing that we will not need to pass a dummy mode value here.
 	if err := r.policyModeUpdateFunc(policyID, 0, bpf.DeleteMode); err != nil {
+		return err
+	}
+	if err := r.policyForeignRootUpdateFunc(policyID, false, bpf.DeleteForeignRoot); err != nil {
 		return err
 	}
 	return nil
@@ -173,7 +180,13 @@ func (r *Resolver) syncWorkloadPolicy(wp *v1alpha1.WorkloadPolicy) (policyByCont
 				"container", containerName)
 			op = bpf.AddValuesToPolicy
 		}
-		if err := r.upsertPolicyIDInBPF(polID, containerRules.Executables.Allowed, mode, op); err != nil {
+		if err := r.upsertPolicyIDInBPF(
+			polID,
+			containerRules.Executables.Allowed,
+			mode,
+			containerRules.AllowForeignRootExec,
+			op,
+		); err != nil {
 			return nil, fmt.Errorf("failed to populate policy for wp %s, container %s: %w", wpKey, containerName, err)
 		}
 	}
